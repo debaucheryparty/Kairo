@@ -1,0 +1,15 @@
+{
+  "name": "kairo",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter kairo-web dev",
+    "build:web": "pnpm --filter kairo-web build",
+    "dev:desktop": "pnpm --filter kairo-desktop dev",
+    "build:desktop": "pnpm --filter kairo-desktop build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

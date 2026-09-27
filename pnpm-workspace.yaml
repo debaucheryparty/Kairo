@@ -1,0 +1,6 @@
+packages:
+  - "packages/*"
+  - "apps/kairo-web"
+  - "apps/kairo-desktop"
+allowBuilds:
+  esbuild: true
