@@ -823,6 +823,309 @@ export function decodeListPtysResponse(data: Uint8Array): PtySessionInfo[] {
   return sessions;
 }
 
+export interface DockerContainer {
+  id: string;
+  name: string;
+  image: string;
+  state: string;
+  status: string;
+  createdAt: number;
+  ports: string[];
+}
+
+export enum ContainerAction {
+  Unspecified = 0,
+  Start = 1,
+  Stop = 2,
+  Restart = 3,
+}
+
+export interface SystemService {
+  name: string;
+  description: string;
+  loadState: string;
+  activeState: string;
+  subState: string;
+}
+
+export enum ServiceAction {
+  Unspecified = 0,
+  Start = 1,
+  Stop = 2,
+  Restart = 3,
+}
+
+export function encodeListContainersRequest(all = false): Uint8Array {
+  return encodeUintField(1, all ? 1 : 0);
+}
+
+export function decodeListContainersResponse(data: Uint8Array): {
+  containers: DockerContainer[];
+  dockerAvailable: boolean;
+} {
+  let offset = 0;
+  const containers: DockerContainer[] = [];
+  let dockerAvailable = false;
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (fieldNumber === 2 && wireType === 0) {
+      let value = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        value |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      dockerAvailable = value !== 0;
+    } else if (fieldNumber === 1 && wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+
+      const end = offset + length;
+      let id = '';
+      let name = '';
+      let image = '';
+      let state = '';
+      let status = '';
+      let createdAt = 0;
+      const ports: string[] = [];
+
+      while (offset < end) {
+        const itemTag = data[offset++];
+        const fn = itemTag >> 3;
+        const wt = itemTag & 0x07;
+
+        if (wt === 0) {
+          let val = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            val |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          if (fn === 6) createdAt = val;
+        } else if (wt === 2) {
+          let l = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            l |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          const str = textDecoder.decode(data.subarray(offset, offset + l));
+          offset += l;
+          if (fn === 1) id = str;
+          else if (fn === 2) name = str;
+          else if (fn === 3) image = str;
+          else if (fn === 4) state = str;
+          else if (fn === 5) status = str;
+          else if (fn === 7) ports.push(str);
+        } else {
+          break;
+        }
+      }
+
+      containers.push({ id, name, image, state, status, createdAt, ports });
+    } else {
+      break;
+    }
+  }
+
+  return { containers, dockerAvailable };
+}
+
+export function encodeManageContainerRequest(
+  containerId: string,
+  action: ContainerAction
+): Uint8Array {
+  return concat([encodeStringField(1, containerId), encodeUintField(2, action)]);
+}
+
+export function decodeManageContainerResponse(data: Uint8Array): {
+  success: boolean;
+  message: string;
+} {
+  let offset = 0;
+  let success = false;
+  let message = '';
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 0) {
+      let value = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        value |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) success = value !== 0;
+    } else if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 2) {
+        message = textDecoder.decode(data.subarray(offset, offset + length));
+      }
+      offset += length;
+    } else {
+      break;
+    }
+  }
+
+  return { success, message };
+}
+
+export function encodeContainerLogsRequest(containerId: string, tail = 100): Uint8Array {
+  return concat([encodeStringField(1, containerId), encodeUintField(2, tail)]);
+}
+
+export function decodeContainerLogsResponse(data: Uint8Array): { logs: string } {
+  let offset = 0;
+  let logs = '';
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) {
+        logs = textDecoder.decode(data.subarray(offset, offset + length));
+      }
+      offset += length;
+    } else {
+      break;
+    }
+  }
+
+  return { logs };
+}
+
+export function encodeListServicesRequest(): Uint8Array {
+  return new Uint8Array(0);
+}
+
+export function decodeListServicesResponse(data: Uint8Array): {
+  services: SystemService[];
+  systemdAvailable: boolean;
+} {
+  let offset = 0;
+  const services: SystemService[] = [];
+  let systemdAvailable = false;
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (fieldNumber === 2 && wireType === 0) {
+      let value = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        value |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      systemdAvailable = value !== 0;
+    } else if (fieldNumber === 1 && wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+
+      const end = offset + length;
+      let name = '';
+      let description = '';
+      let loadState = '';
+      let activeState = '';
+      let subState = '';
+
+      while (offset < end) {
+        const itemTag = data[offset++];
+        const fn = itemTag >> 3;
+        const wt = itemTag & 0x07;
+
+        if (wt === 2) {
+          let l = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            l |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          const str = textDecoder.decode(data.subarray(offset, offset + l));
+          offset += l;
+          if (fn === 1) name = str;
+          else if (fn === 2) description = str;
+          else if (fn === 3) loadState = str;
+          else if (fn === 4) activeState = str;
+          else if (fn === 5) subState = str;
+        } else {
+          break;
+        }
+      }
+
+      services.push({ name, description, loadState, activeState, subState });
+    } else {
+      break;
+    }
+  }
+
+  return { services, systemdAvailable };
+}
+
+export function encodeManageServiceRequest(serviceName: string, action: ServiceAction): Uint8Array {
+  return concat([encodeStringField(1, serviceName), encodeUintField(2, action)]);
+}
+
+export function decodeManageServiceResponse(data: Uint8Array): {
+  success: boolean;
+  message: string;
+} {
+  return decodeManageContainerResponse(data);
+}
+
 
 
 

@@ -29,6 +29,11 @@ export enum Opcode {
   ProcessSpawn = 31,
   ProcessKill = 32,
   MetricsGet = 40,
+  DockerListContainers = 50,
+  DockerManageContainer = 51,
+  DockerContainerLogs = 52,
+  SystemListServices = 60,
+  SystemManageService = 61,
 }
 
 export interface KairoEnvelope {

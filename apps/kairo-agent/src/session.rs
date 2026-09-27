@@ -6,11 +6,13 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use kairo_common::KairoId;
 use kairo_protocol::v1::{
-    AttachPtyRequest, AttachPtyResponse, ClosePtyRequest, CreatePtyRequest, CreatePtyResponse,
-    ErrorCode, GetMetricsRequest, GetMetricsResponse, HandshakeAck, HandshakeInit, KairoError,
-    KillProcessRequest, ListDirectoryRequest, ListProcessesRequest, ListProcessesResponse,
-    ListPtysRequest, ListPtysResponse, PtyInput, PtyOutput, ReadFileRequest, ResizePtyRequest,
-    WatchRequest, WatchResponse, WriteFileRequest,
+    AttachPtyRequest, AttachPtyResponse, ClosePtyRequest, ContainerAction, ContainerLogsRequest,
+    CreatePtyRequest, CreatePtyResponse, ErrorCode, GetMetricsRequest, GetMetricsResponse,
+    HandshakeAck, HandshakeInit, KairoError, KillProcessRequest, ListContainersRequest,
+    ListDirectoryRequest, ListProcessesRequest, ListProcessesResponse, ListPtysRequest,
+    ListPtysResponse, ListServicesRequest, ManageContainerRequest, ManageServiceRequest, PtyInput,
+    PtyOutput, ReadFileRequest, ResizePtyRequest, ServiceAction, WatchRequest, WatchResponse,
+    WriteFileRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
@@ -27,6 +29,7 @@ use crate::fs::{FilesystemHandler, FsError};
 use crate::metrics::MetricsCollector;
 use crate::process::ProcessManager;
 use crate::pty::{PtyError, PtyManager};
+use crate::system::{SystemError, SystemManager};
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -49,6 +52,9 @@ pub enum SessionError {
 
     #[error("pty error: {0}")]
     Pty(#[from] PtyError),
+
+    #[error("system error: {0}")]
+    System(#[from] SystemError),
 
     #[error("unexpected message kind: expected {expected:?}, got {actual:?}")]
     UnexpectedKind {
@@ -86,6 +92,7 @@ pub struct Session {
     pty: Arc<PtyManager>,
     metrics: Arc<MetricsCollector>,
     process: Arc<ProcessManager>,
+    system: Arc<SystemManager>,
     watcher: Option<ActiveWatcher>,
 }
 
@@ -95,6 +102,7 @@ impl Session {
         let fs = FilesystemHandler::new(&config.data_dir);
         let metrics = Arc::new(MetricsCollector::new());
         let process = Arc::new(ProcessManager::new());
+        let system = Arc::new(SystemManager::new());
         Self {
             session_id: KairoId::new(),
             config,
@@ -103,6 +111,7 @@ impl Session {
             pty,
             metrics,
             process,
+            system,
             watcher: None,
         }
     }
@@ -233,6 +242,8 @@ impl Session {
                 "terminal.v1".to_string(),
                 "process.v1".to_string(),
                 "metrics.v1".to_string(),
+                "docker.v1".to_string(),
+                "system.v1".to_string(),
             ],
         };
 
@@ -560,6 +571,75 @@ impl Session {
                 if let Err(e) = self.process.kill_process(&req.process_id, req.signal) {
                     warn!(error = %e, pid = %req.process_id, "failed to kill process");
                 }
+            }
+            Opcode::DockerListContainers => {
+                let req = ListContainersRequest::decode(message.payload)?;
+                let resp = self.system.list_containers(req.all);
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::DockerListContainers,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::DockerManageContainer => {
+                let req = ManageContainerRequest::decode(message.payload)?;
+                let action =
+                    ContainerAction::try_from(req.action).unwrap_or(ContainerAction::Unspecified);
+                let resp = self.system.manage_container(&req.container_id, action)?;
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::DockerManageContainer,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::DockerContainerLogs => {
+                let req = ContainerLogsRequest::decode(message.payload)?;
+                let resp = self.system.container_logs(&req.container_id, req.tail)?;
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::DockerContainerLogs,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::SystemListServices => {
+                let _req = ListServicesRequest::decode(message.payload)?;
+                let resp = self.system.list_services();
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::SystemListServices,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::SystemManageService => {
+                let req = ManageServiceRequest::decode(message.payload)?;
+                let action =
+                    ServiceAction::try_from(req.action).unwrap_or(ServiceAction::Unspecified);
+                let resp = self.system.manage_service(&req.service_name, action)?;
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::SystemManageService,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
             }
             _ => {
                 warn!(?opcode, "unsupported request opcode");

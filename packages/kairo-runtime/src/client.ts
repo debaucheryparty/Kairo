@@ -28,12 +28,26 @@ import {
   encodeWatchRequest,
   decodeWatchResponse,
   decodeFileEvent,
+  encodeListContainersRequest,
+  decodeListContainersResponse,
+  encodeManageContainerRequest,
+  decodeManageContainerResponse,
+  encodeContainerLogsRequest,
+  decodeContainerLogsResponse,
+  encodeListServicesRequest,
+  decodeListServicesResponse,
+  encodeManageServiceRequest,
+  decodeManageServiceResponse,
   type FileEntry,
   type FileEventPayload,
   type HandshakeAckPayload,
   type ProcessInfo,
   type PtySessionInfo,
   type SystemMetrics,
+  type DockerContainer,
+  ContainerAction,
+  type SystemService,
+  ServiceAction,
 } from './protocol';
 import type { KairoSession } from './session';
 import type { TransportAdapter } from './transport';
@@ -299,6 +313,49 @@ export class KairoClient {
   async killProcess(processId: string, signal = 9): Promise<void> {
     const payload = encodeKillProcessRequest(processId, signal);
     await this.sendNotification(Opcode.ProcessKill, payload);
+  }
+
+  async listContainers(all = false): Promise<{
+    containers: DockerContainer[];
+    dockerAvailable: boolean;
+  }> {
+    const payload = encodeListContainersRequest(all);
+    const respBytes = await this.sendRequest(Opcode.DockerListContainers, payload);
+    return decodeListContainersResponse(respBytes);
+  }
+
+  async manageContainer(
+    containerId: string,
+    action: ContainerAction
+  ): Promise<{ success: boolean; message: string }> {
+    const payload = encodeManageContainerRequest(containerId, action);
+    const respBytes = await this.sendRequest(Opcode.DockerManageContainer, payload);
+    return decodeManageContainerResponse(respBytes);
+  }
+
+  async getContainerLogs(containerId: string, tail = 100): Promise<string> {
+    const payload = encodeContainerLogsRequest(containerId, tail);
+    const respBytes = await this.sendRequest(Opcode.DockerContainerLogs, payload);
+    const res = decodeContainerLogsResponse(respBytes);
+    return res.logs;
+  }
+
+  async listServices(): Promise<{
+    services: SystemService[];
+    systemdAvailable: boolean;
+  }> {
+    const payload = encodeListServicesRequest();
+    const respBytes = await this.sendRequest(Opcode.SystemListServices, payload);
+    return decodeListServicesResponse(respBytes);
+  }
+
+  async manageService(
+    serviceName: string,
+    action: ServiceAction
+  ): Promise<{ success: boolean; message: string }> {
+    const payload = encodeManageServiceRequest(serviceName, action);
+    const respBytes = await this.sendRequest(Opcode.SystemManageService, payload);
+    return decodeManageServiceResponse(respBytes);
   }
 
   private handleIncomingMessage(data: Uint8Array): void {

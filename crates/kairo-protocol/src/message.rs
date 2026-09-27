@@ -57,6 +57,11 @@ pub enum Opcode {
     ProcessSpawn = 31,
     ProcessKill = 32,
     MetricsGet = 40,
+    DockerListContainers = 50,
+    DockerManageContainer = 51,
+    DockerContainerLogs = 52,
+    SystemListServices = 60,
+    SystemManageService = 61,
 }
 
 impl Opcode {
@@ -79,6 +84,11 @@ impl Opcode {
             31 => Some(Self::ProcessSpawn),
             32 => Some(Self::ProcessKill),
             40 => Some(Self::MetricsGet),
+            50 => Some(Self::DockerListContainers),
+            51 => Some(Self::DockerManageContainer),
+            52 => Some(Self::DockerContainerLogs),
+            60 => Some(Self::SystemListServices),
+            61 => Some(Self::SystemManageService),
             _ => None,
         }
     }
