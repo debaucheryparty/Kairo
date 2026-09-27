@@ -7,6 +7,7 @@ export {
   encodeEnvelope,
   decodeEnvelope,
   MessageKind,
+  Opcode,
   type KairoEnvelope,
   HEADER_SIZE,
   MAGIC,
@@ -15,7 +16,15 @@ export {
 export {
   encodeHandshakeInit,
   decodeHandshakeAck,
+  encodeListDirectoryRequest,
+  decodeListDirectoryResponse,
+  encodeReadFileRequest,
+  decodeReadFileResponse,
+  encodeWriteFileRequest,
+  decodeWriteFileResponse,
   type HandshakeInitPayload,
   type HandshakeAckPayload,
+  type FileEntry,
+  type KairoErrorPayload,
 } from './protocol';
 

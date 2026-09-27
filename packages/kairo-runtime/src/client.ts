@@ -1,8 +1,16 @@
 import { ConnectionState, type ConnectionStore } from './connection';
-import { decodeEnvelope, encodeEnvelope, MessageKind } from './envelope';
+import { decodeEnvelope, encodeEnvelope, MessageKind, Opcode } from './envelope';
 import {
   decodeHandshakeAck,
+  decodeKairoError,
+  decodeListDirectoryResponse,
+  decodeReadFileResponse,
+  decodeWriteFileResponse,
   encodeHandshakeInit,
+  encodeListDirectoryRequest,
+  encodeReadFileRequest,
+  encodeWriteFileRequest,
+  type FileEntry,
   type HandshakeAckPayload,
 } from './protocol';
 import type { KairoSession } from './session';
@@ -15,6 +23,12 @@ export interface KairoClientOptions {
   handshakeTimeoutMs?: number;
 }
 
+interface PendingRequest {
+  resolve: (data: Uint8Array) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 export class KairoClient {
   private transport: TransportAdapter;
   private store: { getState: () => ConnectionStore };
@@ -22,6 +36,7 @@ export class KairoClient {
   private handshakeTimeoutMs: number;
   private currentSession: KairoSession | null = null;
   private nextRequestId = 1n;
+  private pendingRequests = new Map<string, PendingRequest>();
 
   constructor(options: KairoClientOptions) {
     this.transport = options.transport;
@@ -31,12 +46,21 @@ export class KairoClient {
 
     this.transport.onClose((reason) => {
       this.currentSession = null;
+      for (const [, req] of this.pendingRequests) {
+        clearTimeout(req.timer);
+        req.reject(new Error(`Connection closed: ${reason}`));
+      }
+      this.pendingRequests.clear();
       this.store.getState().transition(ConnectionState.Disconnected);
       this.store.getState().setError(reason);
     });
 
     this.transport.onError((error) => {
       this.store.getState().setError(error.message);
+    });
+
+    this.transport.onMessage((data) => {
+      this.handleIncomingMessage(new Uint8Array(data));
     });
   }
 
@@ -61,24 +85,21 @@ export class KairoClient {
 
     const handshakeAckPromise = new Promise<HandshakeAckPayload>((resolve, reject) => {
       const timer = setTimeout(() => {
+        this.pendingRequests.delete(requestId.toString());
         reject(new Error('Handshake timed out waiting for server response'));
       }, this.handshakeTimeoutMs);
 
-      const handler = (data: ArrayBuffer) => {
-        try {
-          const envelope = decodeEnvelope(new Uint8Array(data));
-          if (envelope.kind === MessageKind.HandshakeAck) {
-            clearTimeout(timer);
-            const ack = decodeHandshakeAck(envelope.payload);
-            resolve(ack);
+      this.pendingRequests.set(requestId.toString(), {
+        resolve: (payload) => {
+          try {
+            resolve(decodeHandshakeAck(payload));
+          } catch (e) {
+            reject(e instanceof Error ? e : new Error(String(e)));
           }
-        } catch (err) {
-          clearTimeout(timer);
-          reject(err);
-        }
-      };
-
-      this.transport.onMessage(handler);
+        },
+        reject,
+        timer,
+      });
     });
 
     await this.transport.send(frame.buffer as ArrayBuffer);
@@ -99,5 +120,77 @@ export class KairoClient {
     this.currentSession = null;
     await this.transport.close();
     this.store.getState().transition(ConnectionState.Disconnected);
+  }
+
+  async sendRequest(opcode: Opcode, payload: Uint8Array): Promise<Uint8Array> {
+    if (!this.currentSession) {
+      throw new Error('Not connected to a Kairo Agent');
+    }
+
+    const requestId = this.nextRequestId++;
+    const frame = encodeEnvelope(MessageKind.Request, requestId, payload, opcode);
+
+    return new Promise<Uint8Array>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingRequests.delete(requestId.toString());
+        reject(new Error(`Request timed out (opcode ${opcode})`));
+      }, 15_000);
+
+      this.pendingRequests.set(requestId.toString(), { resolve, reject, timer });
+
+      this.transport.send(frame.buffer as ArrayBuffer).catch((err) => {
+        clearTimeout(timer);
+        this.pendingRequests.delete(requestId.toString());
+        reject(err);
+      });
+    });
+  }
+
+  async listDirectory(path = ''): Promise<FileEntry[]> {
+    const payload = encodeListDirectoryRequest(path);
+    const respBytes = await this.sendRequest(Opcode.FsListDirectory, payload);
+    return decodeListDirectoryResponse(respBytes);
+  }
+
+  async readFile(
+    path: string,
+    offset = 0,
+    length = 0
+  ): Promise<{ content: Uint8Array; revision: string }> {
+    const payload = encodeReadFileRequest(path, offset, length);
+    const respBytes = await this.sendRequest(Opcode.FsReadFile, payload);
+    return decodeReadFileResponse(respBytes);
+  }
+
+  async writeFile(
+    path: string,
+    content: Uint8Array,
+    expectedRevision = ''
+  ): Promise<{ revision: string }> {
+    const payload = encodeWriteFileRequest(path, content, expectedRevision);
+    const respBytes = await this.sendRequest(Opcode.FsWriteFile, payload);
+    return decodeWriteFileResponse(respBytes);
+  }
+
+  private handleIncomingMessage(data: Uint8Array): void {
+    try {
+      const envelope = decodeEnvelope(data);
+      const reqId = envelope.requestId.toString();
+      const pending = this.pendingRequests.get(reqId);
+
+      if (!pending) return;
+
+      this.pendingRequests.delete(reqId);
+      clearTimeout(pending.timer);
+
+      if (envelope.kind === MessageKind.Response || envelope.kind === MessageKind.HandshakeAck) {
+        pending.resolve(envelope.payload);
+      } else if (envelope.kind === MessageKind.Error) {
+        const err = decodeKairoError(envelope.payload);
+        pending.reject(new Error(`Agent error [code ${err.code}]: ${err.message}`));
+      }
+    } catch (e) {
+      // Ignored malformed messages
+    }
   }
 }

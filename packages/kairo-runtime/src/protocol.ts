@@ -10,25 +10,65 @@ export interface HandshakeAckPayload {
   capabilities: string[];
 }
 
-export function encodeHandshakeInit(payload: HandshakeInitPayload): Uint8Array {
-  const parts: Uint8Array[] = [];
+export interface FileEntry {
+  path: string;
+  fileType: number;
+  size: number;
+  modifiedAt: number;
+  revision: string;
+}
 
-  // Field 1: protocol_version (uint32, tag = (1 << 3) | 0 = 0x08)
-  parts.push(new Uint8Array([0x08, payload.protocolVersion & 0x7f]));
+export interface KairoErrorPayload {
+  code: number;
+  message: string;
+  requestId: string;
+}
 
-  // Field 2: client_id (string, tag = (2 << 3) | 2 = 0x12)
-  const clientBytes = new TextEncoder().encode(payload.clientId);
-  parts.push(new Uint8Array([0x12, clientBytes.byteLength]));
-  parts.push(clientBytes);
-
-  const totalLength = parts.reduce((acc, p) => acc + p.byteLength, 0);
-  const result = new Uint8Array(totalLength);
+function concat(arrays: Uint8Array[]): Uint8Array {
+  const total = arrays.reduce((acc, a) => acc + a.byteLength, 0);
+  const result = new Uint8Array(total);
   let offset = 0;
-  for (const part of parts) {
-    result.set(part, offset);
-    offset += part.byteLength;
+  for (const arr of arrays) {
+    result.set(arr, offset);
+    offset += arr.byteLength;
   }
   return result;
+}
+
+function encodeVarint(val: number): Uint8Array {
+  const bytes: number[] = [];
+  let v = val;
+  while (v >= 0x80) {
+    bytes.push((v & 0x7f) | 0x80);
+    v >>>= 7;
+  }
+  bytes.push(v & 0x7f);
+  return new Uint8Array(bytes);
+}
+
+function encodeStringField(fieldNumber: number, str: string): Uint8Array {
+  const textBytes = new TextEncoder().encode(str);
+  const tag = (fieldNumber << 3) | 2;
+  const lenBytes = encodeVarint(textBytes.byteLength);
+  return concat([new Uint8Array([tag]), lenBytes, textBytes]);
+}
+
+function encodeBytesField(fieldNumber: number, bytes: Uint8Array): Uint8Array {
+  const tag = (fieldNumber << 3) | 2;
+  const lenBytes = encodeVarint(bytes.byteLength);
+  return concat([new Uint8Array([tag]), lenBytes, bytes]);
+}
+
+function encodeUintField(fieldNumber: number, val: number): Uint8Array {
+  const tag = (fieldNumber << 3) | 0;
+  return concat([new Uint8Array([tag]), encodeVarint(val)]);
+}
+
+export function encodeHandshakeInit(payload: HandshakeInitPayload): Uint8Array {
+  return concat([
+    encodeUintField(1, payload.protocolVersion),
+    encodeStringField(2, payload.clientId),
+  ]);
 }
 
 export function decodeHandshakeAck(data: Uint8Array): HandshakeAckPayload {
@@ -45,7 +85,6 @@ export function decodeHandshakeAck(data: Uint8Array): HandshakeAckPayload {
     const wireType = tag & 0x07;
 
     if (wireType === 0) {
-      // Varint
       let value = 0;
       let shift = 0;
       while (offset < data.byteLength) {
@@ -54,11 +93,8 @@ export function decodeHandshakeAck(data: Uint8Array): HandshakeAckPayload {
         if ((byte & 0x80) === 0) break;
         shift += 7;
       }
-      if (fieldNumber === 1) {
-        protocolVersion = value;
-      }
+      if (fieldNumber === 1) protocolVersion = value;
     } else if (wireType === 2) {
-      // Length-delimited
       let length = 0;
       let shift = 0;
       while (offset < data.byteLength) {
@@ -71,23 +107,215 @@ export function decodeHandshakeAck(data: Uint8Array): HandshakeAckPayload {
       offset += length;
       const str = textDecoder.decode(bytes);
 
-      if (fieldNumber === 2) {
-        agentId = str;
-      } else if (fieldNumber === 3) {
-        sessionId = str;
-      } else if (fieldNumber === 4) {
-        capabilities.push(str);
-      }
+      if (fieldNumber === 2) agentId = str;
+      else if (fieldNumber === 3) sessionId = str;
+      else if (fieldNumber === 4) capabilities.push(str);
     } else {
-      // Skip unknown wire types
       break;
     }
   }
 
-  return {
-    protocolVersion,
-    agentId,
-    sessionId,
-    capabilities,
-  };
+  return { protocolVersion, agentId, sessionId, capabilities };
+}
+
+export function encodeListDirectoryRequest(path: string): Uint8Array {
+  return encodeStringField(1, path);
+}
+
+export function decodeListDirectoryResponse(data: Uint8Array): FileEntry[] {
+  let offset = 0;
+  const entries: FileEntry[] = [];
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (fieldNumber === 1 && wireType === 2) {
+      // Repeated FileEntry
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+
+      const entryEnd = offset + length;
+      let path = '';
+      let fileType = 0;
+      let size = 0;
+      let modifiedAt = 0;
+      let revision = '';
+
+      while (offset < entryEnd) {
+        const entryTag = data[offset++];
+        const fn = entryTag >> 3;
+        const wt = entryTag & 0x07;
+
+        if (wt === 0) {
+          let val = 0;
+          let s = 0;
+          while (offset < entryEnd) {
+            const b = data[offset++];
+            val |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          if (fn === 2) fileType = val;
+          else if (fn === 3) size = val;
+          else if (fn === 4) modifiedAt = val;
+        } else if (wt === 2) {
+          let l = 0;
+          let s = 0;
+          while (offset < entryEnd) {
+            const b = data[offset++];
+            l |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          const str = textDecoder.decode(data.subarray(offset, offset + l));
+          offset += l;
+          if (fn === 1) path = str;
+          else if (fn === 5) revision = str;
+        }
+      }
+
+      entries.push({ path, fileType, size, modifiedAt, revision });
+    } else {
+      break;
+    }
+  }
+
+  return entries;
+}
+
+export function encodeReadFileRequest(path: string, offset = 0, length = 0): Uint8Array {
+  return concat([
+    encodeStringField(1, path),
+    encodeUintField(2, offset),
+    encodeUintField(3, length),
+  ]);
+}
+
+export function decodeReadFileResponse(data: Uint8Array): { content: Uint8Array; revision: string } {
+  let offset = 0;
+  let content = new Uint8Array(0);
+  let revision = '';
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) {
+        content = data.slice(offset, offset + length);
+      } else if (fieldNumber === 2) {
+        revision = textDecoder.decode(data.subarray(offset, offset + length));
+      }
+      offset += length;
+    } else {
+      break;
+    }
+  }
+
+  return { content, revision };
+}
+
+export function encodeWriteFileRequest(
+  path: string,
+  content: Uint8Array,
+  expectedRevision = ''
+): Uint8Array {
+  return concat([
+    encodeStringField(1, path),
+    encodeBytesField(2, content),
+    encodeStringField(3, expectedRevision),
+  ]);
+}
+
+export function decodeWriteFileResponse(data: Uint8Array): { revision: string } {
+  let offset = 0;
+  let revision = '';
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) {
+        revision = textDecoder.decode(data.subarray(offset, offset + length));
+      }
+      offset += length;
+    } else {
+      break;
+    }
+  }
+
+  return { revision };
+}
+
+export function decodeKairoError(data: Uint8Array): KairoErrorPayload {
+  let offset = 0;
+  let code = 0;
+  let message = '';
+  let requestId = '';
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 0) {
+      let value = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        value |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) code = value;
+    } else if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      const str = textDecoder.decode(data.subarray(offset, offset + length));
+      offset += length;
+      if (fieldNumber === 2) message = str;
+      else if (fieldNumber === 3) requestId = str;
+    } else {
+      break;
+    }
+  }
+
+  return { code, message, requestId };
 }

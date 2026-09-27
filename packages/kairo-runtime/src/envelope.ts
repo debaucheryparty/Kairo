@@ -12,6 +12,23 @@ export enum MessageKind {
   Error = 6,
 }
 
+export enum Opcode {
+  None = 0,
+  FsListDirectory = 10,
+  FsReadFile = 11,
+  FsWriteFile = 12,
+  FsWatch = 13,
+  TerminalCreatePty = 20,
+  TerminalInput = 21,
+  TerminalOutput = 22,
+  TerminalResize = 23,
+  TerminalClose = 24,
+  ProcessList = 30,
+  ProcessSpawn = 31,
+  ProcessKill = 32,
+  MetricsGet = 40,
+}
+
 export interface KairoEnvelope {
   version: number;
   kind: MessageKind;
@@ -23,7 +40,8 @@ export interface KairoEnvelope {
 export function encodeEnvelope(
   kind: MessageKind,
   requestId: bigint,
-  payload: Uint8Array = new Uint8Array(0)
+  payload: Uint8Array = new Uint8Array(0),
+  opcode: Opcode = Opcode.None
 ): Uint8Array {
   if (payload.byteLength > MAX_PAYLOAD_SIZE) {
     throw new Error(`Payload too large: ${payload.byteLength} bytes (max ${MAX_PAYLOAD_SIZE})`);
@@ -37,7 +55,7 @@ export function encodeEnvelope(
   view.setUint8(1, MAGIC[1]);
   view.setUint16(2, PROTOCOL_VERSION);
   view.setUint16(4, kind);
-  view.setUint16(6, 0); // flags
+  view.setUint16(6, opcode); // flags contains opcode
   view.setBigUint64(8, requestId);
   view.setUint32(16, payload.byteLength);
 
