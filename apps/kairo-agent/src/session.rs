@@ -6,9 +6,9 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use kairo_common::KairoId;
 use kairo_protocol::v1::{
-    ClosePtyRequest, CreatePtyRequest, CreatePtyResponse, ErrorCode, HandshakeAck, HandshakeInit,
-    KairoError, ListDirectoryRequest, PtyInput, PtyOutput, ReadFileRequest, ResizePtyRequest,
-    WriteFileRequest,
+    ClosePtyRequest, CreatePtyRequest, CreatePtyResponse, ErrorCode, GetMetricsRequest,
+    GetMetricsResponse, HandshakeAck, HandshakeInit, KairoError, ListDirectoryRequest, PtyInput,
+    PtyOutput, ReadFileRequest, ResizePtyRequest, WriteFileRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
@@ -22,6 +22,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::AgentConfig;
 use crate::fs::{FilesystemHandler, FsError};
+use crate::metrics::MetricsCollector;
 use crate::pty::{PtyError, PtyManager};
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -69,6 +70,7 @@ pub struct Session {
     state: SessionState,
     fs: FilesystemHandler,
     pty: Arc<PtyManager>,
+    metrics: Arc<MetricsCollector>,
 }
 
 impl Session {
@@ -76,12 +78,14 @@ impl Session {
     pub fn new(config: Arc<AgentConfig>) -> Self {
         let fs = FilesystemHandler::new(&config.data_dir);
         let pty = Arc::new(PtyManager::new());
+        let metrics = Arc::new(MetricsCollector::new());
         Self {
             session_id: KairoId::new(),
             config,
             state: SessionState::Authenticating,
             fs,
             pty,
+            metrics,
         }
     }
 
@@ -389,6 +393,22 @@ impl Session {
                 if let Err(e) = self.pty.close(&req.pty_id) {
                     warn!(error = %e, "pty close failed");
                 }
+            }
+            Opcode::MetricsGet => {
+                let _req = GetMetricsRequest::decode(message.payload)?;
+                let metrics = self.metrics.collect();
+                let resp = GetMetricsResponse {
+                    metrics: Some(metrics),
+                };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::MetricsGet,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
             }
             _ => {
                 warn!(?opcode, "unsupported request opcode");

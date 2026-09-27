@@ -28,10 +28,13 @@ export {
   decodePtyOutput,
   encodeResizePtyRequest,
   encodeClosePtyRequest,
+  encodeGetMetricsRequest,
+  decodeGetMetricsResponse,
   type HandshakeInitPayload,
   type HandshakeAckPayload,
   type FileEntry,
   type KairoErrorPayload,
   type CreatePtyRequestPayload,
+  type SystemMetrics,
 } from './protocol';
 

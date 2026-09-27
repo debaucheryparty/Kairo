@@ -30,6 +30,7 @@ futures-util = { workspace = true }
 bytes = { workspace = true }
 prost = { workspace = true }
 portable-pty = { workspace = true }
+sysinfo = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

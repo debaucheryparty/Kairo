@@ -428,3 +428,102 @@ export function encodeClosePtyRequest(ptyId: string): Uint8Array {
   return encodeStringField(1, ptyId);
 }
 
+export interface SystemMetrics {
+  cpuUsagePercent: number;
+  memoryTotalBytes: number;
+  memoryUsedBytes: number;
+  diskTotalBytes: number;
+  diskUsedBytes: number;
+  loadAverage1m: number;
+  loadAverage5m: number;
+  loadAverage15m: number;
+  uptimeSeconds: number;
+}
+
+export function encodeGetMetricsRequest(): Uint8Array {
+  return new Uint8Array(0);
+}
+
+export function decodeGetMetricsResponse(data: Uint8Array): SystemMetrics {
+  let offset = 0;
+  const metrics: SystemMetrics = {
+    cpuUsagePercent: 0,
+    memoryTotalBytes: 0,
+    memoryUsedBytes: 0,
+    diskTotalBytes: 0,
+    diskUsedBytes: 0,
+    loadAverage1m: 0,
+    loadAverage5m: 0,
+    loadAverage15m: 0,
+    uptimeSeconds: 0,
+  };
+
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (fieldNumber === 1 && wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+
+      const end = offset + length;
+      while (offset < end) {
+        const subTag = data[offset++];
+        const fn = subTag >> 3;
+        const wt = subTag & 0x07;
+
+        if (wt === 1) {
+          const val = view.getFloat64(offset, true);
+          offset += 8;
+          if (fn === 1) metrics.cpuUsagePercent = val;
+          else if (fn === 6) metrics.loadAverage1m = val;
+          else if (fn === 7) metrics.loadAverage5m = val;
+          else if (fn === 8) metrics.loadAverage15m = val;
+        } else if (wt === 0) {
+          let val = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            val += (b & 0x7f) * Math.pow(2, s);
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          if (fn === 2) metrics.memoryTotalBytes = val;
+          else if (fn === 3) metrics.memoryUsedBytes = val;
+          else if (fn === 4) metrics.diskTotalBytes = val;
+          else if (fn === 5) metrics.diskUsedBytes = val;
+          else if (fn === 9) metrics.uptimeSeconds = val;
+        } else if (wt === 2) {
+          let l = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            l |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          offset += l;
+        } else if (wt === 5) {
+          offset += 4;
+        } else {
+          break;
+        }
+      }
+    } else {
+      break;
+    }
+  }
+
+  return metrics;
+}
+
+

@@ -235,7 +235,7 @@ export function App() {
             >
               {win.appId === 'finder' && <Finder client={client} />}
               {win.appId === 'terminal' && <TerminalApp client={client} session={session} />}
-              {win.appId === 'monitor' && <ActivityMonitor session={session} />}
+              {win.appId === 'monitor' && <ActivityMonitor client={client} session={session} />}
             </WindowFrame>
           ))
         )}

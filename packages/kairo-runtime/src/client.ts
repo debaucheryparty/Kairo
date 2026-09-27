@@ -2,6 +2,7 @@ import { ConnectionState, type ConnectionStore } from './connection';
 import { decodeEnvelope, encodeEnvelope, MessageKind, Opcode } from './envelope';
 import {
   decodeCreatePtyResponse,
+  decodeGetMetricsResponse,
   decodeHandshakeAck,
   decodeKairoError,
   decodeListDirectoryResponse,
@@ -10,6 +11,7 @@ import {
   decodeWriteFileResponse,
   encodeClosePtyRequest,
   encodeCreatePtyRequest,
+  encodeGetMetricsRequest,
   encodeHandshakeInit,
   encodeListDirectoryRequest,
   encodePtyInput,
@@ -18,6 +20,7 @@ import {
   encodeWriteFileRequest,
   type FileEntry,
   type HandshakeAckPayload,
+  type SystemMetrics,
 } from './protocol';
 import type { KairoSession } from './session';
 import type { TransportAdapter } from './transport';
@@ -236,6 +239,12 @@ export class KairoClient {
   async closePty(ptyId: string): Promise<void> {
     const payload = encodeClosePtyRequest(ptyId);
     await this.sendNotification(Opcode.TerminalClose, payload);
+  }
+
+  async getMetrics(): Promise<SystemMetrics> {
+    const payload = encodeGetMetricsRequest();
+    const respBytes = await this.sendRequest(Opcode.MetricsGet, payload);
+    return decodeGetMetricsResponse(respBytes);
   }
 
   private handleIncomingMessage(data: Uint8Array): void {
