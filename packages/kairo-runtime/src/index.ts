@@ -66,5 +66,8 @@ export {
   ContainerAction,
   type SystemService,
   ServiceAction,
+  type LinuxApp,
+  type LaunchAppResponsePayload,
+  type RemoteSurfaceInfo,
 } from './protocol';
 

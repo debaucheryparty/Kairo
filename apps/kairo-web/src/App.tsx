@@ -2,10 +2,12 @@ import {
   ConnectionState,
   ComputerManager,
   type ComputerProfile,
+  type LinuxApp,
 } from '@kairo/runtime';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityMonitor } from './apps/ActivityMonitor';
 import { Finder } from './apps/Finder';
+import { RemoteSurfaceApp } from './apps/RemoteSurfaceApp';
 import { TerminalApp } from './apps/TerminalApp';
 import { Spotlight } from './shell/Spotlight';
 import type { AppId, WindowState } from './types/window';
@@ -32,6 +34,7 @@ const DEFAULT_WINDOWS: Record<
   terminal: { title: 'Terminal', width: 620, height: 380 },
   monitor: { title: 'Activity Monitor', width: 520, height: 400 },
   settings: { title: 'Settings', width: 480, height: 360 },
+  surface: { title: 'Remote Surface', width: 740, height: 520 },
 };
 
 function loadInitialProfiles(): ComputerProfile[] {
@@ -105,6 +108,18 @@ export function App() {
   const [newComputerUrl, setNewComputerUrl] = useState('ws://127.0.0.1:9600');
   const [newComputerRelayUrl, setNewComputerRelayUrl] = useState('');
   const [newComputerColor, setNewComputerColor] = useState('#6366f1');
+  const [installedApps, setInstalledApps] = useState<LinuxApp[]>([]);
+
+  useEffect(() => {
+    if (activeState === ConnectionState.Connected) {
+      activeInstance.client
+        .listApplications()
+        .then((apps) => setInstalledApps(apps))
+        .catch(() => {});
+    } else {
+      setInstalledApps([]);
+    }
+  }, [activeState, activeInstance]);
 
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
@@ -165,6 +180,45 @@ export function App() {
       setNextZIndex((z) => z + 1);
     },
     [activeProfile, nextZIndex]
+  );
+
+  const launchRemoteApp = useCallback(
+    async (app: LinuxApp) => {
+      try {
+        const resp = await activeInstance.client.launchApplication({
+          appId: app.appId,
+          exec: app.exec,
+        });
+
+        const offset = (windows.length * 28) % 180;
+        const newWindow: WindowState = {
+          id: `surface-${resp.surfaceId}`,
+          appId: 'surface',
+          title: `${app.name} (${activeProfile.name})`,
+          computerId: activeProfile.id,
+          computerName: activeProfile.name,
+          computerColor: activeProfile.color,
+          surfaceId: resp.surfaceId,
+          surfaceApp: app.name,
+          x: 80 + offset,
+          y: 50 + offset,
+          width: 740,
+          height: 520,
+          minWidth: 400,
+          minHeight: 300,
+          isMinimized: false,
+          isMaximized: false,
+          zIndex: nextZIndex,
+        };
+
+        setWindows((prev) => [...prev, newWindow]);
+        setActiveWindowId(newWindow.id);
+        setNextZIndex((z) => z + 1);
+      } catch (err) {
+        console.error('Failed to launch remote app:', err);
+      }
+    },
+    [activeInstance, activeProfile, nextZIndex, windows.length]
   );
 
   const handleConnect = async (profileId = activeProfile.id) => {
@@ -506,6 +560,14 @@ export function App() {
                     session={inst.session}
                   />
                 )}
+                {win.appId === 'surface' && win.surfaceId && (
+                  <RemoteSurfaceApp
+                    client={inst.client}
+                    surfaceId={win.surfaceId}
+                    appTitle={win.surfaceApp || win.title}
+                    onClose={() => closeWindow(win.id)}
+                  />
+                )}
               </WindowFrame>
             );
           })
@@ -630,6 +692,8 @@ export function App() {
         isOpen={isSpotlightOpen}
         onClose={() => setIsSpotlightOpen(false)}
         onOpenApp={openApp}
+        onLaunchRemoteApp={launchRemoteApp}
+        installedApps={installedApps}
         onDisconnect={() => handleDisconnect()}
         onCloseAllWindows={() => setWindows([])}
       />

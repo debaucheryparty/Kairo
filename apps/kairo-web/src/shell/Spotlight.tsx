@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { LinuxApp } from '@kairo/runtime';
 import type { AppId } from '../types/window';
 
 export interface SpotlightAction {
@@ -14,6 +15,8 @@ interface SpotlightProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenApp: (appId: AppId) => void;
+  onLaunchRemoteApp?: (app: LinuxApp) => void;
+  installedApps?: LinuxApp[];
   onDisconnect?: () => void;
   onCloseAllWindows?: () => void;
 }
@@ -22,6 +25,8 @@ export function Spotlight({
   isOpen,
   onClose,
   onOpenApp,
+  onLaunchRemoteApp,
+  installedApps = [],
   onDisconnect,
   onCloseAllWindows,
 }: SpotlightProps) {
@@ -85,6 +90,19 @@ export function Spotlight({
         onClose();
       },
     },
+    ...installedApps.map(
+      (app): SpotlightAction => ({
+        id: `remote-${app.appId}`,
+        title: app.name,
+        subtitle:
+          app.comment || app.genericName || `Launch ${app.exec} as Remote Surface`,
+        category: 'Applications',
+        onSelect: () => {
+          if (onLaunchRemoteApp) onLaunchRemoteApp(app);
+          onClose();
+        },
+      })
+    ),
   ];
 
   const filtered = actions.filter(

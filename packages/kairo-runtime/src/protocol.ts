@@ -24,6 +24,8 @@ export interface KairoErrorPayload {
   requestId: string;
 }
 
+const textDecoder = new TextDecoder();
+
 function concat(arrays: Uint8Array[]): Uint8Array {
   const total = arrays.reduce((acc, a) => acc + a.byteLength, 0);
   const result = new Uint8Array(total);
@@ -1124,6 +1126,205 @@ export function decodeManageServiceResponse(data: Uint8Array): {
   message: string;
 } {
   return decodeManageContainerResponse(data);
+}
+
+export interface LinuxApp {
+  appId: string;
+  name: string;
+  genericName: string;
+  comment: string;
+  icon: string;
+  exec: string;
+  categories: string[];
+  isTerminal: boolean;
+}
+
+export interface LaunchAppResponsePayload {
+  surfaceId: string;
+  processId: string;
+  state: string;
+}
+
+export interface RemoteSurfaceInfo {
+  surfaceId: string;
+  appId: string;
+  title: string;
+  width: number;
+  height: number;
+  backend: string;
+  state: string;
+}
+
+export function encodeListAppsRequest(): Uint8Array {
+  return new Uint8Array(0);
+}
+
+export function decodeListAppsResponse(data: Uint8Array): LinuxApp[] {
+  const apps: LinuxApp[] = [];
+  let offset = 0;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (fieldNumber === 1 && wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+
+      const end = offset + length;
+      let appId = '';
+      let name = '';
+      let genericName = '';
+      let comment = '';
+      let icon = '';
+      let exec = '';
+      const categories: string[] = [];
+      let isTerminal = false;
+
+      while (offset < end) {
+        const itemTag = data[offset++];
+        const fn = itemTag >> 3;
+        const wt = itemTag & 0x07;
+
+        if (wt === 2) {
+          let l = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            l |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          const str = textDecoder.decode(data.subarray(offset, offset + l));
+          offset += l;
+          if (fn === 1) appId = str;
+          else if (fn === 2) name = str;
+          else if (fn === 3) genericName = str;
+          else if (fn === 4) comment = str;
+          else if (fn === 5) icon = str;
+          else if (fn === 6) exec = str;
+          else if (fn === 7) categories.push(str);
+        } else if (wt === 0) {
+          let val = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            val |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          if (fn === 8) isTerminal = val !== 0;
+        } else {
+          break;
+        }
+      }
+
+      apps.push({
+        appId,
+        name,
+        genericName,
+        comment,
+        icon,
+        exec,
+        categories,
+        isTerminal,
+      });
+    } else {
+      break;
+    }
+  }
+
+  return apps;
+}
+
+export function encodeLaunchAppRequest(req: {
+  appId: string;
+  exec?: string;
+  args?: string[];
+  workingDirectory?: string;
+}): Uint8Array {
+  const parts: Uint8Array[] = [encodeStringField(1, req.appId)];
+  if (req.exec) {
+    parts.push(encodeStringField(2, req.exec));
+  }
+  if (req.args) {
+    for (const arg of req.args) {
+      parts.push(encodeStringField(3, arg));
+    }
+  }
+  if (req.workingDirectory) {
+    parts.push(encodeStringField(4, req.workingDirectory));
+  }
+  return concat(parts);
+}
+
+export function decodeLaunchAppResponse(data: Uint8Array): LaunchAppResponsePayload {
+  let surfaceId = '';
+  let processId = '';
+  let state = '';
+  let offset = 0;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      const str = textDecoder.decode(data.subarray(offset, offset + length));
+      offset += length;
+      if (fieldNumber === 1) surfaceId = str;
+      else if (fieldNumber === 2) processId = str;
+      else if (fieldNumber === 3) state = str;
+    } else {
+      break;
+    }
+  }
+
+  return { surfaceId, processId, state };
+}
+
+export function encodeCloseSurfaceRequest(surfaceId: string): Uint8Array {
+  return encodeStringField(1, surfaceId);
+}
+
+export function decodeCloseSurfaceResponse(data: Uint8Array): boolean {
+  let success = false;
+  let offset = 0;
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (fieldNumber === 1 && wireType === 0) {
+      let val = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        val |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      success = val !== 0;
+    } else {
+      break;
+    }
+  }
+  return success;
 }
 
 

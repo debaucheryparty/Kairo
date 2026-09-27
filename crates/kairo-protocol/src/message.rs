@@ -62,6 +62,10 @@ pub enum Opcode {
     DockerContainerLogs = 52,
     SystemListServices = 60,
     SystemManageService = 61,
+    AppList = 70,
+    AppLaunch = 71,
+    SurfaceInput = 72,
+    SurfaceClose = 73,
 }
 
 impl Opcode {
@@ -89,6 +93,10 @@ impl Opcode {
             52 => Some(Self::DockerContainerLogs),
             60 => Some(Self::SystemListServices),
             61 => Some(Self::SystemManageService),
+            70 => Some(Self::AppList),
+            71 => Some(Self::AppLaunch),
+            72 => Some(Self::SurfaceInput),
+            73 => Some(Self::SurfaceClose),
             _ => None,
         }
     }

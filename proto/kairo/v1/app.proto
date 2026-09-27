@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package kairo.v1;
+
+message LinuxApp {
+  string app_id = 1;
+  string name = 2;
+  string generic_name = 3;
+  string comment = 4;
+  string icon = 5;
+  string exec = 6;
+  repeated string categories = 7;
+  bool is_terminal = 8;
+}
+
+message ListAppsRequest {}
+
+message ListAppsResponse {
+  repeated LinuxApp apps = 1;
+}
+
+message LaunchAppRequest {
+  string app_id = 1;
+  string exec = 2;
+  repeated string args = 3;
+  string working_directory = 4;
+}
+
+message LaunchAppResponse {
+  string surface_id = 1;
+  string process_id = 2;
+  string state = 3;
+}
+
+message RemoteSurface {
+  string surface_id = 1;
+  string app_id = 2;
+  string title = 3;
+  uint32 width = 4;
+  uint32 height = 5;
+  string backend = 6;
+  string state = 7;
+}
+
+message SurfaceInputEvent {
+  string surface_id = 1;
+  string event_type = 2;
+  int32 x = 3;
+  int32 y = 4;
+  uint32 button = 5;
+  string key = 6;
+  int32 delta_x = 7;
+  int32 delta_y = 8;
+}
+
+message CloseSurfaceRequest {
+  string surface_id = 1;
+}
+
+message CloseSurfaceResponse {
+  bool success = 1;
+}

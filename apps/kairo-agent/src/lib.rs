@@ -1,3 +1,4 @@
+pub mod app_manager;
 pub mod config;
 pub mod fs;
 pub mod metrics;
@@ -7,6 +8,7 @@ pub mod server;
 pub mod session;
 pub mod system;
 
+pub use app_manager::{AppError, AppManager};
 pub use config::AgentConfig;
 pub use fs::{FilesystemHandler, FsError};
 pub use metrics::MetricsCollector;

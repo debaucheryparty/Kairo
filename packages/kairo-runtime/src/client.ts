@@ -38,6 +38,12 @@ import {
   decodeListServicesResponse,
   encodeManageServiceRequest,
   decodeManageServiceResponse,
+  encodeListAppsRequest,
+  decodeListAppsResponse,
+  encodeLaunchAppRequest,
+  decodeLaunchAppResponse,
+  encodeCloseSurfaceRequest,
+  decodeCloseSurfaceResponse,
   type FileEntry,
   type FileEventPayload,
   type HandshakeAckPayload,
@@ -48,6 +54,8 @@ import {
   ContainerAction,
   type SystemService,
   ServiceAction,
+  type LinuxApp,
+  type LaunchAppResponsePayload,
 } from './protocol';
 import type { KairoSession } from './session';
 import type { TransportAdapter } from './transport';
@@ -356,6 +364,29 @@ export class KairoClient {
     const payload = encodeManageServiceRequest(serviceName, action);
     const respBytes = await this.sendRequest(Opcode.SystemManageService, payload);
     return decodeManageServiceResponse(respBytes);
+  }
+
+  async listApplications(): Promise<LinuxApp[]> {
+    const payload = encodeListAppsRequest();
+    const respBytes = await this.sendRequest(Opcode.AppList, payload);
+    return decodeListAppsResponse(respBytes);
+  }
+
+  async launchApplication(req: {
+    appId: string;
+    exec?: string;
+    args?: string[];
+    workingDirectory?: string;
+  }): Promise<LaunchAppResponsePayload> {
+    const payload = encodeLaunchAppRequest(req);
+    const respBytes = await this.sendRequest(Opcode.AppLaunch, payload);
+    return decodeLaunchAppResponse(respBytes);
+  }
+
+  async closeSurface(surfaceId: string): Promise<boolean> {
+    const payload = encodeCloseSurfaceRequest(surfaceId);
+    const respBytes = await this.sendRequest(Opcode.SurfaceClose, payload);
+    return decodeCloseSurfaceResponse(respBytes);
   }
 
   private handleIncomingMessage(data: Uint8Array): void {

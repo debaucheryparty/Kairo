@@ -1,4 +1,4 @@
-export type AppId = 'finder' | 'terminal' | 'monitor' | 'settings';
+export type AppId = 'finder' | 'terminal' | 'monitor' | 'settings' | 'surface';
 
 export interface WindowState {
   id: string;
@@ -7,6 +7,8 @@ export interface WindowState {
   computerId: string;
   computerName?: string;
   computerColor?: string;
+  surfaceId?: string;
+  surfaceApp?: string;
   x: number;
   y: number;
   width: number;

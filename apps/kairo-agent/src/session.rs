@@ -6,13 +6,14 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use kairo_common::KairoId;
 use kairo_protocol::v1::{
-    AttachPtyRequest, AttachPtyResponse, ClosePtyRequest, ContainerAction, ContainerLogsRequest,
-    CreatePtyRequest, CreatePtyResponse, ErrorCode, GetMetricsRequest, GetMetricsResponse,
-    HandshakeAck, HandshakeInit, KairoError, KillProcessRequest, ListContainersRequest,
-    ListDirectoryRequest, ListProcessesRequest, ListProcessesResponse, ListPtysRequest,
-    ListPtysResponse, ListServicesRequest, ManageContainerRequest, ManageServiceRequest, PtyInput,
-    PtyOutput, ReadFileRequest, ResizePtyRequest, ServiceAction, WatchRequest, WatchResponse,
-    WriteFileRequest,
+    AttachPtyRequest, AttachPtyResponse, ClosePtyRequest, CloseSurfaceRequest, CloseSurfaceResponse,
+    ContainerAction, ContainerLogsRequest, CreatePtyRequest, CreatePtyResponse, ErrorCode,
+    GetMetricsRequest, GetMetricsResponse, HandshakeAck, HandshakeInit, KairoError,
+    KillProcessRequest, LaunchAppRequest, ListAppsRequest, ListAppsResponse,
+    ListContainersRequest, ListDirectoryRequest, ListProcessesRequest, ListProcessesResponse,
+    ListPtysRequest, ListPtysResponse, ListServicesRequest, ManageContainerRequest,
+    ManageServiceRequest, PtyInput, PtyOutput, ReadFileRequest, ResizePtyRequest, ServiceAction,
+    SurfaceInputEvent, WatchRequest, WatchResponse, WriteFileRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
@@ -24,6 +25,7 @@ use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tracing::{debug, error, info, warn};
 
+use crate::app_manager::AppManager;
 use crate::config::AgentConfig;
 use crate::fs::{FilesystemHandler, FsError};
 use crate::metrics::MetricsCollector;
@@ -93,12 +95,22 @@ pub struct Session {
     metrics: Arc<MetricsCollector>,
     process: Arc<ProcessManager>,
     system: Arc<SystemManager>,
+    app: Arc<AppManager>,
     watcher: Option<ActiveWatcher>,
 }
 
 impl Session {
     #[must_use]
     pub fn with_pty(config: Arc<AgentConfig>, pty: Arc<PtyManager>) -> Self {
+        Self::with_components(config, pty, Arc::new(AppManager::new()))
+    }
+
+    #[must_use]
+    pub fn with_components(
+        config: Arc<AgentConfig>,
+        pty: Arc<PtyManager>,
+        app: Arc<AppManager>,
+    ) -> Self {
         let fs = FilesystemHandler::new(&config.data_dir);
         let metrics = Arc::new(MetricsCollector::new());
         let process = Arc::new(ProcessManager::new());
@@ -112,6 +124,7 @@ impl Session {
             metrics,
             process,
             system,
+            app,
             watcher: None,
         }
     }
@@ -640,6 +653,69 @@ impl Session {
                     Bytes::from(buf),
                 );
                 self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::AppList => {
+                let _req = ListAppsRequest::decode(message.payload)?;
+                let apps = self.app.list_applications().await;
+                let resp = ListAppsResponse { apps };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::AppList,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::AppLaunch => {
+                let req = LaunchAppRequest::decode(message.payload)?;
+                match self.app.launch_app(req).await {
+                    Ok(resp) => {
+                        let mut buf = Vec::new();
+                        resp.encode(&mut buf)?;
+                        let msg = KairoMessage::with_opcode(
+                            MessageKind::Response,
+                            Opcode::AppLaunch,
+                            request_id,
+                            Bytes::from(buf),
+                        );
+                        self.send_frame(out_tx, msg).await?;
+                    }
+                    Err(e) => {
+                        let err = KairoError {
+                            code: ErrorCode::Internal as i32,
+                            message: e.to_string(),
+                            request_id: request_id.to_string(),
+                        };
+                        let mut buf = Vec::new();
+                        err.encode(&mut buf)?;
+                        let msg = KairoMessage::with_opcode(
+                            MessageKind::Error,
+                            Opcode::AppLaunch,
+                            request_id,
+                            Bytes::from(buf),
+                        );
+                        self.send_frame(out_tx, msg).await?;
+                    }
+                }
+            }
+            Opcode::SurfaceClose => {
+                let req = CloseSurfaceRequest::decode(message.payload)?;
+                let success = self.app.close_surface(&req.surface_id).await;
+                let resp = CloseSurfaceResponse { success };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::SurfaceClose,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::SurfaceInput => {
+                let _req = SurfaceInputEvent::decode(message.payload)?;
             }
             _ => {
                 warn!(?opcode, "unsupported request opcode");

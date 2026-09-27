@@ -34,6 +34,10 @@ export enum Opcode {
   DockerContainerLogs = 52,
   SystemListServices = 60,
   SystemManageService = 61,
+  AppList = 70,
+  AppLaunch = 71,
+  SurfaceInput = 72,
+  SurfaceClose = 73,
 }
 
 export interface KairoEnvelope {
