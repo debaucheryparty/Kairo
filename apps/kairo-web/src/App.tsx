@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityMonitor } from './apps/ActivityMonitor';
 import { Finder } from './apps/Finder';
 import { TerminalApp } from './apps/TerminalApp';
+import { Spotlight } from './shell/Spotlight';
 import type { AppId, WindowState } from './types/window';
 import { WindowFrame } from './wm/WindowFrame';
 
@@ -32,6 +33,7 @@ export function App() {
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [activeWindowId, setActiveWindowId] = useState<string | null>(null);
   const [nextZIndex, setNextZIndex] = useState(10);
+  const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
 
   const client = useMemo(() => {
     const transport = new WebSocketTransportAdapter();
@@ -49,6 +51,17 @@ export function App() {
     });
     return () => unsubscribe();
   }, [store]);
+
+  useEffect(() => {
+    const handleGlobalKeys = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === ' ' || e.code === 'Space')) {
+        e.preventDefault();
+        setIsSpotlightOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeys);
+    return () => window.removeEventListener('keydown', handleGlobalKeys);
+  }, []);
 
   const openApp = useCallback(
     (appId: AppId) => {
@@ -164,6 +177,15 @@ export function App() {
         </div>
 
         <div className="topbar-right">
+          <button
+            type="button"
+            className="topbar-search-btn"
+            onClick={() => setIsSpotlightOpen(true)}
+            title="Command Palette (Cmd/Ctrl+K or Space)"
+          >
+            <span>Search & Launch</span>
+            <kbd>⌘K</kbd>
+          </button>
           {state === ConnectionState.Connected && (
             <button
               type="button"
@@ -270,6 +292,14 @@ export function App() {
           📊
         </button>
       </footer>
+
+      <Spotlight
+        isOpen={isSpotlightOpen}
+        onClose={() => setIsSpotlightOpen(false)}
+        onOpenApp={openApp}
+        onDisconnect={handleDisconnect}
+        onCloseAllWindows={() => setWindows([])}
+      />
     </div>
   );
 }
