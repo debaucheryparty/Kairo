@@ -4,8 +4,11 @@ use std::time::Duration;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use kairo_common::KairoId;
-use kairo_protocol::v1::{HandshakeAck, HandshakeInit};
-use kairo_protocol::{KairoMessage, MessageKind, ProtocolError};
+use kairo_protocol::v1::{
+    ErrorCode, HandshakeAck, HandshakeInit, KairoError, ListDirectoryRequest, ReadFileRequest,
+    WriteFileRequest,
+};
+use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
 use thiserror::Error;
 use tokio::net::TcpStream;
@@ -15,6 +18,7 @@ use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tracing::{debug, error, info, warn};
 
 use crate::config::AgentConfig;
+use crate::fs::{FilesystemHandler, FsError};
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -56,15 +60,18 @@ pub struct Session {
     session_id: KairoId,
     config: Arc<AgentConfig>,
     state: SessionState,
+    fs: FilesystemHandler,
 }
 
 impl Session {
     #[must_use]
     pub fn new(config: Arc<AgentConfig>) -> Self {
+        let fs = FilesystemHandler::new(&config.data_dir);
         Self {
             session_id: KairoId::new(),
             config,
             state: SessionState::Authenticating,
+            fs,
         }
     }
 
@@ -200,7 +207,7 @@ impl Session {
 
     async fn handle_message(
         &mut self,
-        _stream: &mut WebSocketStream<TcpStream>,
+        stream: &mut WebSocketStream<TcpStream>,
         data: Bytes,
     ) -> Result<(), SessionError> {
         let message = match KairoMessage::decode(data) {
@@ -211,12 +218,145 @@ impl Session {
             }
         };
 
-        debug!(
-            kind = ?message.kind,
-            request_id = message.request_id,
-            len = message.payload.len(),
-            "received kairo message"
-        );
+        match message.kind {
+            MessageKind::Request => self.handle_request(stream, message).await,
+            _ => {
+                debug!(kind = ?message.kind, "ignoring unhandled message kind");
+                Ok(())
+            }
+        }
+    }
+
+    async fn handle_request(
+        &mut self,
+        stream: &mut WebSocketStream<TcpStream>,
+        message: KairoMessage,
+    ) -> Result<(), SessionError> {
+        let opcode = message.opcode();
+        let request_id = message.request_id;
+
+        match opcode {
+            Opcode::FsListDirectory => {
+                let req = ListDirectoryRequest::decode(message.payload)?;
+                match self.fs.list_directory(&req.path) {
+                    Ok(resp) => {
+                        let mut buf = Vec::new();
+                        resp.encode(&mut buf)?;
+                        let msg = KairoMessage::with_opcode(
+                            MessageKind::Response,
+                            Opcode::FsListDirectory,
+                            request_id,
+                            Bytes::from(buf),
+                        );
+                        stream
+                            .send(WsMessage::Binary(msg.encode()?))
+                            .await
+                            .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
+                    }
+                    Err(e) => self.send_fs_error(stream, opcode, request_id, e).await?,
+                }
+            }
+            Opcode::FsReadFile => {
+                let req = ReadFileRequest::decode(message.payload)?;
+                match self.fs.read_file(&req.path, req.offset, req.length) {
+                    Ok(resp) => {
+                        let mut buf = Vec::new();
+                        resp.encode(&mut buf)?;
+                        let msg = KairoMessage::with_opcode(
+                            MessageKind::Response,
+                            Opcode::FsReadFile,
+                            request_id,
+                            Bytes::from(buf),
+                        );
+                        stream
+                            .send(WsMessage::Binary(msg.encode()?))
+                            .await
+                            .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
+                    }
+                    Err(e) => self.send_fs_error(stream, opcode, request_id, e).await?,
+                }
+            }
+            Opcode::FsWriteFile => {
+                let req = WriteFileRequest::decode(message.payload)?;
+                let expected = if req.expected_revision.is_empty() {
+                    None
+                } else {
+                    Some(req.expected_revision.as_str())
+                };
+
+                match self.fs.write_file(&req.path, &req.content, expected) {
+                    Ok(resp) => {
+                        let mut buf = Vec::new();
+                        resp.encode(&mut buf)?;
+                        let msg = KairoMessage::with_opcode(
+                            MessageKind::Response,
+                            Opcode::FsWriteFile,
+                            request_id,
+                            Bytes::from(buf),
+                        );
+                        stream
+                            .send(WsMessage::Binary(msg.encode()?))
+                            .await
+                            .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
+                    }
+                    Err(e) => self.send_fs_error(stream, opcode, request_id, e).await?,
+                }
+            }
+            _ => {
+                warn!(?opcode, "unsupported request opcode");
+                let err = KairoError {
+                    code: ErrorCode::InvalidArgument as i32,
+                    message: format!("unsupported opcode: {opcode:?}"),
+                    request_id: request_id.to_string(),
+                };
+                let mut buf = Vec::new();
+                err.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Error,
+                    opcode,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                stream
+                    .send(WsMessage::Binary(msg.encode()?))
+                    .await
+                    .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn send_fs_error(
+        &self,
+        stream: &mut WebSocketStream<TcpStream>,
+        opcode: Opcode,
+        request_id: u64,
+        err: FsError,
+    ) -> Result<(), SessionError> {
+        let code = match err {
+            FsError::NotFound(_) => ErrorCode::NotFound,
+            FsError::PermissionDenied(_) | FsError::PathTraversal(_) => ErrorCode::PermissionDenied,
+            FsError::Conflict { .. } => ErrorCode::AlreadyExists,
+            FsError::Io(_) => ErrorCode::Internal,
+        };
+
+        let proto_err = KairoError {
+            code: code as i32,
+            message: err.to_string(),
+            request_id: request_id.to_string(),
+        };
+
+        let mut buf = Vec::new();
+        proto_err.encode(&mut buf)?;
+
+        let msg =
+            KairoMessage::with_opcode(MessageKind::Error, opcode, request_id, Bytes::from(buf));
+
+        stream
+            .send(WsMessage::Binary(msg.encode()?))
+            .await
+            .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
 
         Ok(())
     }
