@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package kairo.v1;
 
-import "google/protobuf/timestamp.proto";
-
 message KairoError {
   ErrorCode code = 1;
   string message = 2;

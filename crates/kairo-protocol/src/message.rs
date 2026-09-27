@@ -1,45 +1,215 @@
-use bytes::Bytes;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 
-#[derive(Debug, Clone)]
-pub struct KairoMessage {
-    pub kind: MessageKind,
-    pub request_id: u64,
-    pub payload: Bytes,
-}
+use crate::ProtocolError;
+
+pub const MAGIC: [u8; 2] = [0x4B, 0x52];
+pub const PROTOCOL_VERSION: u16 = 1;
+pub const HEADER_SIZE: usize = 20;
+pub const MAX_PAYLOAD_SIZE: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u16)]
 pub enum MessageKind {
-    HandshakeInit,
-    HandshakeAck,
-    Request,
-    Response,
-    Event,
-    Error,
+    HandshakeInit = 1,
+    HandshakeAck = 2,
+    Request = 3,
+    Response = 4,
+    Event = 5,
+    Error = 6,
 }
 
 impl MessageKind {
     #[must_use]
-    pub fn from_u32(v: u32) -> Option<Self> {
+    pub fn from_u16(v: u16) -> Option<Self> {
         match v {
-            0 => Some(Self::HandshakeInit),
-            1 => Some(Self::HandshakeAck),
-            2 => Some(Self::Request),
-            3 => Some(Self::Response),
-            4 => Some(Self::Event),
-            5 => Some(Self::Error),
+            1 => Some(Self::HandshakeInit),
+            2 => Some(Self::HandshakeAck),
+            3 => Some(Self::Request),
+            4 => Some(Self::Response),
+            5 => Some(Self::Event),
+            6 => Some(Self::Error),
             _ => None,
         }
     }
 
     #[must_use]
-    pub fn as_u32(self) -> u32 {
-        match self {
-            Self::HandshakeInit => 0,
-            Self::HandshakeAck => 1,
-            Self::Request => 2,
-            Self::Response => 3,
-            Self::Event => 4,
-            Self::Error => 5,
+    pub fn as_u16(self) -> u16 {
+        self as u16
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KairoMessage {
+    pub version: u16,
+    pub kind: MessageKind,
+    pub flags: u16,
+    pub request_id: u64,
+    pub payload: Bytes,
+}
+
+impl KairoMessage {
+    #[must_use]
+    pub fn new(kind: MessageKind, request_id: u64, payload: Bytes) -> Self {
+        Self {
+            version: PROTOCOL_VERSION,
+            kind,
+            flags: 0,
+            request_id,
+            payload,
         }
+    }
+
+    pub fn encode(&self) -> Result<Bytes, ProtocolError> {
+        let payload_len = self.payload.len();
+        if payload_len > MAX_PAYLOAD_SIZE {
+            return Err(ProtocolError::PayloadTooLarge {
+                size: payload_len,
+                limit: MAX_PAYLOAD_SIZE,
+            });
+        }
+
+        let mut buf = BytesMut::with_capacity(HEADER_SIZE + payload_len);
+        buf.put_slice(&MAGIC);
+        buf.put_u16(self.version);
+        buf.put_u16(self.kind.as_u16());
+        buf.put_u16(self.flags);
+        buf.put_u64(self.request_id);
+        buf.put_u32(payload_len as u32);
+        buf.put_slice(&self.payload);
+
+        Ok(buf.freeze())
+    }
+
+    pub fn decode(mut data: Bytes) -> Result<Self, ProtocolError> {
+        if data.len() < HEADER_SIZE {
+            return Err(ProtocolError::FrameTooShort {
+                expected: HEADER_SIZE,
+                actual: data.len(),
+            });
+        }
+
+        let magic = [data.get_u8(), data.get_u8()];
+        if magic != MAGIC {
+            return Err(ProtocolError::InvalidMagic(magic));
+        }
+
+        let version = data.get_u16();
+        if version != PROTOCOL_VERSION {
+            return Err(ProtocolError::VersionMismatch {
+                local: PROTOCOL_VERSION,
+                remote: version,
+            });
+        }
+
+        let kind_raw = data.get_u16();
+        let kind =
+            MessageKind::from_u16(kind_raw).ok_or(ProtocolError::UnknownMessageKind(kind_raw))?;
+
+        let flags = data.get_u16();
+        let request_id = data.get_u64();
+        let payload_len = data.get_u32() as usize;
+
+        if payload_len > MAX_PAYLOAD_SIZE {
+            return Err(ProtocolError::PayloadTooLarge {
+                size: payload_len,
+                limit: MAX_PAYLOAD_SIZE,
+            });
+        }
+
+        if data.len() != payload_len {
+            return Err(ProtocolError::PayloadLengthMismatch {
+                expected: payload_len,
+                actual: data.len(),
+            });
+        }
+
+        Ok(Self {
+            version,
+            kind,
+            flags,
+            request_id,
+            payload: data,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encode_decode_roundtrip() {
+        let payload = Bytes::from_static(b"hello kairo");
+        let msg = KairoMessage::new(MessageKind::HandshakeInit, 42, payload.clone());
+
+        let encoded = msg.encode().expect("encode should succeed");
+        assert_eq!(encoded.len(), HEADER_SIZE + payload.len());
+
+        let decoded = KairoMessage::decode(encoded).expect("decode should succeed");
+        assert_eq!(decoded.version, PROTOCOL_VERSION);
+        assert_eq!(decoded.kind, MessageKind::HandshakeInit);
+        assert_eq!(decoded.flags, 0);
+        assert_eq!(decoded.request_id, 42);
+        assert_eq!(decoded.payload, payload);
+    }
+
+    #[test]
+    fn test_invalid_magic() {
+        let mut buf = BytesMut::with_capacity(HEADER_SIZE);
+        buf.put_slice(b"XX");
+        buf.put_u16(1);
+        buf.put_u16(1);
+        buf.put_u16(0);
+        buf.put_u64(1);
+        buf.put_u32(0);
+
+        let err = KairoMessage::decode(buf.freeze()).unwrap_err();
+        assert_eq!(err, ProtocolError::InvalidMagic([b'X', b'X']));
+    }
+
+    #[test]
+    fn test_frame_too_short() {
+        let err = KairoMessage::decode(Bytes::from_static(b"short")).unwrap_err();
+        assert_eq!(
+            err,
+            ProtocolError::FrameTooShort {
+                expected: HEADER_SIZE,
+                actual: 5
+            }
+        );
+    }
+
+    #[test]
+    fn test_version_mismatch() {
+        let mut buf = BytesMut::with_capacity(HEADER_SIZE);
+        buf.put_slice(&MAGIC);
+        buf.put_u16(99);
+        buf.put_u16(1);
+        buf.put_u16(0);
+        buf.put_u64(1);
+        buf.put_u32(0);
+
+        let err = KairoMessage::decode(buf.freeze()).unwrap_err();
+        assert_eq!(
+            err,
+            ProtocolError::VersionMismatch {
+                local: PROTOCOL_VERSION,
+                remote: 99
+            }
+        );
+    }
+
+    #[test]
+    fn test_unknown_kind() {
+        let mut buf = BytesMut::with_capacity(HEADER_SIZE);
+        buf.put_slice(&MAGIC);
+        buf.put_u16(PROTOCOL_VERSION);
+        buf.put_u16(999);
+        buf.put_u16(0);
+        buf.put_u64(1);
+        buf.put_u32(0);
+
+        let err = KairoMessage::decode(buf.freeze()).unwrap_err();
+        assert_eq!(err, ProtocolError::UnknownMessageKind(999));
     }
 }
