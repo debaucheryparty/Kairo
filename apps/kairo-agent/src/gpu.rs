@@ -135,7 +135,8 @@ impl GpuManager {
         let stream = streams.get(stream_id)?;
 
         let elapsed = stream.started_at.elapsed().as_secs_f32().max(0.001);
-        let current_fps = ((stream.frame_count as f32 / elapsed) as u32).clamp(1, stream.target_fps);
+        let current_fps =
+            ((stream.frame_count as f32 / elapsed) as u32).clamp(1, stream.target_fps);
 
         Some(GpuStreamStats {
             stream_id: stream_id.to_string(),

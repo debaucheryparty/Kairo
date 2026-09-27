@@ -1,8 +1,8 @@
+use kairo_common::KairoId;
+use kairo_protocol::v1::{LaunchAppRequest, LaunchAppResponse, LinuxApp, RemoteSurface};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use kairo_common::KairoId;
-use kairo_protocol::v1::{LaunchAppRequest, LaunchAppResponse, LinuxApp, RemoteSurface};
 use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
@@ -286,7 +286,10 @@ mod tests {
         let manager = AppManager::new();
         let apps = manager.list_applications().await;
         assert!(!apps.is_empty());
-        assert!(apps.iter().any(|a| a.app_id == "terminal" || a.app_id == "htop"));
+        assert!(
+            apps.iter()
+                .any(|a| a.app_id == "terminal" || a.app_id == "htop")
+        );
     }
 
     #[tokio::test]

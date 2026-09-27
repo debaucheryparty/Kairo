@@ -1,5 +1,5 @@
-use std::time::Duration;
 use bytes::Bytes;
+use std::time::Duration;
 use tracing::{debug, warn};
 
 use crate::{Transport, TransportError, WebSocketTransport};
@@ -30,11 +30,8 @@ impl FallbackTransport {
 
         for (idx, endpoint) in endpoints.iter().enumerate() {
             debug!("attempting transport connection to {endpoint}");
-            let connect_res = tokio::time::timeout(
-                connect_timeout,
-                WebSocketTransport::connect(endpoint),
-            )
-            .await;
+            let connect_res =
+                tokio::time::timeout(connect_timeout, WebSocketTransport::connect(endpoint)).await;
 
             match connect_res {
                 Ok(Ok(transport)) => {
@@ -79,11 +76,9 @@ impl FallbackTransport {
 
         for (idx, endpoint) in self.endpoints.iter().enumerate() {
             debug!("reconnecting: trying endpoint {endpoint}");
-            let connect_res = tokio::time::timeout(
-                self.connect_timeout,
-                WebSocketTransport::connect(endpoint),
-            )
-            .await;
+            let connect_res =
+                tokio::time::timeout(self.connect_timeout, WebSocketTransport::connect(endpoint))
+                    .await;
 
             match connect_res {
                 Ok(Ok(transport)) => {

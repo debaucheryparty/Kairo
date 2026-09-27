@@ -6,15 +6,15 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use kairo_common::KairoId;
 use kairo_protocol::v1::{
-    AttachPtyRequest, AttachPtyResponse, ClosePtyRequest, CloseSurfaceRequest, CloseSurfaceResponse,
-    ContainerAction, ContainerLogsRequest, CreatePtyRequest, CreatePtyResponse, ErrorCode,
-    GetGpuInfoRequest, GetMetricsRequest, GetMetricsResponse, HandshakeAck, HandshakeInit,
-    KairoError, KillProcessRequest, LaunchAppRequest, ListAppsRequest, ListAppsResponse,
-    ListContainersRequest, ListDirectoryRequest, ListProcessesRequest, ListProcessesResponse,
-    ListPtysRequest, ListPtysResponse, ListServicesRequest, ManageContainerRequest,
-    ManageServiceRequest, PtyInput, PtyOutput, ReadFileRequest, ResizePtyRequest, ServiceAction,
-    StartGpuStreamRequest, StopGpuStreamRequest, StopGpuStreamResponse, SurfaceInputEvent,
-    WatchRequest, WatchResponse, WriteFileRequest,
+    AttachPtyRequest, AttachPtyResponse, ClosePtyRequest, CloseSurfaceRequest,
+    CloseSurfaceResponse, ContainerAction, ContainerLogsRequest, CreatePtyRequest,
+    CreatePtyResponse, ErrorCode, GetGpuInfoRequest, GetMetricsRequest, GetMetricsResponse,
+    HandshakeAck, HandshakeInit, KairoError, KillProcessRequest, LaunchAppRequest, ListAppsRequest,
+    ListAppsResponse, ListContainersRequest, ListDirectoryRequest, ListProcessesRequest,
+    ListProcessesResponse, ListPtysRequest, ListPtysResponse, ListServicesRequest,
+    ManageContainerRequest, ManageServiceRequest, PtyInput, PtyOutput, ReadFileRequest,
+    ResizePtyRequest, ServiceAction, StartGpuStreamRequest, StopGpuStreamRequest,
+    StopGpuStreamResponse, SurfaceInputEvent, WatchRequest, WatchResponse, WriteFileRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
