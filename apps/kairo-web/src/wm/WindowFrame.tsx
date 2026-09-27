@@ -157,7 +157,27 @@ export function WindowFrame({
             title="Maximize"
           />
         </div>
-        <span className="window-title">{window.title}</span>
+        <span className="window-title">
+          {window.computerColor && (
+            <span
+              style={{
+                display: 'inline-block',
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                backgroundColor: window.computerColor,
+                marginRight: 6,
+                verticalAlign: 'middle',
+              }}
+            />
+          )}
+          {window.title}
+          {window.computerName && (
+            <span style={{ opacity: 0.5, fontSize: '0.85em', marginLeft: 6 }}>
+              [{window.computerName}]
+            </span>
+          )}
+        </span>
         <div className="titlebar-spacer" />
       </div>
 

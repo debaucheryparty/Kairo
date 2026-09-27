@@ -4,6 +4,9 @@ export interface WindowState {
   id: string;
   appId: AppId;
   title: string;
+  computerId: string;
+  computerName?: string;
+  computerColor?: string;
   x: number;
   y: number;
   width: number;

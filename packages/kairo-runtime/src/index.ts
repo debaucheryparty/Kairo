@@ -3,6 +3,7 @@ export { type TransportAdapter } from './transport';
 export { type KairoSession } from './session';
 export { WebSocketTransportAdapter } from './websocket';
 export { KairoClient, type KairoClientOptions } from './client';
+export { ComputerManager, type ComputerProfile, type ComputerInstance } from './computer';
 export {
   encodeEnvelope,
   decodeEnvelope,
