@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package kairo.v1;
+
+message ProcessInfo {
+  string process_id = 1;
+  uint32 pid = 2;
+  string executable = 3;
+  repeated string arguments = 4;
+  ProcessState state = 5;
+  string owner = 6;
+}
+
+enum ProcessState {
+  PROCESS_STATE_UNSPECIFIED = 0;
+  PROCESS_STATE_RUNNING = 1;
+  PROCESS_STATE_STOPPED = 2;
+  PROCESS_STATE_ZOMBIE = 3;
+}
+
+message ListProcessesRequest {}
+
+message ListProcessesResponse {
+  repeated ProcessInfo processes = 1;
+}
+
+message SpawnProcessRequest {
+  string executable = 1;
+  repeated string arguments = 2;
+  string working_directory = 3;
+  map<string, string> environment = 4;
+}
+
+message SpawnProcessResponse {
+  string process_id = 1;
+  uint32 pid = 2;
+}
+
+message KillProcessRequest {
+  string process_id = 1;
+  int32 signal = 2;
+}

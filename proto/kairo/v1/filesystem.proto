@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package kairo.v1;
+
+message FileEntry {
+  string path = 1;
+  FileType file_type = 2;
+  uint64 size = 3;
+  int64 modified_at = 4;
+  string revision = 5;
+}
+
+enum FileType {
+  FILE_TYPE_UNSPECIFIED = 0;
+  FILE_TYPE_FILE = 1;
+  FILE_TYPE_DIRECTORY = 2;
+  FILE_TYPE_SYMLINK = 3;
+}
+
+message ListDirectoryRequest {
+  string path = 1;
+}
+
+message ListDirectoryResponse {
+  repeated FileEntry entries = 1;
+}
+
+message ReadFileRequest {
+  string path = 1;
+  uint64 offset = 2;
+  uint64 length = 3;
+}
+
+message ReadFileResponse {
+  bytes content = 1;
+  string revision = 2;
+}
+
+message WriteFileRequest {
+  string path = 1;
+  bytes content = 2;
+  string expected_revision = 3;
+}
+
+message WriteFileResponse {
+  string revision = 1;
+}
+
+message WatchRequest {
+  string path = 1;
+  bool recursive = 2;
+}
+
+message FileEvent {
+  string path = 1;
+  FileEventKind kind = 2;
+}
+
+enum FileEventKind {
+  FILE_EVENT_KIND_UNSPECIFIED = 0;
+  FILE_EVENT_KIND_CREATED = 1;
+  FILE_EVENT_KIND_MODIFIED = 2;
+  FILE_EVENT_KIND_DELETED = 3;
+  FILE_EVENT_KIND_RENAMED = 4;
+}

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package kairo.v1;
+
+message HandshakeInit {
+  uint32 protocol_version = 1;
+  string client_id = 2;
+}
+
+message HandshakeAck {
+  uint32 protocol_version = 1;
+  string agent_id = 2;
+  string session_id = 3;
+  repeated string capabilities = 4;
+}

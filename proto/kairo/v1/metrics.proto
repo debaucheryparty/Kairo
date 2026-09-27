@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package kairo.v1;
+
+message SystemMetrics {
+  double cpu_usage_percent = 1;
+  uint64 memory_total_bytes = 2;
+  uint64 memory_used_bytes = 3;
+  uint64 disk_total_bytes = 4;
+  uint64 disk_used_bytes = 5;
+  double load_average_1m = 6;
+  double load_average_5m = 7;
+  double load_average_15m = 8;
+  uint64 uptime_seconds = 9;
+}
+
+message GetMetricsRequest {}
+
+message GetMetricsResponse {
+  SystemMetrics metrics = 1;
+}
