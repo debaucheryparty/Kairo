@@ -44,6 +44,14 @@ import {
   decodeLaunchAppResponse,
   encodeCloseSurfaceRequest,
   decodeCloseSurfaceResponse,
+  encodeGetGpuInfoRequest,
+  decodeGetGpuInfoResponse,
+  encodeStartGpuStreamRequest,
+  decodeStartGpuStreamResponse,
+  encodeStopGpuStreamRequest,
+  decodeStopGpuStreamResponse,
+  encodeGpuStreamStatsRequest,
+  decodeGpuStreamStats,
   type FileEntry,
   type FileEventPayload,
   type HandshakeAckPayload,
@@ -56,6 +64,10 @@ import {
   ServiceAction,
   type LinuxApp,
   type LaunchAppResponsePayload,
+  type GetGpuInfoResponsePayload,
+  type StartGpuStreamRequestPayload,
+  type StartGpuStreamResponsePayload,
+  type GpuStreamStatsPayload,
 } from './protocol';
 import type { KairoSession } from './session';
 import type { TransportAdapter } from './transport';
@@ -387,6 +399,30 @@ export class KairoClient {
     const payload = encodeCloseSurfaceRequest(surfaceId);
     const respBytes = await this.sendRequest(Opcode.SurfaceClose, payload);
     return decodeCloseSurfaceResponse(respBytes);
+  }
+
+  async getGpuInfo(): Promise<GetGpuInfoResponsePayload> {
+    const payload = encodeGetGpuInfoRequest();
+    const respBytes = await this.sendRequest(Opcode.GpuGetInfo, payload);
+    return decodeGetGpuInfoResponse(respBytes);
+  }
+
+  async startGpuStream(req: StartGpuStreamRequestPayload): Promise<StartGpuStreamResponsePayload> {
+    const payload = encodeStartGpuStreamRequest(req);
+    const respBytes = await this.sendRequest(Opcode.GpuStartStream, payload);
+    return decodeStartGpuStreamResponse(respBytes);
+  }
+
+  async stopGpuStream(streamId: string): Promise<boolean> {
+    const payload = encodeStopGpuStreamRequest(streamId);
+    const respBytes = await this.sendRequest(Opcode.GpuStopStream, payload);
+    return decodeStopGpuStreamResponse(respBytes);
+  }
+
+  async getGpuStreamStats(streamId: string): Promise<GpuStreamStatsPayload> {
+    const payload = encodeGpuStreamStatsRequest(streamId);
+    const respBytes = await this.sendRequest(Opcode.GpuStreamStats, payload);
+    return decodeGpuStreamStats(respBytes);
   }
 
   private handleIncomingMessage(data: Uint8Array): void {

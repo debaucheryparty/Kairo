@@ -8,12 +8,13 @@ use kairo_common::KairoId;
 use kairo_protocol::v1::{
     AttachPtyRequest, AttachPtyResponse, ClosePtyRequest, CloseSurfaceRequest, CloseSurfaceResponse,
     ContainerAction, ContainerLogsRequest, CreatePtyRequest, CreatePtyResponse, ErrorCode,
-    GetMetricsRequest, GetMetricsResponse, HandshakeAck, HandshakeInit, KairoError,
-    KillProcessRequest, LaunchAppRequest, ListAppsRequest, ListAppsResponse,
+    GetGpuInfoRequest, GetMetricsRequest, GetMetricsResponse, HandshakeAck, HandshakeInit,
+    KairoError, KillProcessRequest, LaunchAppRequest, ListAppsRequest, ListAppsResponse,
     ListContainersRequest, ListDirectoryRequest, ListProcessesRequest, ListProcessesResponse,
     ListPtysRequest, ListPtysResponse, ListServicesRequest, ManageContainerRequest,
     ManageServiceRequest, PtyInput, PtyOutput, ReadFileRequest, ResizePtyRequest, ServiceAction,
-    SurfaceInputEvent, WatchRequest, WatchResponse, WriteFileRequest,
+    StartGpuStreamRequest, StopGpuStreamRequest, StopGpuStreamResponse, SurfaceInputEvent,
+    WatchRequest, WatchResponse, WriteFileRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
@@ -28,6 +29,7 @@ use tracing::{debug, error, info, warn};
 use crate::app_manager::AppManager;
 use crate::config::AgentConfig;
 use crate::fs::{FilesystemHandler, FsError};
+use crate::gpu::{GpuError, GpuManager};
 use crate::metrics::MetricsCollector;
 use crate::process::ProcessManager;
 use crate::pty::{PtyError, PtyManager};
@@ -57,6 +59,9 @@ pub enum SessionError {
 
     #[error("system error: {0}")]
     System(#[from] SystemError),
+
+    #[error("gpu error: {0}")]
+    Gpu(#[from] GpuError),
 
     #[error("unexpected message kind: expected {expected:?}, got {actual:?}")]
     UnexpectedKind {
@@ -96,13 +101,19 @@ pub struct Session {
     process: Arc<ProcessManager>,
     system: Arc<SystemManager>,
     app: Arc<AppManager>,
+    gpu: Arc<GpuManager>,
     watcher: Option<ActiveWatcher>,
 }
 
 impl Session {
     #[must_use]
     pub fn with_pty(config: Arc<AgentConfig>, pty: Arc<PtyManager>) -> Self {
-        Self::with_components(config, pty, Arc::new(AppManager::new()))
+        Self::with_components(
+            config,
+            pty,
+            Arc::new(AppManager::new()),
+            Arc::new(GpuManager::new()),
+        )
     }
 
     #[must_use]
@@ -110,6 +121,7 @@ impl Session {
         config: Arc<AgentConfig>,
         pty: Arc<PtyManager>,
         app: Arc<AppManager>,
+        gpu: Arc<GpuManager>,
     ) -> Self {
         let fs = FilesystemHandler::new(&config.data_dir);
         let metrics = Arc::new(MetricsCollector::new());
@@ -125,6 +137,7 @@ impl Session {
             process,
             system,
             app,
+            gpu,
             watcher: None,
         }
     }
@@ -257,6 +270,8 @@ impl Session {
                 "metrics.v1".to_string(),
                 "docker.v1".to_string(),
                 "system.v1".to_string(),
+                "app.v1".to_string(),
+                "gpu.v1".to_string(),
             ],
         };
 
@@ -716,6 +731,79 @@ impl Session {
             }
             Opcode::SurfaceInput => {
                 let _req = SurfaceInputEvent::decode(message.payload)?;
+            }
+            Opcode::GpuGetInfo => {
+                let _req = GetGpuInfoRequest::decode(message.payload)?;
+                let resp = self.gpu.get_gpu_info().await;
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::GpuGetInfo,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::GpuStartStream => {
+                let req = StartGpuStreamRequest::decode(message.payload)?;
+                match self.gpu.start_stream(req).await {
+                    Ok(resp) => {
+                        let mut buf = Vec::new();
+                        resp.encode(&mut buf)?;
+                        let msg = KairoMessage::with_opcode(
+                            MessageKind::Response,
+                            Opcode::GpuStartStream,
+                            request_id,
+                            Bytes::from(buf),
+                        );
+                        self.send_frame(out_tx, msg).await?;
+                    }
+                    Err(e) => {
+                        let err = KairoError {
+                            code: ErrorCode::Internal as i32,
+                            message: e.to_string(),
+                            request_id: request_id.to_string(),
+                        };
+                        let mut buf = Vec::new();
+                        err.encode(&mut buf)?;
+                        let msg = KairoMessage::with_opcode(
+                            MessageKind::Error,
+                            Opcode::GpuStartStream,
+                            request_id,
+                            Bytes::from(buf),
+                        );
+                        self.send_frame(out_tx, msg).await?;
+                    }
+                }
+            }
+            Opcode::GpuStopStream => {
+                let req = StopGpuStreamRequest::decode(message.payload)?;
+                let success = self.gpu.stop_stream(&req.stream_id).await;
+                let resp = StopGpuStreamResponse { success };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::GpuStopStream,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::GpuStreamStats => {
+                let req = StopGpuStreamRequest::decode(message.payload)?;
+                if let Some(stats) = self.gpu.get_stream_stats(&req.stream_id).await {
+                    let mut buf = Vec::new();
+                    stats.encode(&mut buf)?;
+                    let msg = KairoMessage::with_opcode(
+                        MessageKind::Response,
+                        Opcode::GpuStreamStats,
+                        request_id,
+                        Bytes::from(buf),
+                    );
+                    self.send_frame(out_tx, msg).await?;
+                }
             }
             _ => {
                 warn!(?opcode, "unsupported request opcode");

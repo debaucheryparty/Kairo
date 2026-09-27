@@ -69,5 +69,19 @@ export {
   type LinuxApp,
   type LaunchAppResponsePayload,
   type RemoteSurfaceInfo,
+  encodeGetGpuInfoRequest,
+  decodeGetGpuInfoResponse,
+  encodeStartGpuStreamRequest,
+  decodeStartGpuStreamResponse,
+  encodeStopGpuStreamRequest,
+  decodeStopGpuStreamResponse,
+  encodeGpuStreamStatsRequest,
+  decodeGpuStreamStats,
+  type GpuDevicePayload,
+  type GetGpuInfoResponsePayload,
+  type StartGpuStreamRequestPayload,
+  type StartGpuStreamResponsePayload,
+  type GpuStreamStatsPayload,
 } from './protocol';
+
 

@@ -66,6 +66,10 @@ pub enum Opcode {
     AppLaunch = 71,
     SurfaceInput = 72,
     SurfaceClose = 73,
+    GpuGetInfo = 80,
+    GpuStartStream = 81,
+    GpuStopStream = 82,
+    GpuStreamStats = 83,
 }
 
 impl Opcode {
@@ -97,6 +101,10 @@ impl Opcode {
             71 => Some(Self::AppLaunch),
             72 => Some(Self::SurfaceInput),
             73 => Some(Self::SurfaceClose),
+            80 => Some(Self::GpuGetInfo),
+            81 => Some(Self::GpuStartStream),
+            82 => Some(Self::GpuStopStream),
+            83 => Some(Self::GpuStreamStats),
             _ => None,
         }
     }

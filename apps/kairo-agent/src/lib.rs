@@ -1,6 +1,7 @@
 pub mod app_manager;
 pub mod config;
 pub mod fs;
+pub mod gpu;
 pub mod metrics;
 pub mod process;
 pub mod pty;
@@ -11,6 +12,7 @@ pub mod system;
 pub use app_manager::{AppError, AppManager};
 pub use config::AgentConfig;
 pub use fs::{FilesystemHandler, FsError};
+pub use gpu::{GpuError, GpuManager};
 pub use metrics::MetricsCollector;
 pub use process::{ProcessError, ProcessManager};
 pub use pty::{PtyError, PtyManager};

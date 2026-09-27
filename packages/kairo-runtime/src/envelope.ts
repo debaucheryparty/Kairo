@@ -38,6 +38,10 @@ export enum Opcode {
   AppLaunch = 71,
   SurfaceInput = 72,
   SurfaceClose = 73,
+  GpuGetInfo = 80,
+  GpuStartStream = 81,
+  GpuStopStream = 82,
+  GpuStreamStats = 83,
 }
 
 export interface KairoEnvelope {

@@ -5,6 +5,7 @@ use tracing::{error, info, warn};
 
 use crate::app_manager::AppManager;
 use crate::config::AgentConfig;
+use crate::gpu::GpuManager;
 use crate::pty::PtyManager;
 use crate::session::Session;
 
@@ -12,6 +13,7 @@ pub struct Server {
     config: Arc<AgentConfig>,
     pty: Arc<PtyManager>,
     app: Arc<AppManager>,
+    gpu: Arc<GpuManager>,
 }
 
 impl Server {
@@ -21,6 +23,7 @@ impl Server {
             config: Arc::new(config),
             pty: Arc::new(PtyManager::new()),
             app: Arc::new(AppManager::new()),
+            gpu: Arc::new(GpuManager::new()),
         }
     }
 
@@ -49,6 +52,7 @@ impl Server {
                     let config = Arc::clone(&self.config);
                     let pty = Arc::clone(&self.pty);
                     let app = Arc::clone(&self.app);
+                    let gpu = Arc::clone(&self.gpu);
                     tokio::spawn(async move {
                         let ws_stream = match accept_async(tcp_stream).await {
                             Ok(ws) => ws,
@@ -60,7 +64,7 @@ impl Server {
 
                         info!(peer = %peer_addr, "websocket connection established");
 
-                        let mut session = Session::with_components(config, pty, app);
+                        let mut session = Session::with_components(config, pty, app, gpu);
                         if let Err(e) = session.run(ws_stream).await {
                             error!(
                                 peer = %peer_addr,

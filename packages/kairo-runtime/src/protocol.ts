@@ -1327,6 +1327,282 @@ export function decodeCloseSurfaceResponse(data: Uint8Array): boolean {
   return success;
 }
 
+export interface GpuDevicePayload {
+  gpuId: string;
+  name: string;
+  vendor: string;
+  driverVersion: string;
+  memoryTotalBytes: number;
+  memoryUsedBytes: number;
+  temperatureCelsius: number;
+  utilizationPercent: number;
+  supportedEncoders: string[];
+}
+
+export interface GetGpuInfoResponsePayload {
+  gpuAvailable: boolean;
+  devices: GpuDevicePayload[];
+  defaultEncoder: string;
+}
+
+export interface StartGpuStreamRequestPayload {
+  gpuId: string;
+  width?: number;
+  height?: number;
+  targetFps?: number;
+  codec?: string;
+  bitrateKbps?: number;
+}
+
+export interface StartGpuStreamResponsePayload {
+  streamId: string;
+  activeEncoder: string;
+  actualFps: number;
+  streamEndpoint: string;
+}
+
+export interface GpuStreamStatsPayload {
+  streamId: string;
+  currentFps: number;
+  bitrateKbps: number;
+  rttMs: number;
+  frameLossPercent: number;
+}
+
+export function encodeGetGpuInfoRequest(): Uint8Array {
+  return new Uint8Array(0);
+}
+
+export function decodeGetGpuInfoResponse(data: Uint8Array): GetGpuInfoResponsePayload {
+  let gpuAvailable = false;
+  let defaultEncoder = '';
+  const devices: GpuDevicePayload[] = [];
+  let offset = 0;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (fieldNumber === 1 && wireType === 0) {
+      let val = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        val |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      gpuAvailable = val !== 0;
+    } else if (fieldNumber === 3 && wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      defaultEncoder = textDecoder.decode(data.subarray(offset, offset + length));
+      offset += length;
+    } else if (fieldNumber === 2 && wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      const end = offset + length;
+      let gpuId = '';
+      let name = '';
+      let vendor = '';
+      let driverVersion = '';
+      let memoryTotalBytes = 0;
+      let memoryUsedBytes = 0;
+      let temperatureCelsius = 0;
+      let utilizationPercent = 0;
+      const supportedEncoders: string[] = [];
+
+      while (offset < end) {
+        const itemTag = data[offset++];
+        const fn = itemTag >> 3;
+        const wt = itemTag & 0x07;
+
+        if (wt === 2) {
+          let l = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            l |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          const str = textDecoder.decode(data.subarray(offset, offset + l));
+          offset += l;
+          if (fn === 1) gpuId = str;
+          else if (fn === 2) name = str;
+          else if (fn === 3) vendor = str;
+          else if (fn === 4) driverVersion = str;
+          else if (fn === 9) supportedEncoders.push(str);
+        } else if (wt === 0) {
+          let val = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            val |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          if (fn === 5) memoryTotalBytes = val;
+          else if (fn === 6) memoryUsedBytes = val;
+          else if (fn === 7) temperatureCelsius = val;
+          else if (fn === 8) utilizationPercent = val;
+        } else {
+          break;
+        }
+      }
+
+      devices.push({
+        gpuId,
+        name,
+        vendor,
+        driverVersion,
+        memoryTotalBytes,
+        memoryUsedBytes,
+        temperatureCelsius,
+        utilizationPercent,
+        supportedEncoders,
+      });
+    } else {
+      break;
+    }
+  }
+
+  return { gpuAvailable, devices, defaultEncoder };
+}
+
+export function encodeStartGpuStreamRequest(req: StartGpuStreamRequestPayload): Uint8Array {
+  const parts: Uint8Array[] = [encodeStringField(1, req.gpuId)];
+  if (req.width !== undefined) parts.push(encodeUintField(2, req.width));
+  if (req.height !== undefined) parts.push(encodeUintField(3, req.height));
+  if (req.targetFps !== undefined) parts.push(encodeUintField(4, req.targetFps));
+  if (req.codec) parts.push(encodeStringField(5, req.codec));
+  if (req.bitrateKbps !== undefined) parts.push(encodeUintField(6, req.bitrateKbps));
+  return concat(parts);
+}
+
+export function decodeStartGpuStreamResponse(data: Uint8Array): StartGpuStreamResponsePayload {
+  let streamId = '';
+  let activeEncoder = '';
+  let actualFps = 0;
+  let streamEndpoint = '';
+  let offset = 0;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      const str = textDecoder.decode(data.subarray(offset, offset + length));
+      offset += length;
+      if (fieldNumber === 1) streamId = str;
+      else if (fieldNumber === 2) activeEncoder = str;
+      else if (fieldNumber === 4) streamEndpoint = str;
+    } else if (wireType === 0) {
+      let val = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        val |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 3) actualFps = val;
+    } else {
+      break;
+    }
+  }
+
+  return { streamId, activeEncoder, actualFps, streamEndpoint };
+}
+
+export function encodeStopGpuStreamRequest(streamId: string): Uint8Array {
+  return encodeStringField(1, streamId);
+}
+
+export function decodeStopGpuStreamResponse(data: Uint8Array): boolean {
+  return decodeCloseSurfaceResponse(data);
+}
+
+export function encodeGpuStreamStatsRequest(streamId: string): Uint8Array {
+  return encodeStringField(1, streamId);
+}
+
+export function decodeGpuStreamStats(data: Uint8Array): GpuStreamStatsPayload {
+  let streamId = '';
+  let currentFps = 0;
+  let bitrateKbps = 0;
+  let rttMs = 0;
+  let frameLossPercent = 0;
+  let offset = 0;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      const str = textDecoder.decode(data.subarray(offset, offset + length));
+      offset += length;
+      if (fieldNumber === 1) streamId = str;
+    } else if (wireType === 0) {
+      let val = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        val |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 2) currentFps = val;
+      else if (fieldNumber === 3) bitrateKbps = val;
+      else if (fieldNumber === 4) rttMs = val;
+    } else if (wireType === 5) {
+      if (offset + 4 <= data.byteLength) {
+        const view = new DataView(data.buffer, data.byteOffset + offset, 4);
+        frameLossPercent = view.getFloat32(0, true);
+        offset += 4;
+      } else {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+
+  return { streamId, currentFps, bitrateKbps, rttMs, frameLossPercent };
+}
+
+
 
 
 

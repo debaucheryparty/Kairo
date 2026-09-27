@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ContainerAction,
   type DockerContainer,
+  type GetGpuInfoResponsePayload,
+  type GpuStreamStatsPayload,
   type KairoClient,
   type KairoSession,
   type ProcessInfo,
@@ -33,11 +35,15 @@ function formatUptime(seconds: number): string {
 }
 
 export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
-  const [activeTab, setActiveTab] = useState<'telemetry' | 'processes' | 'containers' | 'services'>('telemetry');
+  const [activeTab, setActiveTab] = useState<'telemetry' | 'processes' | 'containers' | 'services' | 'gpu'>('telemetry');
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [procSearch, setProcSearch] = useState('');
   const [loadingProcesses, setLoadingProcesses] = useState(false);
+  const [gpuInfo, setGpuInfo] = useState<GetGpuInfoResponsePayload | null>(null);
+  const [activeStreamId, setActiveStreamId] = useState<string | null>(null);
+  const [streamStats, setStreamStats] = useState<GpuStreamStatsPayload | null>(null);
+  const [streamingLoading, setStreamingLoading] = useState(false);
 
   // Docker state
   const [containers, setContainers] = useState<DockerContainer[]>([]);
@@ -72,6 +78,79 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
       clearInterval(interval);
     };
   }, [client]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchGpu = async () => {
+      try {
+        const info = await client.getGpuInfo();
+        if (isMounted) {
+          setGpuInfo(info);
+        }
+      } catch (e) {
+        console.error('Failed to query GPU telemetry:', e);
+      }
+    };
+
+    fetchGpu();
+    const interval = setInterval(fetchGpu, 4000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [client]);
+
+  useEffect(() => {
+    if (!activeStreamId) return;
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      try {
+        const stats = await client.getGpuStreamStats(activeStreamId);
+        if (isMounted) {
+          setStreamStats(stats);
+        }
+      } catch {
+        // stream may have stopped
+      }
+    }, 1000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [client, activeStreamId]);
+
+  const handleStartStream = async (gpuId: string) => {
+    try {
+      setStreamingLoading(true);
+      const resp = await client.startGpuStream({
+        gpuId,
+        width: 1920,
+        height: 1080,
+        targetFps: 60,
+        bitrateKbps: 8000,
+        codec: 'nvenc_h264',
+      });
+      setActiveStreamId(resp.streamId);
+    } catch (err) {
+      console.error('Failed to start GPU stream:', err);
+    } finally {
+      setStreamingLoading(false);
+    }
+  };
+
+  const handleStopStream = async () => {
+    if (!activeStreamId) return;
+    try {
+      setStreamingLoading(true);
+      await client.stopGpuStream(activeStreamId);
+      setActiveStreamId(null);
+      setStreamStats(null);
+    } catch (err) {
+      console.error('Failed to stop GPU stream:', err);
+    } finally {
+      setStreamingLoading(false);
+    }
+  };
 
   // Fetch running processes
   const fetchProcesses = useCallback(async () => {
@@ -285,6 +364,22 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
           }}
         >
           Services {services.length > 0 && `(${services.length})`}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('gpu')}
+          style={{
+            background: activeTab === 'gpu' ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+            border: activeTab === 'gpu' ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid transparent',
+            borderRadius: 6,
+            color: activeTab === 'gpu' ? '#a5b4fc' : '#94a3b8',
+            fontSize: 12,
+            fontWeight: 600,
+            padding: '5px 12px',
+            cursor: 'pointer',
+          }}
+        >
+          GPU Acceleration {gpuInfo?.gpuAvailable ? `(${gpuInfo.devices.length})` : ''}
         </button>
       </div>
 
@@ -949,6 +1044,243 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
                 </table>
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'gpu' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+          {!gpuInfo || !gpuInfo.gpuAvailable || gpuInfo.devices.length === 0 ? (
+            <div
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: 8,
+                padding: 24,
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', marginBottom: 8 }}>
+                No Discrete Hardware GPU Detected
+              </div>
+              <div style={{ fontSize: 13, color: '#94a3b8', maxWidth: 460, margin: '0 auto 16px', lineHeight: 1.5 }}>
+                The remote host is operating in CPU/headless mode. Kairo automatically routes graphical applications
+                through software rasterization and low-latency software encoders.
+              </div>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 14px',
+                  borderRadius: 20,
+                  background: 'rgba(99, 102, 241, 0.1)',
+                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                  fontSize: 12,
+                  color: '#a5b4fc',
+                }}
+              >
+                <span>Active Encoding Fallback:</span>
+                <code style={{ fontFamily: 'monospace', fontWeight: 600 }}>{gpuInfo?.defaultEncoder || 'software_h264'}</code>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {gpuInfo.devices.map((device) => {
+                const memUsedPct = device.memoryTotalBytes > 0
+                  ? Math.round((device.memoryUsedBytes / device.memoryTotalBytes) * 100)
+                  : 0;
+
+                return (
+                  <div
+                    key={device.gpuId}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      borderRadius: 8,
+                      padding: 18,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                      <div>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: '#f8fafc' }}>
+                          {device.name}
+                        </div>
+                        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                          {device.vendor} • Driver {device.driverVersion}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        {device.temperatureCelsius > 0 && (
+                          <div
+                            style={{
+                              background: device.temperatureCelsius > 80 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                              border: `1px solid ${device.temperatureCelsius > 80 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255, 255, 255, 0.1)'}`,
+                              borderRadius: 4,
+                              padding: '4px 8px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: device.temperatureCelsius > 80 ? '#f87171' : '#cbd5e1',
+                            }}
+                          >
+                            {device.temperatureCelsius}°C
+                          </div>
+                        )}
+                        <div
+                          style={{
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            borderRadius: 4,
+                            padding: '4px 8px',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: '#34d399',
+                          }}
+                        >
+                          Hardware Accelerated
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 16 }}>
+                      <div
+                        style={{
+                          background: 'rgba(0, 0, 0, 0.2)',
+                          borderRadius: 6,
+                          padding: 12,
+                          border: '1px solid rgba(255, 255, 255, 0.04)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
+                          <span style={{ color: '#94a3b8' }}>Core Utilization</span>
+                          <span style={{ color: '#38bdf8', fontWeight: 600 }}>{device.utilizationPercent}%</span>
+                        </div>
+                        <div style={{ height: 6, background: 'rgba(255, 255, 255, 0.08)', borderRadius: 3, overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${Math.min(device.utilizationPercent, 100)}%`,
+                              background: '#38bdf8',
+                              transition: 'width 0.3s ease',
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          background: 'rgba(0, 0, 0, 0.2)',
+                          borderRadius: 6,
+                          padding: 12,
+                          border: '1px solid rgba(255, 255, 255, 0.04)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
+                          <span style={{ color: '#94a3b8' }}>Video Memory (VRAM)</span>
+                          <span style={{ color: '#a855f7', fontWeight: 600 }}>{memUsedPct}%</span>
+                        </div>
+                        <div style={{ height: 6, background: 'rgba(255, 255, 255, 0.08)', borderRadius: 3, overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${Math.min(memUsedPct, 100)}%`,
+                              background: '#a855f7',
+                              transition: 'width 0.3s ease',
+                            }}
+                          />
+                        </div>
+                        <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+                          {formatBytes(device.memoryUsedBytes)} / {formatBytes(device.memoryTotalBytes)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Hardware Encoders
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {device.supportedEncoders.map((encoder) => (
+                          <span
+                            key={encoder}
+                            style={{
+                              background: encoder === gpuInfo.defaultEncoder ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                              border: `1px solid ${encoder === gpuInfo.defaultEncoder ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255, 255, 255, 0.1)'}`,
+                              borderRadius: 4,
+                              padding: '2px 8px',
+                              fontSize: 11,
+                              color: encoder === gpuInfo.defaultEncoder ? '#a5b4fc' : '#cbd5e1',
+                            }}
+                          >
+                            {encoder} {encoder === gpuInfo.defaultEncoder && '★'}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                        paddingTop: 12,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                        {activeStreamId ? (
+                          <span style={{ color: '#34d399', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
+                            Live Stream Active: {streamStats ? `${streamStats.currentFps} FPS • ${streamStats.bitrateKbps} kbps • ${streamStats.rttMs}ms RTT` : 'Initializing pipeline...'}
+                          </span>
+                        ) : (
+                          <span>Direct GPU Pipeline: Low-latency NVENC/VAAPI frame streaming</span>
+                        )}
+                      </div>
+                      <div>
+                        {activeStreamId ? (
+                          <button
+                            type="button"
+                            onClick={handleStopStream}
+                            disabled={streamingLoading}
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              borderRadius: 6,
+                              color: '#f87171',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              padding: '6px 14px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Stop Stream
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleStartStream(device.gpuId)}
+                            disabled={streamingLoading}
+                            style={{
+                              background: 'rgba(99, 102, 241, 0.2)',
+                              border: '1px solid rgba(99, 102, 241, 0.4)',
+                              borderRadius: 6,
+                              color: '#a5b4fc',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              padding: '6px 14px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Test GPU Pipeline
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}

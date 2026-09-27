@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package kairo.v1;
+
+message GpuDevice {
+  string gpu_id = 1;
+  string name = 2;
+  string vendor = 3;
+  string driver_version = 4;
+  uint64 memory_total_bytes = 5;
+  uint64 memory_used_bytes = 6;
+  uint32 temperature_celsius = 7;
+  uint32 utilization_percent = 8;
+  repeated string supported_encoders = 9;
+}
+
+message GetGpuInfoRequest {}
+
+message GetGpuInfoResponse {
+  bool gpu_available = 1;
+  repeated GpuDevice devices = 2;
+  string default_encoder = 3;
+}
+
+message StartGpuStreamRequest {
+  string gpu_id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 target_fps = 4;
+  string codec = 5;
+  uint32 bitrate_kbps = 6;
+}
+
+message StartGpuStreamResponse {
+  string stream_id = 1;
+  string active_encoder = 2;
+  uint32 actual_fps = 3;
+  string stream_endpoint = 4;
+}
+
+message StopGpuStreamRequest {
+  string stream_id = 1;
+}
+
+message StopGpuStreamResponse {
+  bool success = 1;
+}
+
+message GpuStreamStats {
+  string stream_id = 1;
+  uint32 current_fps = 2;
+  uint32 bitrate_kbps = 3;
+  uint32 rtt_ms = 4;
+  float frame_loss_percent = 5;
+}
