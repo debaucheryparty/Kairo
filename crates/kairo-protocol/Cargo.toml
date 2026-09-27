@@ -1,0 +1,19 @@
+[package]
+name = "kairo-protocol"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+kairo-common = { path = "../kairo-common" }
+prost = { workspace = true }
+prost-types = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+bytes = { workspace = true }
+uuid = { workspace = true }
+
+[build-dependencies]
+prost-build = "0.13"
+
+[lints]
+workspace = true
