@@ -3,6 +3,10 @@ name = "kairo-agent"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+name = "kairo_agent"
+path = "src/lib.rs"
+
 [[bin]]
 name = "kairo-agent"
 path = "src/main.rs"
@@ -21,6 +25,10 @@ tracing-subscriber = { workspace = true }
 clap = { workspace = true }
 notify = { workspace = true }
 uuid = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+bytes = { workspace = true }
+prost = { workspace = true }
 
 [lints]
 workspace = true

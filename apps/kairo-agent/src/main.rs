@@ -1,8 +1,7 @@
-mod config;
+use kairo_agent::{AgentConfig, Server};
 
 use anyhow::Result;
 use clap::Parser;
-use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -25,17 +24,13 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    let config = config::AgentConfig {
+    let config = AgentConfig {
         bind_address: cli.bind,
         ..Default::default()
     };
 
-    info!(
-        bind = %config.bind_address,
-        data_dir = %config.data_dir,
-        "kairo-agent starting"
-    );
-    info!("kairo-agent ready");
+    let server = Server::new(config);
+    server.run().await.map_err(|e| anyhow::anyhow!("{e}"))?;
 
     Ok(())
 }
