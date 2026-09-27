@@ -5,7 +5,22 @@ import {
   WebSocketTransportAdapter,
   type KairoSession,
 } from '@kairo/runtime';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityMonitor } from './apps/ActivityMonitor';
+import { Finder } from './apps/Finder';
+import { TerminalApp } from './apps/TerminalApp';
+import type { AppId, WindowState } from './types/window';
+import { WindowFrame } from './wm/WindowFrame';
+
+const DEFAULT_WINDOWS: Record<
+  AppId,
+  { title: string; width: number; height: number }
+> = {
+  finder: { title: 'Finder — Remote Filesystem', width: 680, height: 440 },
+  terminal: { title: 'Terminal', width: 620, height: 380 },
+  monitor: { title: 'Activity Monitor', width: 520, height: 400 },
+  settings: { title: 'Settings', width: 480, height: 360 },
+};
 
 export function App() {
   const [store] = useState(() => createConnectionStore());
@@ -13,6 +28,10 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<KairoSession | null>(null);
   const [agentUrl, setAgentUrl] = useState('ws://127.0.0.1:9600');
+
+  const [windows, setWindows] = useState<WindowState[]>([]);
+  const [activeWindowId, setActiveWindowId] = useState<string | null>(null);
+  const [nextZIndex, setNextZIndex] = useState(10);
 
   const client = useMemo(() => {
     const transport = new WebSocketTransportAdapter();
@@ -31,12 +50,55 @@ export function App() {
     return () => unsubscribe();
   }, [store]);
 
+  const openApp = useCallback(
+    (appId: AppId) => {
+      setWindows((prev) => {
+        const existing = prev.find((w) => w.appId === appId);
+        if (existing) {
+          if (existing.isMinimized) {
+            return prev.map((w) =>
+              w.id === existing.id
+                ? { ...w, isMinimized: false, zIndex: nextZIndex }
+                : w
+            );
+          }
+          return prev.map((w) =>
+            w.id === existing.id ? { ...w, zIndex: nextZIndex } : w
+          );
+        }
+
+        const config = DEFAULT_WINDOWS[appId];
+        const offset = (prev.length * 28) % 180;
+        const newWindow: WindowState = {
+          id: `${appId}-${Date.now()}`,
+          appId,
+          title: config.title,
+          x: 60 + offset,
+          y: 40 + offset,
+          width: config.width,
+          height: config.height,
+          minWidth: 320,
+          minHeight: 240,
+          isMinimized: false,
+          isMaximized: false,
+          zIndex: nextZIndex,
+        };
+
+        setActiveWindowId(newWindow.id);
+        return [...prev, newWindow];
+      });
+      setNextZIndex((z) => z + 1);
+    },
+    [nextZIndex]
+  );
+
   const handleConnect = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     try {
       setError(null);
       const activeSession = await client.connect(agentUrl);
       setSession(activeSession);
+      openApp('finder');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -45,6 +107,44 @@ export function App() {
   const handleDisconnect = async () => {
     await client.disconnect();
     setSession(null);
+    setWindows([]);
+  };
+
+  const focusWindow = (id: string) => {
+    setActiveWindowId(id);
+    setWindows((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, zIndex: nextZIndex } : w))
+    );
+    setNextZIndex((z) => z + 1);
+  };
+
+  const closeWindow = (id: string) => {
+    setWindows((prev) => prev.filter((w) => w.id !== id));
+    if (activeWindowId === id) {
+      setActiveWindowId(null);
+    }
+  };
+
+  const minimizeWindow = (id: string) => {
+    setWindows((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, isMinimized: true } : w))
+    );
+  };
+
+  const maximizeWindow = (id: string) => {
+    setWindows((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, isMaximized: !w.isMaximized } : w))
+    );
+  };
+
+  const moveWindow = (id: string, x: number, y: number) => {
+    setWindows((prev) => prev.map((w) => (w.id === id ? { ...w, x, y } : w)));
+  };
+
+  const resizeWindow = (id: string, width: number, height: number) => {
+    setWindows((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, width, height } : w))
+    );
   };
 
   return (
@@ -56,6 +156,11 @@ export function App() {
             <span className={`status-indicator status-${state}`} />
             <span>{state.charAt(0).toUpperCase() + state.slice(1)}</span>
           </div>
+          {session && (
+            <span className="topbar-host-badge">
+              Host: {session.computerId.slice(0, 8)}...
+            </span>
+          )}
         </div>
 
         <div className="topbar-right">
@@ -90,14 +195,20 @@ export function App() {
                   value={agentUrl}
                   onChange={(e) => setAgentUrl(e.target.value)}
                   placeholder="ws://127.0.0.1:9600"
-                  disabled={state === ConnectionState.Connecting || state === ConnectionState.Authenticating}
+                  disabled={
+                    state === ConnectionState.Connecting ||
+                    state === ConnectionState.Authenticating
+                  }
                 />
               </div>
 
               <button
                 type="submit"
                 className="btn-primary"
-                disabled={state === ConnectionState.Connecting || state === ConnectionState.Authenticating}
+                disabled={
+                  state === ConnectionState.Connecting ||
+                  state === ConnectionState.Authenticating
+                }
               >
                 {state === ConnectionState.Connecting
                   ? 'Connecting...'
@@ -110,45 +221,54 @@ export function App() {
             {error && <div className="error-banner">{error}</div>}
           </div>
         ) : (
-          <div className="session-badge">
-            <div className="session-header">
-              <span className="session-title">Connected Session</span>
-              <span className="status-indicator status-connected" />
-            </div>
-
-            <div className="form-group">
-              <label>Agent Identifier</label>
-              <div style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--color-text)' }}>
-                {session?.computerId}
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Session ID</label>
-              <div style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--color-text)' }}>
-                {session?.sessionId}
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Negotiated Capabilities</label>
-              <div className="capabilities-list">
-                {session?.capabilities.map((cap) => (
-                  <span key={cap} className="capability-chip">
-                    {cap}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
+          windows.map((win) => (
+            <WindowFrame
+              key={win.id}
+              window={win}
+              isActive={activeWindowId === win.id}
+              onFocus={() => focusWindow(win.id)}
+              onClose={() => closeWindow(win.id)}
+              onMinimize={() => minimizeWindow(win.id)}
+              onMaximize={() => maximizeWindow(win.id)}
+              onMove={(x, y) => moveWindow(win.id, x, y)}
+              onResize={(w, h) => resizeWindow(win.id, w, h)}
+            >
+              {win.appId === 'finder' && <Finder client={client} />}
+              {win.appId === 'terminal' && <TerminalApp session={session} />}
+              {win.appId === 'monitor' && <ActivityMonitor session={session} />}
+            </WindowFrame>
+          ))
         )}
       </main>
 
       <footer className="dock">
-        <div className="dock-item" title="Finder">📁</div>
-        <div className="dock-item" title="Terminal">💻</div>
-        <div className="dock-item" title="Activity Monitor">📊</div>
-        <div className="dock-item" title="Settings">⚙️</div>
+        <button
+          type="button"
+          className="dock-item"
+          title="Finder"
+          onClick={() => openApp('finder')}
+          disabled={state !== ConnectionState.Connected}
+        >
+          📁
+        </button>
+        <button
+          type="button"
+          className="dock-item"
+          title="Terminal"
+          onClick={() => openApp('terminal')}
+          disabled={state !== ConnectionState.Connected}
+        >
+          💻
+        </button>
+        <button
+          type="button"
+          className="dock-item"
+          title="Activity Monitor"
+          onClick={() => openApp('monitor')}
+          disabled={state !== ConnectionState.Connected}
+        >
+          📊
+        </button>
       </footer>
     </div>
   );
