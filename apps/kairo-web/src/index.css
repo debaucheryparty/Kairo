@@ -951,3 +951,27 @@ body {
   margin-top: 16px;
 }
 
+.status-indicator.status-degraded {
+  background: var(--color-warning);
+}
+
+.reconnecting-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 24, 16, 0.92);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(16px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: #fde68a;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+}
+

@@ -1,18 +1,20 @@
 import { ConnectionState, createConnectionStore, type ConnectionStore } from './connection';
 import { KairoClient } from './client';
-import { WebSocketTransportAdapter } from './websocket';
+import { ResilientTransportAdapter } from './resilient-transport';
 import type { KairoSession } from './session';
 
 export interface ComputerProfile {
   id: string;
   name: string;
   url: string;
+  relayUrl?: string;
   color: string;
 }
 
 export interface ComputerInstance {
   profile: ComputerProfile;
   client: KairoClient;
+  transport: ResilientTransportAdapter;
   store: {
     getState: () => ConnectionStore;
     subscribe: (listener: (state: ConnectionStore) => void) => () => void;
@@ -46,7 +48,18 @@ export class ComputerManager {
 
   private createInstance(profile: ComputerProfile): ComputerInstance {
     const store = createConnectionStore();
-    const transport = new WebSocketTransportAdapter();
+    const transport = new ResilientTransportAdapter({
+      primaryUrl: profile.url,
+      fallbackUrls: profile.relayUrl ? [profile.relayUrl] : [],
+      connectionStore: store,
+      onReconnected: async () => {
+        try {
+          const session = await client.connect(profile.url);
+          instance.session = session;
+          this.notify();
+        } catch {}
+      },
+    });
     const client = new KairoClient({
       transport,
       connectionStore: store,
@@ -56,6 +69,7 @@ export class ComputerManager {
     const instance: ComputerInstance = {
       profile,
       client,
+      transport,
       store,
       session: null,
     };

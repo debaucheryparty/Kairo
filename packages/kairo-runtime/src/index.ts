@@ -2,6 +2,7 @@ export { ConnectionState, type ConnectionStore, createConnectionStore } from './
 export { type TransportAdapter } from './transport';
 export { type KairoSession } from './session';
 export { WebSocketTransportAdapter } from './websocket';
+export { ResilientTransportAdapter, type ResilientTransportConfig } from './resilient-transport';
 export { KairoClient, type KairoClientOptions } from './client';
 export { ComputerManager, type ComputerProfile, type ComputerInstance } from './computer';
 export {

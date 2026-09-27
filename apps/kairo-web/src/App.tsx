@@ -103,6 +103,7 @@ export function App() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newComputerName, setNewComputerName] = useState('');
   const [newComputerUrl, setNewComputerUrl] = useState('ws://127.0.0.1:9600');
+  const [newComputerRelayUrl, setNewComputerRelayUrl] = useState('');
   const [newComputerColor, setNewComputerColor] = useState('#6366f1');
 
   useEffect(() => {
@@ -187,12 +188,14 @@ export function App() {
       id,
       name: newComputerName.trim(),
       url: newComputerUrl.trim(),
+      relayUrl: newComputerRelayUrl.trim() || undefined,
       color: newComputerColor,
     });
     manager.setActiveId(id);
     setIsAddModalOpen(false);
     setNewComputerName('');
     setNewComputerUrl('ws://127.0.0.1:9600');
+    setNewComputerRelayUrl('');
   };
 
   const handleRemoveComputer = (e: React.MouseEvent, id: string) => {
@@ -391,7 +394,43 @@ export function App() {
       </header>
 
       <main className="desktop">
-        {activeState !== ConnectionState.Connected && windows.length === 0 ? (
+        {activeState === ConnectionState.Reconnecting && (
+          <div className="reconnecting-banner">
+            <span className="status-indicator status-reconnecting" />
+            <span>Reconnecting to {activeProfile.name}...</span>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ padding: '2px 8px', fontSize: 11 }}
+              onClick={() => handleConnect(activeProfile.id)}
+            >
+              Retry Now
+            </button>
+          </div>
+        )}
+
+        {activeState === ConnectionState.Degraded && (
+          <div
+            className="reconnecting-banner"
+            style={{ borderColor: 'rgba(245, 158, 11, 0.5)' }}
+          >
+            <span className="status-indicator status-degraded" />
+            <span>Connection to {activeProfile.name} is degraded</span>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ padding: '2px 8px', fontSize: 11 }}
+              onClick={() => handleConnect(activeProfile.id)}
+            >
+              Reconnect
+            </button>
+          </div>
+        )}
+
+        {activeState !== ConnectionState.Connected &&
+        activeState !== ConnectionState.Reconnecting &&
+        activeState !== ConnectionState.Degraded &&
+        windows.length === 0 ? (
           <div className="connection-card">
             <div
               style={{
@@ -538,6 +577,18 @@ export function App() {
                   value={newComputerUrl}
                   onChange={(e) => setNewComputerUrl(e.target.value)}
                   required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="computer-relay-url">Relay / Fallback URL (Optional)</label>
+                <input
+                  id="computer-relay-url"
+                  className="form-input"
+                  type="text"
+                  placeholder="wss://relay.kairo.dev:9600"
+                  value={newComputerRelayUrl}
+                  onChange={(e) => setNewComputerRelayUrl(e.target.value)}
                 />
               </div>
 
