@@ -277,6 +277,92 @@ export function decodeWriteFileResponse(data: Uint8Array): { revision: string } 
   return { revision };
 }
 
+export enum FileEventKind {
+  Unspecified = 0,
+  Created = 1,
+  Modified = 2,
+  Deleted = 3,
+  Renamed = 4,
+}
+
+export interface FileEventPayload {
+  path: string;
+  kind: FileEventKind;
+}
+
+export function encodeWatchRequest(path: string, recursive = false): Uint8Array {
+  return concat([
+    encodeStringField(1, path),
+    encodeUintField(2, recursive ? 1 : 0),
+  ]);
+}
+
+export function decodeWatchResponse(data: Uint8Array): { success: boolean } {
+  let offset = 0;
+  let success = false;
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+    if (wireType === 0) {
+      let value = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        value |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) success = value !== 0;
+    } else {
+      break;
+    }
+  }
+  return { success };
+}
+
+export function decodeFileEvent(data: Uint8Array): FileEventPayload {
+  let offset = 0;
+  let path = '';
+  let kind = FileEventKind.Unspecified;
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 0) {
+      let value = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        value |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 2) kind = value as FileEventKind;
+    } else if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) {
+        path = textDecoder.decode(data.subarray(offset, offset + length));
+      }
+      offset += length;
+    } else {
+      break;
+    }
+  }
+
+  return { path, kind };
+}
+
 export function decodeKairoError(data: Uint8Array): KairoErrorPayload {
   let offset = 0;
   let code = 0;

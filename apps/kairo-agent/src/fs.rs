@@ -4,8 +4,10 @@ use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use kairo_protocol::v1::{
-    FileEntry, FileType, ListDirectoryResponse, ReadFileResponse, WriteFileResponse,
+    FileEntry, FileEvent, FileEventKind, FileType, ListDirectoryResponse, ReadFileResponse,
+    WriteFileResponse,
 };
+use notify::{RecommendedWatcher, Watcher};
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -22,8 +24,17 @@ pub enum FsError {
     #[error("revision conflict: expected {expected}, actual {actual}")]
     Conflict { expected: String, actual: String },
 
+    #[error("watcher error: {0}")]
+    Watcher(String),
+
     #[error("io error: {0}")]
     Io(String),
+}
+
+impl From<notify::Error> for FsError {
+    fn from(err: notify::Error) -> Self {
+        Self::Watcher(err.to_string())
+    }
 }
 
 impl From<std::io::Error> for FsError {
@@ -58,6 +69,74 @@ impl FilesystemHandler {
         let full = self.root.join(clean_relative);
 
         Ok(full)
+    }
+
+    #[must_use]
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn watch_path(
+        &self,
+        requested: &str,
+        recursive: bool,
+    ) -> Result<
+        (
+            RecommendedWatcher,
+            tokio::sync::mpsc::UnboundedReceiver<FileEvent>,
+        ),
+        FsError,
+    > {
+        let full_path = self.sanitize_path(requested)?;
+        if !full_path.exists() {
+            return Err(FsError::NotFound(requested.to_string()));
+        }
+
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let root = self.root.clone();
+
+        let mut watcher =
+            notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+                if let Ok(event) = res {
+                    let kind = match event.kind {
+                        notify::EventKind::Create(_) => FileEventKind::Created,
+                        notify::EventKind::Modify(notify::event::ModifyKind::Name(_)) => {
+                            FileEventKind::Renamed
+                        }
+                        notify::EventKind::Modify(_) => FileEventKind::Modified,
+                        notify::EventKind::Remove(_) => FileEventKind::Deleted,
+                        notify::EventKind::Any => FileEventKind::Modified,
+                        _ => FileEventKind::Unspecified,
+                    };
+
+                    for path in event.paths {
+                        let relative = path
+                            .strip_prefix(&root)
+                            .map(|p| p.to_string_lossy().to_string())
+                            .unwrap_or_else(|_| path.to_string_lossy().to_string());
+
+                        let normalized = relative.replace('\\', "/");
+                        if normalized.contains(".tmp.") {
+                            continue;
+                        }
+
+                        let _ = tx.send(FileEvent {
+                            path: normalized,
+                            kind: kind as i32,
+                        });
+                    }
+                }
+            })?;
+
+        let mode = if recursive {
+            notify::RecursiveMode::Recursive
+        } else {
+            notify::RecursiveMode::NonRecursive
+        };
+
+        watcher.watch(&full_path, mode)?;
+
+        Ok((watcher, rx))
     }
 
     pub fn list_directory(&self, path: &str) -> Result<ListDirectoryResponse, FsError> {
@@ -259,5 +338,37 @@ mod tests {
 
         let err = fs_handler.list_directory("../etc").unwrap_err();
         assert_eq!(err, FsError::PathTraversal("../etc".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_watch_path_events() {
+        let temp = TempDir::new().unwrap();
+        let fs_handler = FilesystemHandler::new(temp.path());
+
+        let (_watcher, mut rx) = fs_handler
+            .watch_path("", false)
+            .expect("watch should succeed");
+
+        fs_handler
+            .write_file("watched.txt", b"hello watch", None)
+            .expect("write should succeed");
+
+        let mut matched = false;
+        for _ in 0..5 {
+            if let Ok(Some(event)) =
+                tokio::time::timeout(std::time::Duration::from_secs(3), rx.recv()).await
+            {
+                if event.path == "watched.txt" {
+                    assert!(
+                        event.kind == FileEventKind::Created as i32
+                            || event.kind == FileEventKind::Modified as i32
+                            || event.kind == FileEventKind::Renamed as i32
+                    );
+                    matched = true;
+                    break;
+                }
+            }
+        }
+        assert!(matched, "should receive event for watched.txt");
     }
 }

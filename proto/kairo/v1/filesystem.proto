@@ -51,6 +51,10 @@ message WatchRequest {
   bool recursive = 2;
 }
 
+message WatchResponse {
+  bool success = 1;
+}
+
 message FileEvent {
   string path = 1;
   FileEventKind kind = 2;

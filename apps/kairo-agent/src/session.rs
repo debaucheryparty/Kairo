@@ -10,7 +10,7 @@ use kairo_protocol::v1::{
     ErrorCode, GetMetricsRequest, GetMetricsResponse, HandshakeAck, HandshakeInit, KairoError,
     KillProcessRequest, ListDirectoryRequest, ListProcessesRequest, ListProcessesResponse,
     ListPtysRequest, ListPtysResponse, PtyInput, PtyOutput, ReadFileRequest, ResizePtyRequest,
-    WriteFileRequest,
+    WatchRequest, WatchResponse, WriteFileRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
@@ -67,6 +67,17 @@ pub enum SessionState {
     Terminated,
 }
 
+struct ActiveWatcher {
+    _watcher: notify::RecommendedWatcher,
+    abort_handle: tokio::task::AbortHandle,
+}
+
+impl Drop for ActiveWatcher {
+    fn drop(&mut self) {
+        self.abort_handle.abort();
+    }
+}
+
 pub struct Session {
     session_id: KairoId,
     config: Arc<AgentConfig>,
@@ -75,6 +86,7 @@ pub struct Session {
     pty: Arc<PtyManager>,
     metrics: Arc<MetricsCollector>,
     process: Arc<ProcessManager>,
+    watcher: Option<ActiveWatcher>,
 }
 
 impl Session {
@@ -91,6 +103,7 @@ impl Session {
             pty,
             metrics,
             process,
+            watcher: None,
         }
     }
 
@@ -163,6 +176,7 @@ impl Session {
         }
 
         self.state = SessionState::Terminated;
+        self.watcher = None;
         drop(out_tx);
         let _ = writer_handle.await;
 
@@ -320,6 +334,56 @@ impl Session {
                         let msg = KairoMessage::with_opcode(
                             MessageKind::Response,
                             Opcode::FsWriteFile,
+                            request_id,
+                            Bytes::from(buf),
+                        );
+                        self.send_frame(out_tx, msg).await?;
+                    }
+                    Err(e) => self.send_fs_error(out_tx, opcode, request_id, e).await?,
+                }
+            }
+            Opcode::FsWatch => {
+                let req = WatchRequest::decode(message.payload)?;
+                match self.fs.watch_path(&req.path, req.recursive) {
+                    Ok((watcher, mut rx)) => {
+                        if let Some(prev) = self.watcher.take() {
+                            prev.abort_handle.abort();
+                        }
+
+                        let out_tx_clone = out_tx.clone();
+                        let task = tokio::spawn(async move {
+                            while let Some(event) = rx.recv().await {
+                                let mut buf = Vec::new();
+                                if event.encode(&mut buf).is_ok() {
+                                    let msg = KairoMessage::with_opcode(
+                                        MessageKind::Event,
+                                        Opcode::FsWatch,
+                                        0,
+                                        Bytes::from(buf),
+                                    );
+                                    if let Ok(encoded) = msg.encode()
+                                        && out_tx_clone
+                                            .send(WsMessage::Binary(encoded))
+                                            .await
+                                            .is_err()
+                                    {
+                                        break;
+                                    }
+                                }
+                            }
+                        });
+
+                        self.watcher = Some(ActiveWatcher {
+                            _watcher: watcher,
+                            abort_handle: task.abort_handle(),
+                        });
+
+                        let resp = WatchResponse { success: true };
+                        let mut buf = Vec::new();
+                        resp.encode(&mut buf)?;
+                        let msg = KairoMessage::with_opcode(
+                            MessageKind::Response,
+                            Opcode::FsWatch,
                             request_id,
                             Bytes::from(buf),
                         );
@@ -543,7 +607,7 @@ impl Session {
             FsError::NotFound(_) => ErrorCode::NotFound,
             FsError::PermissionDenied(_) | FsError::PathTraversal(_) => ErrorCode::PermissionDenied,
             FsError::Conflict { .. } => ErrorCode::AlreadyExists,
-            FsError::Io(_) => ErrorCode::Internal,
+            FsError::Io(_) | FsError::Watcher(_) => ErrorCode::Internal,
         };
 
         let proto_err = KairoError {

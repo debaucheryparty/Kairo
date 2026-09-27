@@ -25,7 +25,11 @@ import {
   encodeReadFileRequest,
   encodeResizePtyRequest,
   encodeWriteFileRequest,
+  encodeWatchRequest,
+  decodeWatchResponse,
+  decodeFileEvent,
   type FileEntry,
+  type FileEventPayload,
   type HandshakeAckPayload,
   type ProcessInfo,
   type PtySessionInfo,
@@ -189,6 +193,24 @@ export class KairoClient {
     const payload = encodeWriteFileRequest(path, content, expectedRevision);
     const respBytes = await this.sendRequest(Opcode.FsWriteFile, payload);
     return decodeWriteFileResponse(respBytes);
+  }
+
+  async watchDirectory(path = '', recursive = false): Promise<boolean> {
+    const payload = encodeWatchRequest(path, recursive);
+    const respBytes = await this.sendRequest(Opcode.FsWatch, payload);
+    const res = decodeWatchResponse(respBytes);
+    return res.success;
+  }
+
+  onFileEvent(listener: (event: FileEventPayload) => void): () => void {
+    return this.onEvent(Opcode.FsWatch, (payload) => {
+      try {
+        const event = decodeFileEvent(payload);
+        listener(event);
+      } catch (err) {
+        console.error('Failed to decode FileEvent:', err);
+      }
+    });
   }
 
   async sendNotification(opcode: Opcode, payload: Uint8Array): Promise<void> {

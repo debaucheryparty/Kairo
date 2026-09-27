@@ -19,6 +19,7 @@ export function Finder({ client }: FinderProps) {
 
   const [showNewFile, setShowNewFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
+  const [isWatching, setIsWatching] = useState(false);
 
   const loadDirectory = async (path: string) => {
     setLoading(true);
@@ -44,6 +45,36 @@ export function Finder({ client }: FinderProps) {
 
   useEffect(() => {
     loadDirectory(currentPath);
+
+    let cancelled = false;
+    client
+      .watchDirectory(currentPath)
+      .then((ok) => {
+        if (!cancelled) setIsWatching(ok);
+      })
+      .catch(() => {
+        if (!cancelled) setIsWatching(false);
+      });
+
+    const unsubscribe = client.onFileEvent(() => {
+      client
+        .listDirectory(currentPath)
+        .then((list) => {
+          if (cancelled) return;
+          const sorted = [...list].sort((a, b) => {
+            if (a.fileType === 2 && b.fileType !== 2) return -1;
+            if (a.fileType !== 2 && b.fileType === 2) return 1;
+            return a.path.localeCompare(b.path);
+          });
+          setEntries(sorted);
+        })
+        .catch(() => {});
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [currentPath]);
 
   const handleEntryClick = async (entry: FileEntry) => {
@@ -158,6 +189,34 @@ export function Finder({ client }: FinderProps) {
             </React.Fragment>
           ))}
         </div>
+        {isWatching && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '11px',
+              padding: '2px 8px',
+              borderRadius: '999px',
+              background: 'rgba(16, 185, 129, 0.12)',
+              color: '#34d399',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              marginLeft: 'auto',
+            }}
+            title="Real-time directory watching active"
+          >
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: '#10b981',
+                boxShadow: '0 0 6px #10b981',
+              }}
+            />
+            Live Sync
+          </div>
+        )}
       </div>
 
       {showNewFile && (
