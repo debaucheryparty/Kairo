@@ -29,6 +29,7 @@ tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
 bytes = { workspace = true }
 prost = { workspace = true }
+portable-pty = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

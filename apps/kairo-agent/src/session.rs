@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -5,13 +6,15 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use kairo_common::KairoId;
 use kairo_protocol::v1::{
-    ErrorCode, HandshakeAck, HandshakeInit, KairoError, ListDirectoryRequest, ReadFileRequest,
+    ClosePtyRequest, CreatePtyRequest, CreatePtyResponse, ErrorCode, HandshakeAck, HandshakeInit,
+    KairoError, ListDirectoryRequest, PtyInput, PtyOutput, ReadFileRequest, ResizePtyRequest,
     WriteFileRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
 use thiserror::Error;
 use tokio::net::TcpStream;
+use tokio::sync::mpsc;
 use tokio::time::timeout;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
@@ -19,6 +22,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::AgentConfig;
 use crate::fs::{FilesystemHandler, FsError};
+use crate::pty::{PtyError, PtyManager};
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -38,6 +42,9 @@ pub enum SessionError {
 
     #[error("protobuf encode failed: {0}")]
     ProtobufEncode(#[from] prost::EncodeError),
+
+    #[error("pty error: {0}")]
+    Pty(#[from] PtyError),
 
     #[error("unexpected message kind: expected {expected:?}, got {actual:?}")]
     UnexpectedKind {
@@ -61,17 +68,20 @@ pub struct Session {
     config: Arc<AgentConfig>,
     state: SessionState,
     fs: FilesystemHandler,
+    pty: Arc<PtyManager>,
 }
 
 impl Session {
     #[must_use]
     pub fn new(config: Arc<AgentConfig>) -> Self {
         let fs = FilesystemHandler::new(&config.data_dir);
+        let pty = Arc::new(PtyManager::new());
         Self {
             session_id: KairoId::new(),
             config,
             state: SessionState::Authenticating,
             fs,
+            pty,
         }
     }
 
@@ -109,28 +119,39 @@ impl Session {
             }
         }
 
-        while let Some(msg_res) = stream.next().await {
+        let (mut ws_tx, mut ws_rx) = stream.split();
+        let (out_tx, mut out_rx) = mpsc::channel::<WsMessage>(256);
+
+        let writer_handle = tokio::spawn(async move {
+            while let Some(msg) = out_rx.recv().await {
+                if ws_tx.send(msg).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        while let Some(msg_res) = ws_rx.next().await {
             let ws_msg = msg_res.map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
 
             match ws_msg {
                 WsMessage::Binary(data) => {
-                    self.handle_message(&mut stream, data).await?;
+                    self.handle_message(&out_tx, data).await?;
                 }
                 WsMessage::Close(_) => {
                     info!(session_id = %self.session_id, "client closed connection");
                     break;
                 }
                 WsMessage::Ping(payload) => {
-                    stream
-                        .send(WsMessage::Pong(payload))
-                        .await
-                        .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
+                    let _ = out_tx.send(WsMessage::Pong(payload)).await;
                 }
                 _ => {}
             }
         }
 
         self.state = SessionState::Terminated;
+        drop(out_tx);
+        let _ = writer_handle.await;
+
         Ok(())
     }
 
@@ -207,7 +228,7 @@ impl Session {
 
     async fn handle_message(
         &mut self,
-        stream: &mut WebSocketStream<TcpStream>,
+        out_tx: &mpsc::Sender<WsMessage>,
         data: Bytes,
     ) -> Result<(), SessionError> {
         let message = match KairoMessage::decode(data) {
@@ -219,7 +240,7 @@ impl Session {
         };
 
         match message.kind {
-            MessageKind::Request => self.handle_request(stream, message).await,
+            MessageKind::Request => self.handle_request(out_tx, message).await,
             _ => {
                 debug!(kind = ?message.kind, "ignoring unhandled message kind");
                 Ok(())
@@ -229,7 +250,7 @@ impl Session {
 
     async fn handle_request(
         &mut self,
-        stream: &mut WebSocketStream<TcpStream>,
+        out_tx: &mpsc::Sender<WsMessage>,
         message: KairoMessage,
     ) -> Result<(), SessionError> {
         let opcode = message.opcode();
@@ -248,12 +269,9 @@ impl Session {
                             request_id,
                             Bytes::from(buf),
                         );
-                        stream
-                            .send(WsMessage::Binary(msg.encode()?))
-                            .await
-                            .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
+                        self.send_frame(out_tx, msg).await?;
                     }
-                    Err(e) => self.send_fs_error(stream, opcode, request_id, e).await?,
+                    Err(e) => self.send_fs_error(out_tx, opcode, request_id, e).await?,
                 }
             }
             Opcode::FsReadFile => {
@@ -268,12 +286,9 @@ impl Session {
                             request_id,
                             Bytes::from(buf),
                         );
-                        stream
-                            .send(WsMessage::Binary(msg.encode()?))
-                            .await
-                            .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
+                        self.send_frame(out_tx, msg).await?;
                     }
-                    Err(e) => self.send_fs_error(stream, opcode, request_id, e).await?,
+                    Err(e) => self.send_fs_error(out_tx, opcode, request_id, e).await?,
                 }
             }
             Opcode::FsWriteFile => {
@@ -294,12 +309,85 @@ impl Session {
                             request_id,
                             Bytes::from(buf),
                         );
-                        stream
-                            .send(WsMessage::Binary(msg.encode()?))
-                            .await
-                            .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
+                        self.send_frame(out_tx, msg).await?;
                     }
-                    Err(e) => self.send_fs_error(stream, opcode, request_id, e).await?,
+                    Err(e) => self.send_fs_error(out_tx, opcode, request_id, e).await?,
+                }
+            }
+            Opcode::TerminalCreatePty => {
+                let req = CreatePtyRequest::decode(message.payload)?;
+                let shell = if req.shell.is_empty() {
+                    None
+                } else {
+                    Some(req.shell.as_str())
+                };
+                let cwd = if req.working_directory.is_empty() {
+                    None
+                } else {
+                    Some(Path::new(&req.working_directory))
+                };
+
+                let (pty_id, mut pty_rx) =
+                    self.pty
+                        .create_pty(shell, req.cols as u16, req.rows as u16, cwd)?;
+
+                let out_tx_clone = out_tx.clone();
+                let pty_id_str = pty_id.to_string();
+                tokio::spawn(async move {
+                    while let Some(chunk) = pty_rx.recv().await {
+                        let pty_out = PtyOutput {
+                            pty_id: pty_id_str.clone(),
+                            data: chunk,
+                        };
+                        let mut buf = Vec::new();
+                        if pty_out.encode(&mut buf).is_ok() {
+                            let msg = KairoMessage::with_opcode(
+                                MessageKind::Event,
+                                Opcode::TerminalOutput,
+                                0,
+                                Bytes::from(buf),
+                            );
+                            if let Ok(encoded) = msg.encode()
+                                && out_tx_clone.send(WsMessage::Binary(encoded)).await.is_err()
+                            {
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                let resp = CreatePtyResponse {
+                    pty_id: pty_id.to_string(),
+                };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::TerminalCreatePty,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::TerminalInput => {
+                let req = PtyInput::decode(message.payload)?;
+                if let Err(e) = self.pty.write_input(&req.pty_id, &req.data) {
+                    warn!(error = %e, "pty write input failed");
+                }
+            }
+            Opcode::TerminalResize => {
+                let req = ResizePtyRequest::decode(message.payload)?;
+                if let Err(e) = self
+                    .pty
+                    .resize(&req.pty_id, req.cols as u16, req.rows as u16)
+                {
+                    warn!(error = %e, "pty resize failed");
+                }
+            }
+            Opcode::TerminalClose => {
+                let req = ClosePtyRequest::decode(message.payload)?;
+                if let Err(e) = self.pty.close(&req.pty_id) {
+                    warn!(error = %e, "pty close failed");
                 }
             }
             _ => {
@@ -317,19 +405,29 @@ impl Session {
                     request_id,
                     Bytes::from(buf),
                 );
-                stream
-                    .send(WsMessage::Binary(msg.encode()?))
-                    .await
-                    .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
+                self.send_frame(out_tx, msg).await?;
             }
         }
 
         Ok(())
     }
 
+    async fn send_frame(
+        &self,
+        out_tx: &mpsc::Sender<WsMessage>,
+        msg: KairoMessage,
+    ) -> Result<(), SessionError> {
+        let encoded = msg.encode()?;
+        out_tx
+            .send(WsMessage::Binary(encoded))
+            .await
+            .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
+        Ok(())
+    }
+
     async fn send_fs_error(
         &self,
-        stream: &mut WebSocketStream<TcpStream>,
+        out_tx: &mpsc::Sender<WsMessage>,
         opcode: Opcode,
         request_id: u64,
         err: FsError,
@@ -353,11 +451,7 @@ impl Session {
         let msg =
             KairoMessage::with_opcode(MessageKind::Error, opcode, request_id, Bytes::from(buf));
 
-        stream
-            .send(WsMessage::Binary(msg.encode()?))
-            .await
-            .map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
-
+        self.send_frame(out_tx, msg).await?;
         Ok(())
     }
 }
