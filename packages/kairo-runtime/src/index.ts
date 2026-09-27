@@ -30,11 +30,15 @@ export {
   encodeClosePtyRequest,
   encodeGetMetricsRequest,
   decodeGetMetricsResponse,
+  encodeListProcessesRequest,
+  decodeListProcessesResponse,
+  encodeKillProcessRequest,
   type HandshakeInitPayload,
   type HandshakeAckPayload,
   type FileEntry,
   type KairoErrorPayload,
   type CreatePtyRequestPayload,
   type SystemMetrics,
+  type ProcessInfo,
 } from './protocol';
 

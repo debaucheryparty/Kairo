@@ -6,6 +6,7 @@ import {
   decodeHandshakeAck,
   decodeKairoError,
   decodeListDirectoryResponse,
+  decodeListProcessesResponse,
   decodePtyOutput,
   decodeReadFileResponse,
   decodeWriteFileResponse,
@@ -13,13 +14,16 @@ import {
   encodeCreatePtyRequest,
   encodeGetMetricsRequest,
   encodeHandshakeInit,
+  encodeKillProcessRequest,
   encodeListDirectoryRequest,
+  encodeListProcessesRequest,
   encodePtyInput,
   encodeReadFileRequest,
   encodeResizePtyRequest,
   encodeWriteFileRequest,
   type FileEntry,
   type HandshakeAckPayload,
+  type ProcessInfo,
   type SystemMetrics,
 } from './protocol';
 import type { KairoSession } from './session';
@@ -245,6 +249,17 @@ export class KairoClient {
     const payload = encodeGetMetricsRequest();
     const respBytes = await this.sendRequest(Opcode.MetricsGet, payload);
     return decodeGetMetricsResponse(respBytes);
+  }
+
+  async listProcesses(): Promise<ProcessInfo[]> {
+    const payload = encodeListProcessesRequest();
+    const respBytes = await this.sendRequest(Opcode.ProcessList, payload);
+    return decodeListProcessesResponse(respBytes);
+  }
+
+  async killProcess(processId: string, signal = 9): Promise<void> {
+    const payload = encodeKillProcessRequest(processId, signal);
+    await this.sendNotification(Opcode.ProcessKill, payload);
   }
 
   private handleIncomingMessage(data: Uint8Array): void {

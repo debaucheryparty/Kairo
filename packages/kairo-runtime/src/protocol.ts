@@ -526,4 +526,98 @@ export function decodeGetMetricsResponse(data: Uint8Array): SystemMetrics {
   return metrics;
 }
 
+export interface ProcessInfo {
+  processId: string;
+  pid: number;
+  executable: string;
+  arguments: string[];
+  state: number;
+  owner: string;
+}
+
+export function encodeListProcessesRequest(): Uint8Array {
+  return new Uint8Array(0);
+}
+
+export function decodeListProcessesResponse(data: Uint8Array): ProcessInfo[] {
+  let offset = 0;
+  const processes: ProcessInfo[] = [];
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (fieldNumber === 1 && wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+
+      const end = offset + length;
+      let processId = '';
+      let pid = 0;
+      let executable = '';
+      const args: string[] = [];
+      let state = 0;
+      let owner = '';
+
+      while (offset < end) {
+        const subTag = data[offset++];
+        const fn = subTag >> 3;
+        const wt = subTag & 0x07;
+
+        if (wt === 0) {
+          let val = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            val |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          if (fn === 2) pid = val;
+          else if (fn === 5) state = val;
+        } else if (wt === 2) {
+          let l = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            l |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          const str = textDecoder.decode(data.subarray(offset, offset + l));
+          offset += l;
+          if (fn === 1) processId = str;
+          else if (fn === 3) executable = str;
+          else if (fn === 4) args.push(str);
+          else if (fn === 6) owner = str;
+        } else {
+          break;
+        }
+      }
+
+      processes.push({ processId, pid, executable, arguments: args, state, owner });
+    } else {
+      break;
+    }
+  }
+
+  return processes;
+}
+
+export function encodeKillProcessRequest(processId: string, signal = 9): Uint8Array {
+  return concat([
+    encodeStringField(1, processId),
+    encodeUintField(2, signal),
+  ]);
+}
+
+
 

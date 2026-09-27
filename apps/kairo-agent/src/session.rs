@@ -7,8 +7,9 @@ use futures_util::{SinkExt, StreamExt};
 use kairo_common::KairoId;
 use kairo_protocol::v1::{
     ClosePtyRequest, CreatePtyRequest, CreatePtyResponse, ErrorCode, GetMetricsRequest,
-    GetMetricsResponse, HandshakeAck, HandshakeInit, KairoError, ListDirectoryRequest, PtyInput,
-    PtyOutput, ReadFileRequest, ResizePtyRequest, WriteFileRequest,
+    GetMetricsResponse, HandshakeAck, HandshakeInit, KairoError, KillProcessRequest,
+    ListDirectoryRequest, ListProcessesRequest, ListProcessesResponse, PtyInput, PtyOutput,
+    ReadFileRequest, ResizePtyRequest, WriteFileRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
@@ -23,6 +24,7 @@ use tracing::{debug, error, info, warn};
 use crate::config::AgentConfig;
 use crate::fs::{FilesystemHandler, FsError};
 use crate::metrics::MetricsCollector;
+use crate::process::ProcessManager;
 use crate::pty::{PtyError, PtyManager};
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -71,6 +73,7 @@ pub struct Session {
     fs: FilesystemHandler,
     pty: Arc<PtyManager>,
     metrics: Arc<MetricsCollector>,
+    process: Arc<ProcessManager>,
 }
 
 impl Session {
@@ -79,6 +82,7 @@ impl Session {
         let fs = FilesystemHandler::new(&config.data_dir);
         let pty = Arc::new(PtyManager::new());
         let metrics = Arc::new(MetricsCollector::new());
+        let process = Arc::new(ProcessManager::new());
         Self {
             session_id: KairoId::new(),
             config,
@@ -86,6 +90,7 @@ impl Session {
             fs,
             pty,
             metrics,
+            process,
         }
     }
 
@@ -409,6 +414,26 @@ impl Session {
                     Bytes::from(buf),
                 );
                 self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::ProcessList => {
+                let _req = ListProcessesRequest::decode(message.payload)?;
+                let processes = self.process.list_processes();
+                let resp = ListProcessesResponse { processes };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::ProcessList,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::ProcessKill => {
+                let req = KillProcessRequest::decode(message.payload)?;
+                if let Err(e) = self.process.kill_process(&req.process_id, req.signal) {
+                    warn!(error = %e, pid = %req.process_id, "failed to kill process");
+                }
             }
             _ => {
                 warn!(?opcode, "unsupported request opcode");
