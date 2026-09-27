@@ -22,9 +22,16 @@ export {
   decodeReadFileResponse,
   encodeWriteFileRequest,
   decodeWriteFileResponse,
+  encodeCreatePtyRequest,
+  decodeCreatePtyResponse,
+  encodePtyInput,
+  decodePtyOutput,
+  encodeResizePtyRequest,
+  encodeClosePtyRequest,
   type HandshakeInitPayload,
   type HandshakeAckPayload,
   type FileEntry,
   type KairoErrorPayload,
+  type CreatePtyRequestPayload,
 } from './protocol';
 

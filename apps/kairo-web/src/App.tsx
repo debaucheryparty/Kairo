@@ -234,7 +234,7 @@ export function App() {
               onResize={(w, h) => resizeWindow(win.id, w, h)}
             >
               {win.appId === 'finder' && <Finder client={client} />}
-              {win.appId === 'terminal' && <TerminalApp session={session} />}
+              {win.appId === 'terminal' && <TerminalApp client={client} session={session} />}
               {win.appId === 'monitor' && <ActivityMonitor session={session} />}
             </WindowFrame>
           ))

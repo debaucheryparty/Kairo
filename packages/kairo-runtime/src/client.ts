@@ -1,14 +1,20 @@
 import { ConnectionState, type ConnectionStore } from './connection';
 import { decodeEnvelope, encodeEnvelope, MessageKind, Opcode } from './envelope';
 import {
+  decodeCreatePtyResponse,
   decodeHandshakeAck,
   decodeKairoError,
   decodeListDirectoryResponse,
+  decodePtyOutput,
   decodeReadFileResponse,
   decodeWriteFileResponse,
+  encodeClosePtyRequest,
+  encodeCreatePtyRequest,
   encodeHandshakeInit,
   encodeListDirectoryRequest,
+  encodePtyInput,
   encodeReadFileRequest,
+  encodeResizePtyRequest,
   encodeWriteFileRequest,
   type FileEntry,
   type HandshakeAckPayload,
@@ -37,6 +43,7 @@ export class KairoClient {
   private currentSession: KairoSession | null = null;
   private nextRequestId = 1n;
   private pendingRequests = new Map<string, PendingRequest>();
+  private eventListeners = new Map<number, Set<(payload: Uint8Array) => void>>();
 
   constructor(options: KairoClientOptions) {
     this.transport = options.transport;
@@ -172,9 +179,83 @@ export class KairoClient {
     return decodeWriteFileResponse(respBytes);
   }
 
+  async sendNotification(opcode: Opcode, payload: Uint8Array): Promise<void> {
+    if (!this.currentSession) {
+      throw new Error('Not connected to a Kairo Agent');
+    }
+    const frame = encodeEnvelope(MessageKind.Request, 0n, payload, opcode);
+    await this.transport.send(frame.buffer as ArrayBuffer);
+  }
+
+  onEvent(opcode: Opcode, listener: (payload: Uint8Array) => void): () => void {
+    let set = this.eventListeners.get(opcode);
+    if (!set) {
+      set = new Set();
+      this.eventListeners.set(opcode, set);
+    }
+    set.add(listener);
+    return () => {
+      set?.delete(listener);
+    };
+  }
+
+  onTerminalOutput(listener: (output: { ptyId: string; data: Uint8Array }) => void): () => void {
+    return this.onEvent(Opcode.TerminalOutput, (payload) => {
+      try {
+        const decoded = decodePtyOutput(payload);
+        listener(decoded);
+      } catch (err) {
+        console.error('Failed to decode PtyOutput event:', err);
+      }
+    });
+  }
+
+  async createPty(
+    shell = '',
+    cols = 80,
+    rows = 24,
+    workingDirectory = ''
+  ): Promise<string> {
+    const payload = encodeCreatePtyRequest({ shell, cols, rows, workingDirectory });
+    const respBytes = await this.sendRequest(Opcode.TerminalCreatePty, payload);
+    const resp = decodeCreatePtyResponse(respBytes);
+    return resp.ptyId;
+  }
+
+  async writePty(ptyId: string, data: Uint8Array | string): Promise<void> {
+    const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+    const payload = encodePtyInput(ptyId, bytes);
+    await this.sendNotification(Opcode.TerminalInput, payload);
+  }
+
+  async resizePty(ptyId: string, cols: number, rows: number): Promise<void> {
+    const payload = encodeResizePtyRequest(ptyId, cols, rows);
+    await this.sendNotification(Opcode.TerminalResize, payload);
+  }
+
+  async closePty(ptyId: string): Promise<void> {
+    const payload = encodeClosePtyRequest(ptyId);
+    await this.sendNotification(Opcode.TerminalClose, payload);
+  }
+
   private handleIncomingMessage(data: Uint8Array): void {
     try {
       const envelope = decodeEnvelope(data);
+
+      if (envelope.kind === MessageKind.Event) {
+        const listeners = this.eventListeners.get(envelope.flags);
+        if (listeners) {
+          for (const listener of listeners) {
+            try {
+              listener(envelope.payload);
+            } catch (err) {
+              console.error('Error in event listener:', err);
+            }
+          }
+        }
+        return;
+      }
+
       const reqId = envelope.requestId.toString();
       const pending = this.pendingRequests.get(reqId);
 

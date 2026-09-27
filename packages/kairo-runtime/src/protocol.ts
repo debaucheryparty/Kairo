@@ -319,3 +319,112 @@ export function decodeKairoError(data: Uint8Array): KairoErrorPayload {
 
   return { code, message, requestId };
 }
+
+export interface CreatePtyRequestPayload {
+  shell?: string;
+  cols?: number;
+  rows?: number;
+  workingDirectory?: string;
+}
+
+export function encodeCreatePtyRequest(req: CreatePtyRequestPayload = {}): Uint8Array {
+  const parts: Uint8Array[] = [];
+  if (req.shell) {
+    parts.push(encodeStringField(1, req.shell));
+  }
+  if (req.cols !== undefined) {
+    parts.push(encodeUintField(2, req.cols));
+  }
+  if (req.rows !== undefined) {
+    parts.push(encodeUintField(3, req.rows));
+  }
+  if (req.workingDirectory) {
+    parts.push(encodeStringField(4, req.workingDirectory));
+  }
+  return concat(parts);
+}
+
+export function decodeCreatePtyResponse(data: Uint8Array): { ptyId: string } {
+  let offset = 0;
+  let ptyId = '';
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) {
+        ptyId = textDecoder.decode(data.subarray(offset, offset + length));
+      }
+      offset += length;
+    } else {
+      break;
+    }
+  }
+
+  return { ptyId };
+}
+
+export function encodePtyInput(ptyId: string, data: Uint8Array): Uint8Array {
+  return concat([
+    encodeStringField(1, ptyId),
+    encodeBytesField(2, data),
+  ]);
+}
+
+export function decodePtyOutput(data: Uint8Array): { ptyId: string; data: Uint8Array } {
+  let offset = 0;
+  let ptyId = '';
+  let outputData = new Uint8Array(0);
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) {
+        ptyId = textDecoder.decode(data.subarray(offset, offset + length));
+      } else if (fieldNumber === 2) {
+        outputData = data.slice(offset, offset + length);
+      }
+      offset += length;
+    } else {
+      break;
+    }
+  }
+
+  return { ptyId, data: outputData };
+}
+
+export function encodeResizePtyRequest(ptyId: string, cols: number, rows: number): Uint8Array {
+  return concat([
+    encodeStringField(1, ptyId),
+    encodeUintField(2, cols),
+    encodeUintField(3, rows),
+  ]);
+}
+
+export function encodeClosePtyRequest(ptyId: string): Uint8Array {
+  return encodeStringField(1, ptyId);
+}
+
