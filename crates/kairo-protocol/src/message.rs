@@ -38,6 +38,53 @@ impl MessageKind {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u16)]
+pub enum Opcode {
+    None = 0,
+    FsListDirectory = 10,
+    FsReadFile = 11,
+    FsWriteFile = 12,
+    FsWatch = 13,
+    TerminalCreatePty = 20,
+    TerminalInput = 21,
+    TerminalOutput = 22,
+    TerminalResize = 23,
+    TerminalClose = 24,
+    ProcessList = 30,
+    ProcessSpawn = 31,
+    ProcessKill = 32,
+    MetricsGet = 40,
+}
+
+impl Opcode {
+    #[must_use]
+    pub fn from_u16(v: u16) -> Option<Self> {
+        match v {
+            0 => Some(Self::None),
+            10 => Some(Self::FsListDirectory),
+            11 => Some(Self::FsReadFile),
+            12 => Some(Self::FsWriteFile),
+            13 => Some(Self::FsWatch),
+            20 => Some(Self::TerminalCreatePty),
+            21 => Some(Self::TerminalInput),
+            22 => Some(Self::TerminalOutput),
+            23 => Some(Self::TerminalResize),
+            24 => Some(Self::TerminalClose),
+            30 => Some(Self::ProcessList),
+            31 => Some(Self::ProcessSpawn),
+            32 => Some(Self::ProcessKill),
+            40 => Some(Self::MetricsGet),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn as_u16(self) -> u16 {
+        self as u16
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KairoMessage {
     pub version: u16,
@@ -57,6 +104,22 @@ impl KairoMessage {
             request_id,
             payload,
         }
+    }
+
+    #[must_use]
+    pub fn with_opcode(kind: MessageKind, opcode: Opcode, request_id: u64, payload: Bytes) -> Self {
+        Self {
+            version: PROTOCOL_VERSION,
+            kind,
+            flags: opcode.as_u16(),
+            request_id,
+            payload,
+        }
+    }
+
+    #[must_use]
+    pub fn opcode(&self) -> Opcode {
+        Opcode::from_u16(self.flags).unwrap_or(Opcode::None)
     }
 
     pub fn encode(&self) -> Result<Bytes, ProtocolError> {
