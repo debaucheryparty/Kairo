@@ -4,10 +4,12 @@ use tokio_tungstenite::accept_async;
 use tracing::{error, info, warn};
 
 use crate::config::AgentConfig;
+use crate::pty::PtyManager;
 use crate::session::Session;
 
 pub struct Server {
     config: Arc<AgentConfig>,
+    pty: Arc<PtyManager>,
 }
 
 impl Server {
@@ -15,6 +17,7 @@ impl Server {
     pub fn new(config: AgentConfig) -> Self {
         Self {
             config: Arc::new(config),
+            pty: Arc::new(PtyManager::new()),
         }
     }
 
@@ -41,6 +44,7 @@ impl Server {
                     info!(peer = %peer_addr, "accepted tcp connection");
 
                     let config = Arc::clone(&self.config);
+                    let pty = Arc::clone(&self.pty);
                     tokio::spawn(async move {
                         let ws_stream = match accept_async(tcp_stream).await {
                             Ok(ws) => ws,
@@ -52,7 +56,7 @@ impl Server {
 
                         info!(peer = %peer_addr, "websocket connection established");
 
-                        let mut session = Session::new(config);
+                        let mut session = Session::with_pty(config, pty);
                         if let Err(e) = session.run(ws_stream).await {
                             error!(
                                 peer = %peer_addr,

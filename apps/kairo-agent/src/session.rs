@@ -6,10 +6,11 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use kairo_common::KairoId;
 use kairo_protocol::v1::{
-    ClosePtyRequest, CreatePtyRequest, CreatePtyResponse, ErrorCode, GetMetricsRequest,
-    GetMetricsResponse, HandshakeAck, HandshakeInit, KairoError, KillProcessRequest,
-    ListDirectoryRequest, ListProcessesRequest, ListProcessesResponse, PtyInput, PtyOutput,
-    ReadFileRequest, ResizePtyRequest, WriteFileRequest,
+    AttachPtyRequest, AttachPtyResponse, ClosePtyRequest, CreatePtyRequest, CreatePtyResponse,
+    ErrorCode, GetMetricsRequest, GetMetricsResponse, HandshakeAck, HandshakeInit, KairoError,
+    KillProcessRequest, ListDirectoryRequest, ListProcessesRequest, ListProcessesResponse,
+    ListPtysRequest, ListPtysResponse, PtyInput, PtyOutput, ReadFileRequest, ResizePtyRequest,
+    WriteFileRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
@@ -78,9 +79,8 @@ pub struct Session {
 
 impl Session {
     #[must_use]
-    pub fn new(config: Arc<AgentConfig>) -> Self {
+    pub fn with_pty(config: Arc<AgentConfig>, pty: Arc<PtyManager>) -> Self {
         let fs = FilesystemHandler::new(&config.data_dir);
-        let pty = Arc::new(PtyManager::new());
         let metrics = Arc::new(MetricsCollector::new());
         let process = Arc::new(ProcessManager::new());
         Self {
@@ -92,6 +92,11 @@ impl Session {
             metrics,
             process,
         }
+    }
+
+    #[must_use]
+    pub fn new(config: Arc<AgentConfig>) -> Self {
+        Self::with_pty(config, Arc::new(PtyManager::new()))
     }
 
     #[must_use]
@@ -343,7 +348,7 @@ impl Session {
                 let out_tx_clone = out_tx.clone();
                 let pty_id_str = pty_id.to_string();
                 tokio::spawn(async move {
-                    while let Some(chunk) = pty_rx.recv().await {
+                    while let Ok(chunk) = pty_rx.recv().await {
                         let pty_out = PtyOutput {
                             pty_id: pty_id_str.clone(),
                             data: chunk,
@@ -373,6 +378,63 @@ impl Session {
                 let msg = KairoMessage::with_opcode(
                     MessageKind::Response,
                     Opcode::TerminalCreatePty,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::TerminalAttach => {
+                let req = AttachPtyRequest::decode(message.payload)?;
+                let (backlog, mut pty_rx) = self.pty.attach_pty(&req.pty_id)?;
+
+                let out_tx_clone = out_tx.clone();
+                let pty_id_str = req.pty_id.clone();
+                tokio::spawn(async move {
+                    while let Ok(chunk) = pty_rx.recv().await {
+                        let pty_out = PtyOutput {
+                            pty_id: pty_id_str.clone(),
+                            data: chunk,
+                        };
+                        let mut buf = Vec::new();
+                        if pty_out.encode(&mut buf).is_ok() {
+                            let msg = KairoMessage::with_opcode(
+                                MessageKind::Event,
+                                Opcode::TerminalOutput,
+                                0,
+                                Bytes::from(buf),
+                            );
+                            if let Ok(encoded) = msg.encode()
+                                && out_tx_clone.send(WsMessage::Binary(encoded)).await.is_err()
+                            {
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                let resp = AttachPtyResponse {
+                    pty_id: req.pty_id,
+                    backlog,
+                };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::TerminalAttach,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::TerminalList => {
+                let _req = ListPtysRequest::decode(message.payload)?;
+                let sessions = self.pty.list_ptys()?;
+                let resp = ListPtysResponse { sessions };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::TerminalList,
                     request_id,
                     Bytes::from(buf),
                 );

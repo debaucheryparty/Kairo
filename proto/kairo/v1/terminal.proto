@@ -37,3 +37,26 @@ message PtyExited {
   string pty_id = 1;
   int32 exit_code = 2;
 }
+
+message AttachPtyRequest {
+  string pty_id = 1;
+}
+
+message AttachPtyResponse {
+  string pty_id = 1;
+  bytes backlog = 2;
+}
+
+message ListPtysRequest {}
+
+message PtySessionInfo {
+  string pty_id = 1;
+  string shell = 2;
+  uint32 cols = 3;
+  uint32 rows = 4;
+}
+
+message ListPtysResponse {
+  repeated PtySessionInfo sessions = 1;
+}
+

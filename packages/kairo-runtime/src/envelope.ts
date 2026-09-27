@@ -23,6 +23,8 @@ export enum Opcode {
   TerminalOutput = 22,
   TerminalResize = 23,
   TerminalClose = 24,
+  TerminalAttach = 25,
+  TerminalList = 26,
   ProcessList = 30,
   ProcessSpawn = 31,
   ProcessKill = 32,

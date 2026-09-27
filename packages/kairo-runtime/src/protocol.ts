@@ -619,5 +619,124 @@ export function encodeKillProcessRequest(processId: string, signal = 9): Uint8Ar
   ]);
 }
 
+export interface PtySessionInfo {
+  ptyId: string;
+  shell: string;
+  cols: number;
+  rows: number;
+}
+
+export function encodeAttachPtyRequest(ptyId: string): Uint8Array {
+  return encodeStringField(1, ptyId);
+}
+
+export function decodeAttachPtyResponse(data: Uint8Array): { ptyId: string; backlog: Uint8Array } {
+  let offset = 0;
+  let ptyId = '';
+  let backlog = new Uint8Array(0);
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) {
+        ptyId = textDecoder.decode(data.subarray(offset, offset + length));
+      } else if (fieldNumber === 2) {
+        backlog = data.slice(offset, offset + length);
+      }
+      offset += length;
+    } else {
+      break;
+    }
+  }
+
+  return { ptyId, backlog };
+}
+
+export function encodeListPtysRequest(): Uint8Array {
+  return new Uint8Array(0);
+}
+
+export function decodeListPtysResponse(data: Uint8Array): PtySessionInfo[] {
+  let offset = 0;
+  const sessions: PtySessionInfo[] = [];
+  const textDecoder = new TextDecoder();
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (fieldNumber === 1 && wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+
+      const end = offset + length;
+      let ptyId = '';
+      let shell = '';
+      let cols = 0;
+      let rows = 0;
+
+      while (offset < end) {
+        const subTag = data[offset++];
+        const fn = subTag >> 3;
+        const wt = subTag & 0x07;
+
+        if (wt === 0) {
+          let val = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            val |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          if (fn === 3) cols = val;
+          else if (fn === 4) rows = val;
+        } else if (wt === 2) {
+          let l = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            l |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          const str = textDecoder.decode(data.subarray(offset, offset + l));
+          offset += l;
+          if (fn === 1) ptyId = str;
+          else if (fn === 2) shell = str;
+        } else {
+          break;
+        }
+      }
+
+      sessions.push({ ptyId, shell, cols, rows });
+    } else {
+      break;
+    }
+  }
+
+  return sessions;
+}
+
+
 
 

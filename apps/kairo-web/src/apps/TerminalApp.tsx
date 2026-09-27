@@ -11,8 +11,9 @@ interface TerminalAppProps {
 
 export function TerminalApp({ client }: TerminalAppProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [, setPtyId] = useState<string | null>(null);
+  const [ptyId, setPtyId] = useState<string | null>(null);
   const [status, setStatus] = useState<'initializing' | 'connected' | 'error'>('initializing');
+  const [statusMessage, setStatusMessage] = useState('Attaching to shell...');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,26 +72,42 @@ export function TerminalApp({ client }: TerminalAppProps) {
       }
     });
 
-    // Spawn PTY on Agent
-    client
-      .createPty('', term.cols, term.rows)
-      .then((id) => {
-        if (isDisposed) {
-          client.closePty(id).catch(() => {});
-          return;
+    // Attach to existing detached session or spawn new one
+    const initPty = async () => {
+      try {
+        setStatusMessage('Discovering active sessions...');
+        const existing = await client.listPtys();
+        if (existing.length > 0) {
+          setStatusMessage('Reattaching to detached session (replaying backlog)...');
+          const target = existing[0];
+          const { ptyId: attachedId, backlog } = await client.attachPty(target.ptyId);
+          if (isDisposed) return;
+          activePtyId = attachedId;
+          setPtyId(attachedId);
+          setStatus('connected');
+          if (backlog.byteLength > 0) {
+            term.write(backlog);
+          }
+          term.focus();
+        } else {
+          setStatusMessage('Spawning remote shell...');
+          const id = await client.createPty('', term.cols, term.rows);
+          if (isDisposed) return;
+          activePtyId = id;
+          setPtyId(id);
+          setStatus('connected');
+          term.focus();
         }
-        activePtyId = id;
-        setPtyId(id);
-        setStatus('connected');
-        term.focus();
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!isDisposed) {
           setStatus('error');
           setErrorMessage(err instanceof Error ? err.message : String(err));
-          term.writeln(`\r\n\x1b[31m[Kairo Terminal Error] Failed to create PTY: ${err}\x1b[0m\r\n`);
+          term.writeln(`\r\n\x1b[31m[Kairo Terminal Error] Failed to initialize PTY: ${err}\x1b[0m\r\n`);
         }
-      });
+      }
+    };
+
+    initPty();
 
     // Resize observer
     const resizeObserver = new ResizeObserver(() => {
@@ -112,12 +129,21 @@ export function TerminalApp({ client }: TerminalAppProps) {
       resizeObserver.disconnect();
       dataDisposable.dispose();
       unsubscribeOutput();
-      if (activePtyId) {
-        client.closePty(activePtyId).catch(() => {});
-      }
+      // Detach view without killing the remote process so it survives disconnection!
       term.dispose();
     };
   }, [client]);
+
+  const handleKillSession = async () => {
+    if (ptyId) {
+      try {
+        await client.closePty(ptyId);
+        window.location.reload();
+      } catch (e) {
+        console.error('Failed to close PTY:', e);
+      }
+    }
+  };
 
   return (
     <div
@@ -132,42 +158,80 @@ export function TerminalApp({ client }: TerminalAppProps) {
         overflow: 'hidden',
       }}
     >
-      {status === 'initializing' && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 10,
-            right: 12,
-            padding: '4px 8px',
-            borderRadius: 4,
-            background: 'rgba(56, 189, 248, 0.1)',
-            border: '1px solid rgba(56, 189, 248, 0.3)',
-            color: '#38bdf8',
-            fontSize: 11,
-            zIndex: 10,
-          }}
-        >
-          Spawning remote shell...
-        </div>
-      )}
-      {status === 'error' && errorMessage && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 10,
-            right: 12,
-            padding: '4px 8px',
-            borderRadius: 4,
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: '#ef4444',
-            fontSize: 11,
-            zIndex: 10,
-          }}
-        >
-          {errorMessage}
-        </div>
-      )}
+      <div
+        style={{
+          position: 'absolute',
+          top: 8,
+          right: 12,
+          display: 'flex',
+          gap: 6,
+          zIndex: 10,
+          alignItems: 'center',
+        }}
+      >
+        {status === 'initializing' && (
+          <div
+            style={{
+              padding: '3px 8px',
+              borderRadius: 4,
+              background: 'rgba(56, 189, 248, 0.1)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              color: '#38bdf8',
+              fontSize: 11,
+            }}
+          >
+            {statusMessage}
+          </div>
+        )}
+        {status === 'connected' && (
+          <div
+            style={{
+              padding: '3px 8px',
+              borderRadius: 4,
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: '#34d399',
+              fontSize: 10,
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            ● Detached Survival Enabled (64KB Backlog)
+          </div>
+        )}
+        {status === 'error' && errorMessage && (
+          <div
+            style={{
+              padding: '3px 8px',
+              borderRadius: 4,
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#ef4444',
+              fontSize: 11,
+            }}
+          >
+            {errorMessage}
+          </div>
+        )}
+        {ptyId && (
+          <button
+            type="button"
+            onClick={handleKillSession}
+            title="Terminate running remote shell process"
+            style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: 4,
+              color: '#f87171',
+              fontSize: 10,
+              padding: '2px 6px',
+              cursor: 'pointer',
+            }}
+          >
+            Reset Shell
+          </button>
+        )}
+      </div>
+
       <div
         ref={containerRef}
         style={{

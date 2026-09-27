@@ -5,10 +5,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use kairo_common::KairoId;
+use kairo_protocol::v1::PtySessionInfo;
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use thiserror::Error;
-use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 use tracing::{debug, info};
+
+pub const BACKLOG_CAPACITY: usize = 64 * 1024; // 64KB
 
 #[derive(Debug, Error)]
 pub enum PtyError {
@@ -25,11 +28,52 @@ pub enum PtyError {
     ResizeFailed(String),
 }
 
+#[derive(Debug, Clone)]
+pub struct RingBuffer {
+    buf: Vec<u8>,
+    capacity: usize,
+}
+
+impl RingBuffer {
+    #[must_use]
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            buf: Vec::with_capacity(capacity),
+            capacity,
+        }
+    }
+
+    pub fn push(&mut self, data: &[u8]) {
+        if data.len() >= self.capacity {
+            self.buf.clear();
+            self.buf
+                .extend_from_slice(&data[data.len() - self.capacity..]);
+        } else {
+            let overflow = (self.buf.len() + data.len()).saturating_sub(self.capacity);
+            if overflow > 0 {
+                self.buf.drain(..overflow);
+            }
+            self.buf.extend_from_slice(data);
+        }
+    }
+
+    #[must_use]
+    pub fn get(&self) -> Vec<u8> {
+        self.buf.clone()
+    }
+}
+
 struct PtyInstance {
     master: Box<dyn MasterPty + Send>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    output_tx: broadcast::Sender<Vec<u8>>,
+    backlog: Arc<Mutex<RingBuffer>>,
+    shell: String,
+    cols: u16,
+    rows: u16,
 }
 
+#[derive(Clone)]
 pub struct PtyManager {
     instances: Arc<Mutex<HashMap<String, PtyInstance>>>,
 }
@@ -54,7 +98,7 @@ impl PtyManager {
         cols: u16,
         rows: u16,
         cwd: Option<&Path>,
-    ) -> Result<(KairoId, mpsc::Receiver<Vec<u8>>), PtyError> {
+    ) -> Result<(KairoId, broadcast::Receiver<Vec<u8>>), PtyError> {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -89,20 +133,29 @@ impl PtyManager {
             .try_clone_reader()
             .map_err(|e| PtyError::Io(e.to_string()))?;
 
-        let (tx, rx) = mpsc::channel(128);
+        let (output_tx, output_rx) = broadcast::channel(512);
+        let backlog = Arc::new(Mutex::new(RingBuffer::new(BACKLOG_CAPACITY)));
+
         let pty_id = KairoId::new();
         let pty_id_str = pty_id.to_string();
 
         let reader_id = pty_id_str.clone();
+        let backlog_clone = Arc::clone(&backlog);
+        let btx = output_tx.clone();
+
         thread::spawn(move || {
             let mut buf = [0u8; 4096];
             loop {
                 match std::io::Read::read(&mut reader, &mut buf) {
                     Ok(0) => break,
                     Ok(n) => {
-                        if tx.blocking_send(buf[..n].to_vec()).is_err() {
-                            break;
+                        let chunk = buf[..n].to_vec();
+                        if let Ok(mut bg) = backlog_clone.lock() {
+                            bg.push(&chunk);
                         }
+                        // Broadcast chunk to any connected listeners.
+                        // If no clients are connected, the reader keeps running and storing backlog.
+                        let _ = btx.send(chunk);
                     }
                     Err(e) => {
                         debug!(pty_id = %reader_id, error = %e, "pty read ended");
@@ -116,6 +169,11 @@ impl PtyManager {
         let instance = PtyInstance {
             master: pair.master,
             writer: Arc::new(Mutex::new(writer)),
+            output_tx,
+            backlog,
+            shell: shell_cmd.to_string(),
+            cols,
+            rows,
         };
 
         let mut lock = self
@@ -124,8 +182,53 @@ impl PtyManager {
             .map_err(|e| PtyError::Io(e.to_string()))?;
         lock.insert(pty_id_str.clone(), instance);
 
-        info!(pty_id = %pty_id_str, "pty session created");
-        Ok((pty_id, rx))
+        info!(pty_id = %pty_id_str, "pty session created with 64KB backlog buffer");
+        Ok((pty_id, output_rx))
+    }
+
+    pub fn attach_pty(
+        &self,
+        pty_id: &str,
+    ) -> Result<(Vec<u8>, broadcast::Receiver<Vec<u8>>), PtyError> {
+        let lock = self
+            .instances
+            .lock()
+            .map_err(|e| PtyError::Io(e.to_string()))?;
+
+        let instance = lock
+            .get(pty_id)
+            .ok_or_else(|| PtyError::NotFound(pty_id.to_string()))?;
+
+        let backlog = match instance.backlog.lock() {
+            Ok(b) => b.get(),
+            Err(p) => p.into_inner().get(),
+        };
+
+        let rx = instance.output_tx.subscribe();
+        info!(
+            pty_id,
+            backlog_len = backlog.len(),
+            "reattached to pty session"
+        );
+        Ok((backlog, rx))
+    }
+
+    pub fn list_ptys(&self) -> Result<Vec<PtySessionInfo>, PtyError> {
+        let lock = self
+            .instances
+            .lock()
+            .map_err(|e| PtyError::Io(e.to_string()))?;
+
+        let mut list = Vec::new();
+        for (id, inst) in lock.iter() {
+            list.push(PtySessionInfo {
+                pty_id: id.clone(),
+                shell: inst.shell.clone(),
+                cols: u32::from(inst.cols),
+                rows: u32::from(inst.rows),
+            });
+        }
+        Ok(list)
     }
 
     pub fn write_input(&self, pty_id: &str, data: &[u8]) -> Result<(), PtyError> {
@@ -152,13 +255,13 @@ impl PtyManager {
     }
 
     pub fn resize(&self, pty_id: &str, cols: u16, rows: u16) -> Result<(), PtyError> {
-        let lock = self
+        let mut lock = self
             .instances
             .lock()
             .map_err(|e| PtyError::Io(e.to_string()))?;
 
         let instance = lock
-            .get(pty_id)
+            .get_mut(pty_id)
             .ok_or_else(|| PtyError::NotFound(pty_id.to_string()))?;
 
         instance
@@ -170,6 +273,9 @@ impl PtyManager {
                 pixel_height: 0,
             })
             .map_err(|e| PtyError::ResizeFailed(e.to_string()))?;
+
+        instance.cols = cols;
+        instance.rows = rows;
 
         debug!(pty_id = %pty_id, cols, rows, "pty resized");
         Ok(())
@@ -197,7 +303,7 @@ mod tests {
     use tokio::time::timeout;
 
     #[tokio::test]
-    async fn test_pty_lifecycle() {
+    async fn test_pty_lifecycle_and_reattach() {
         let manager = PtyManager::new();
         let (pty_id, mut rx) = manager
             .create_pty(None, 80, 24, None)
@@ -207,14 +313,32 @@ mod tests {
             .resize(&pty_id.to_string(), 100, 30)
             .expect("resize should succeed");
 
-        // Write a newline or simple echo
         manager
             .write_input(&pty_id.to_string(), b"\n")
             .expect("write input should succeed");
 
-        // Receive output with timeout
         let out = timeout(Duration::from_secs(3), rx.recv()).await;
         assert!(out.is_ok(), "should receive pty output within timeout");
+
+        // Simulate client drop and reattach
+        drop(rx);
+
+        // Reattach and verify backlog
+        let (backlog, mut reattach_rx) = manager
+            .attach_pty(&pty_id.to_string())
+            .expect("attach should succeed");
+        assert!(
+            !backlog.is_empty(),
+            "backlog should contain previous output"
+        );
+
+        // Further writes stream to reattached receiver
+        manager
+            .write_input(&pty_id.to_string(), b"\n")
+            .expect("write input after reattach");
+
+        let out2 = timeout(Duration::from_secs(3), reattach_rx.recv()).await;
+        assert!(out2.is_ok(), "should receive output after reattach");
 
         manager
             .close(&pty_id.to_string())

@@ -28,6 +28,10 @@ export {
   decodePtyOutput,
   encodeResizePtyRequest,
   encodeClosePtyRequest,
+  encodeAttachPtyRequest,
+  decodeAttachPtyResponse,
+  encodeListPtysRequest,
+  decodeListPtysResponse,
   encodeGetMetricsRequest,
   decodeGetMetricsResponse,
   encodeListProcessesRequest,
@@ -40,5 +44,6 @@ export {
   type CreatePtyRequestPayload,
   type SystemMetrics,
   type ProcessInfo,
+  type PtySessionInfo,
 } from './protocol';
 

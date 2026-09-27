@@ -1,15 +1,18 @@
 import { ConnectionState, type ConnectionStore } from './connection';
 import { decodeEnvelope, encodeEnvelope, MessageKind, Opcode } from './envelope';
 import {
+  decodeAttachPtyResponse,
   decodeCreatePtyResponse,
   decodeGetMetricsResponse,
   decodeHandshakeAck,
   decodeKairoError,
   decodeListDirectoryResponse,
   decodeListProcessesResponse,
+  decodeListPtysResponse,
   decodePtyOutput,
   decodeReadFileResponse,
   decodeWriteFileResponse,
+  encodeAttachPtyRequest,
   encodeClosePtyRequest,
   encodeCreatePtyRequest,
   encodeGetMetricsRequest,
@@ -17,6 +20,7 @@ import {
   encodeKillProcessRequest,
   encodeListDirectoryRequest,
   encodeListProcessesRequest,
+  encodeListPtysRequest,
   encodePtyInput,
   encodeReadFileRequest,
   encodeResizePtyRequest,
@@ -24,6 +28,7 @@ import {
   type FileEntry,
   type HandshakeAckPayload,
   type ProcessInfo,
+  type PtySessionInfo,
   type SystemMetrics,
 } from './protocol';
 import type { KairoSession } from './session';
@@ -243,6 +248,18 @@ export class KairoClient {
   async closePty(ptyId: string): Promise<void> {
     const payload = encodeClosePtyRequest(ptyId);
     await this.sendNotification(Opcode.TerminalClose, payload);
+  }
+
+  async attachPty(ptyId: string): Promise<{ ptyId: string; backlog: Uint8Array }> {
+    const payload = encodeAttachPtyRequest(ptyId);
+    const respBytes = await this.sendRequest(Opcode.TerminalAttach, payload);
+    return decodeAttachPtyResponse(respBytes);
+  }
+
+  async listPtys(): Promise<PtySessionInfo[]> {
+    const payload = encodeListPtysRequest();
+    const respBytes = await this.sendRequest(Opcode.TerminalList, payload);
+    return decodeListPtysResponse(respBytes);
   }
 
   async getMetrics(): Promise<SystemMetrics> {

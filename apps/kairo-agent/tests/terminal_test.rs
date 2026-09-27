@@ -3,11 +3,12 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
-use kairo_agent::{AgentConfig, Session};
+use kairo_agent::{AgentConfig, PtyManager, Session};
 use kairo_common::KairoId;
 use kairo_protocol::v1::{
-    ClosePtyRequest, CreatePtyRequest, CreatePtyResponse, HandshakeAck, HandshakeInit, PtyInput,
-    PtyOutput, ResizePtyRequest,
+    AttachPtyRequest, AttachPtyResponse, ClosePtyRequest, CreatePtyRequest, CreatePtyResponse,
+    HandshakeAck, HandshakeInit, ListPtysRequest, ListPtysResponse, PtyInput, PtyOutput,
+    ResizePtyRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode};
 use prost::Message as ProstMessage;
@@ -184,4 +185,253 @@ async fn test_terminal_pty_e2e_over_websocket() {
 
     client_ws.close(None).await.expect("client close");
     let _ = server_handle.await;
+}
+
+#[tokio::test]
+async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
+    let temp = TempDir::new().expect("create temp dir");
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+
+    let config = Arc::new(AgentConfig {
+        bind_address: addr.to_string(),
+        data_dir: temp.path().to_string_lossy().to_string(),
+        agent_id: KairoId::new(),
+    });
+
+    let shared_pty = Arc::new(PtyManager::new());
+    let s_pty1 = Arc::clone(&shared_pty);
+    let s_config1 = Arc::clone(&config);
+
+    // Multi-connection server loop simulating persistent agent
+    let _server_handle = tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            if let Ok(ws_stream) = tokio_tungstenite::accept_async(stream).await {
+                let mut session = Session::with_pty(Arc::clone(&s_config1), Arc::clone(&s_pty1));
+                tokio::spawn(async move {
+                    let _ = session.run(ws_stream).await;
+                });
+            }
+        }
+    });
+
+    let ws_url = format!("ws://{addr}");
+
+    // --- Client 1: Connect, create PTY, send input, receive output, then abruptly disconnect ---
+    let (mut client_ws1, _) = connect_async(&ws_url).await.expect("client1 connect");
+
+    // Handshake 1
+    let init1 = HandshakeInit {
+        protocol_version: 1,
+        client_id: "client-1".to_string(),
+    };
+    let mut payload = Vec::new();
+    init1.encode(&mut payload).expect("encode init1");
+    let msg1 = KairoMessage::new(MessageKind::HandshakeInit, 1, Bytes::from(payload));
+    client_ws1
+        .send(WsMessage::Binary(msg1.encode().expect("encode msg1")))
+        .await
+        .expect("send init1");
+
+    let ack1_raw = timeout(Duration::from_secs(5), client_ws1.next())
+        .await
+        .expect("ack1 timeout")
+        .expect("ack1 item")
+        .expect("ack1 ws");
+    let ack1_msg = match ack1_raw {
+        WsMessage::Binary(b) => KairoMessage::decode(b).expect("decode ack1"),
+        _ => panic!("expected binary"),
+    };
+    assert_eq!(ack1_msg.kind, MessageKind::HandshakeAck);
+
+    // Create PTY on Client 1
+    let create_req = CreatePtyRequest {
+        shell: String::new(),
+        cols: 80,
+        rows: 24,
+        working_directory: String::new(),
+    };
+    let mut create_payload = Vec::new();
+    create_req
+        .encode(&mut create_payload)
+        .expect("encode create");
+    let create_msg = KairoMessage::with_opcode(
+        MessageKind::Request,
+        Opcode::TerminalCreatePty,
+        2,
+        Bytes::from(create_payload),
+    );
+    client_ws1
+        .send(WsMessage::Binary(
+            create_msg.encode().expect("encode create msg"),
+        ))
+        .await
+        .expect("send create");
+
+    let mut pty_id = String::new();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while tokio::time::Instant::now() < deadline && pty_id.is_empty() {
+        if let Ok(Some(Ok(WsMessage::Binary(b)))) =
+            timeout(Duration::from_secs(2), client_ws1.next()).await
+        {
+            if let Ok(parsed) = KairoMessage::decode(b) {
+                if parsed.opcode() == Opcode::TerminalCreatePty
+                    && parsed.kind == MessageKind::Response
+                {
+                    let resp =
+                        CreatePtyResponse::decode(parsed.payload).expect("decode create resp");
+                    pty_id = resp.pty_id;
+                }
+            }
+        }
+    }
+    assert!(!pty_id.is_empty(), "expected pty_id");
+
+    // Write input from client 1
+    let mut input_payload = Vec::new();
+    PtyInput {
+        pty_id: pty_id.clone(),
+        data: b"\n".to_vec(),
+    }
+    .encode(&mut input_payload)
+    .expect("encode input");
+    let input_msg = KairoMessage::with_opcode(
+        MessageKind::Request,
+        Opcode::TerminalInput,
+        3,
+        Bytes::from(input_payload),
+    );
+    client_ws1
+        .send(WsMessage::Binary(
+            input_msg.encode().expect("encode input msg"),
+        ))
+        .await
+        .expect("send input");
+
+    // Wait for at least one chunk of output to be received on client 1
+    let _ = timeout(Duration::from_secs(3), client_ws1.next()).await;
+
+    // ABRUPT CLIENT 1 DISCONNECT (simulating dropped Wi-Fi or closed tab)
+    drop(client_ws1);
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // --- Client 2: Reconnects, queries active PTYs, attaches with backlog replay ---
+    let (mut client_ws2, _) = connect_async(&ws_url).await.expect("client2 connect");
+
+    // Handshake 2
+    let init2 = HandshakeInit {
+        protocol_version: 1,
+        client_id: "client-2".to_string(),
+    };
+    let mut payload2 = Vec::new();
+    init2.encode(&mut payload2).expect("encode init2");
+    let msg2 = KairoMessage::new(MessageKind::HandshakeInit, 10, Bytes::from(payload2));
+    client_ws2
+        .send(WsMessage::Binary(msg2.encode().expect("encode msg2")))
+        .await
+        .expect("send init2");
+
+    let ack2_raw = timeout(Duration::from_secs(5), client_ws2.next())
+        .await
+        .expect("ack2 timeout")
+        .expect("ack2 item")
+        .expect("ack2 ws");
+    let ack2_msg = match ack2_raw {
+        WsMessage::Binary(b) => KairoMessage::decode(b).expect("decode ack2"),
+        _ => panic!("expected binary"),
+    };
+    assert_eq!(ack2_msg.kind, MessageKind::HandshakeAck);
+
+    // List PTYs on Client 2
+    let mut list_payload = Vec::new();
+    ListPtysRequest {}
+        .encode(&mut list_payload)
+        .expect("encode list");
+    let list_msg = KairoMessage::with_opcode(
+        MessageKind::Request,
+        Opcode::TerminalList,
+        11,
+        Bytes::from(list_payload),
+    );
+    client_ws2
+        .send(WsMessage::Binary(
+            list_msg.encode().expect("encode list msg"),
+        ))
+        .await
+        .expect("send list");
+
+    let list_resp_raw = timeout(Duration::from_secs(5), client_ws2.next())
+        .await
+        .expect("list resp timeout")
+        .expect("list resp item")
+        .expect("list resp ws");
+    let list_resp_msg = match list_resp_raw {
+        WsMessage::Binary(b) => KairoMessage::decode(b).expect("decode list resp msg"),
+        _ => panic!("expected binary"),
+    };
+    let list_resp = ListPtysResponse::decode(list_resp_msg.payload).expect("decode list resp");
+    assert!(
+        list_resp.sessions.iter().any(|s| s.pty_id == pty_id),
+        "expected previously created PTY to survive client disconnect"
+    );
+
+    // Attach to the surviving PTY with Client 2
+    let mut attach_payload = Vec::new();
+    AttachPtyRequest {
+        pty_id: pty_id.clone(),
+    }
+    .encode(&mut attach_payload)
+    .expect("encode attach");
+    let attach_msg = KairoMessage::with_opcode(
+        MessageKind::Request,
+        Opcode::TerminalAttach,
+        12,
+        Bytes::from(attach_payload),
+    );
+    client_ws2
+        .send(WsMessage::Binary(
+            attach_msg.encode().expect("encode attach msg"),
+        ))
+        .await
+        .expect("send attach");
+
+    let attach_resp_raw = timeout(Duration::from_secs(5), client_ws2.next())
+        .await
+        .expect("attach resp timeout")
+        .expect("attach resp item")
+        .expect("attach resp ws");
+    let attach_resp_msg = match attach_resp_raw {
+        WsMessage::Binary(b) => KairoMessage::decode(b).expect("decode attach resp msg"),
+        _ => panic!("expected binary"),
+    };
+    assert_eq!(attach_resp_msg.kind, MessageKind::Response);
+    assert_eq!(attach_resp_msg.opcode(), Opcode::TerminalAttach);
+    let attach_resp = AttachPtyResponse::decode(attach_resp_msg.payload).expect("decode attach");
+    assert_eq!(attach_resp.pty_id, pty_id);
+    assert!(
+        !attach_resp.backlog.is_empty(),
+        "backlog replay should contain output generated during or before disconnect"
+    );
+
+    // Cleanup: Close PTY
+    let mut close_payload = Vec::new();
+    ClosePtyRequest {
+        pty_id: pty_id.clone(),
+    }
+    .encode(&mut close_payload)
+    .expect("encode close");
+    let close_msg = KairoMessage::with_opcode(
+        MessageKind::Request,
+        Opcode::TerminalClose,
+        13,
+        Bytes::from(close_payload),
+    );
+    client_ws2
+        .send(WsMessage::Binary(
+            close_msg.encode().expect("encode close msg"),
+        ))
+        .await
+        .expect("send close");
 }
