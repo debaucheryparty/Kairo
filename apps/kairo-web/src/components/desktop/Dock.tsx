@@ -9,7 +9,7 @@ type DockProps = {
 };
 
 const iconClass =
-  "size-11 overflow-hidden rounded-[13px] shadow-md transition-transform duration-150 group-hover:-translate-y-1 group-focus-visible:ring-2 group-focus-visible:ring-white";
+  "size-11 overflow-hidden rounded-[13px] shadow-md transition-all duration-200 ease-out group-hover:-translate-y-2 group-hover:scale-110 active:scale-95 group-focus-visible:ring-2 group-focus-visible:ring-white";
 
 export function Dock({ onComingSoon }: DockProps) {
   const { windows, focusedId, openWindow, restoreWindow, focusWindow } = useWindowManager();
@@ -32,7 +32,7 @@ export function Dock({ onComingSoon }: DockProps) {
       aria-label="Applications"
       className="pointer-events-none absolute inset-x-0 bottom-3 z-50 flex justify-center"
     >
-      <div className="pointer-events-auto flex items-end gap-2.5 rounded-[26px] border border-white/15 bg-black/35 px-3.5 py-2 shadow-2xl shadow-black/40 backdrop-blur-2xl">
+      <div className="pointer-events-auto flex items-end gap-2.5 rounded-[26px] border border-white/25 bg-white/20 dark:bg-black/35 px-4 py-2.5 shadow-[0_16px_45px_rgba(0,0,0,0.38),inset_0_1px_1px_rgba(255,255,255,0.4)] backdrop-blur-3xl">
         {APP_IDS.map((app) => {
           const Glyph = DOCK_GLYPHS[app];
           const open = windows.find((item) => item.app === app);
@@ -53,8 +53,12 @@ export function Dock({ onComingSoon }: DockProps) {
                 {APP_META[app].title}
               </span>
               <span
-                className={`absolute -bottom-0.5 size-1 rounded-full ${
-                  focused ? "bg-white" : open ? "bg-white/55" : "bg-transparent"
+                className={`absolute -bottom-1 size-1 rounded-full transition-colors ${
+                  focused
+                    ? "bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)]"
+                    : open
+                      ? "bg-white/60"
+                      : "bg-transparent"
                 }`}
               />
             </button>

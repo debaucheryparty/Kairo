@@ -46,14 +46,14 @@ export function WindowHeader({
 
   return (
     <header
-      className={`relative flex h-11 shrink-0 cursor-grab items-center px-3 select-none active:cursor-grabbing ${
+      className={`relative flex h-10 shrink-0 cursor-grab items-center px-3.5 select-none active:cursor-grabbing border-b ${
         light
           ? focused
-            ? "bg-[var(--window-header)]"
-            : "bg-[var(--window-header-inactive)]"
+            ? "border-black/[0.06] bg-[var(--window-header)]/85 backdrop-blur-xl"
+            : "border-black/[0.04] bg-[var(--window-header-inactive)]/85 backdrop-blur-xl"
           : focused
-            ? "bg-[#2b2b2e]"
-            : "bg-[#242426]"
+            ? "border-white/[0.08] bg-[#222226]/90 backdrop-blur-xl"
+            : "border-white/[0.05] bg-[#1c1c20]/90 backdrop-blur-xl"
       }`}
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
@@ -100,7 +100,7 @@ export function WindowHeader({
 
           {snapMenuOpen && onSnap && (
             <div
-              className="absolute left-0 top-6 z-50 flex items-center gap-1.5 rounded-xl border border-white/20 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl animate-menu-in"
+              className="absolute left-0 top-7 z-50 flex items-center gap-1.5 rounded-2xl border border-white/15 bg-[#1b1c20]/95 p-2 shadow-2xl backdrop-blur-2xl animate-menu-in ring-1 ring-black/20"
               onMouseEnter={() => {
                 if (snapTimerRef.current) window.clearTimeout(snapTimerRef.current);
               }}
@@ -113,10 +113,10 @@ export function WindowHeader({
                   onSnap("left");
                   setSnapMenuOpen(false);
                 }}
-                className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-white/10 text-[10px] text-slate-300 hover:text-white"
+                className="flex flex-col items-center gap-1.5 rounded-xl p-2 hover:bg-white/10 text-[10px] text-slate-300 hover:text-white transition-colors"
                 title="Snap Left (50%)"
               >
-                <div className="flex h-5 w-8 overflow-hidden rounded border border-white/30 bg-white/5">
+                <div className="flex h-6 w-9 overflow-hidden rounded-md border border-white/25 bg-white/5">
                   <div className="w-1/2 bg-sky-500/80" />
                 </div>
                 <span>Left</span>
@@ -128,10 +128,10 @@ export function WindowHeader({
                   onSnap("right");
                   setSnapMenuOpen(false);
                 }}
-                className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-white/10 text-[10px] text-slate-300 hover:text-white"
+                className="flex flex-col items-center gap-1.5 rounded-xl p-2 hover:bg-white/10 text-[10px] text-slate-300 hover:text-white transition-colors"
                 title="Snap Right (50%)"
               >
-                <div className="flex h-5 w-8 overflow-hidden rounded border border-white/30 bg-white/5">
+                <div className="flex h-6 w-9 overflow-hidden rounded-md border border-white/25 bg-white/5">
                   <div className="ml-auto w-1/2 bg-sky-500/80" />
                 </div>
                 <span>Right</span>
@@ -143,10 +143,10 @@ export function WindowHeader({
                   onMaximize();
                   setSnapMenuOpen(false);
                 }}
-                className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-white/10 text-[10px] text-slate-300 hover:text-white"
+                className="flex flex-col items-center gap-1.5 rounded-xl p-2 hover:bg-white/10 text-[10px] text-slate-300 hover:text-white transition-colors"
                 title="Fullscreen"
               >
-                <div className="h-5 w-8 rounded border border-white/30 bg-sky-500/80" />
+                <div className="h-6 w-9 rounded-md border border-white/25 bg-sky-500/80" />
                 <span>Full</span>
               </button>
             </div>
@@ -154,8 +154,8 @@ export function WindowHeader({
         </div>
       </div>
       <h2
-        className={`pointer-events-none absolute inset-x-16 truncate text-center text-[13px] font-medium ${
-          light ? "text-[var(--window-title)]" : "text-white/80"
+        className={`pointer-events-none absolute inset-x-16 truncate text-center text-[13px] font-medium tracking-tight ${
+          light ? "text-neutral-700" : "text-neutral-200"
         }`}
       >
         {title}
@@ -180,7 +180,7 @@ function TrafficLight({
       type="button"
       aria-label={label}
       title={label}
-      className={`flex size-3 items-center justify-center rounded-full outline-none ${className}`}
+      className={`flex size-3 items-center justify-center rounded-full ring-1 ring-black/10 dark:ring-white/10 outline-none transition-colors duration-150 ${className}`}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();

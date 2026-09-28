@@ -22,7 +22,7 @@ export function DesktopContextMenu({
     <div
       role="menu"
       aria-label="Desktop"
-      className="sui-menu absolute z-[80] min-w-48 overflow-hidden rounded-xl border py-1 text-sm shadow-2xl animate-menu-in backdrop-blur-xl"
+      className="absolute z-[100] min-w-52 overflow-hidden rounded-[14px] border border-black/10 dark:border-white/15 bg-white/85 dark:bg-[#1c1c20]/90 py-1.5 shadow-2xl backdrop-blur-3xl animate-menu-in ring-1 ring-black/10 dark:ring-black/40 text-[12px]"
       style={{ left: x, top: y }}
     >
       <MenuItem
@@ -33,14 +33,16 @@ export function DesktopContextMenu({
       />
       <MenuItem
         label="Tile Windows"
+        shortcut="⌥T"
         onSelect={() => {
           tileWindows();
           onClose();
         }}
       />
-      <div className="my-1 h-px bg-black/8" />
+      <div className="my-1 h-px bg-black/[0.06] dark:bg-white/[0.08]" />
       <MenuItem
         label="Open Terminal"
+        shortcut="⌘T"
         onSelect={() => {
           openWindow("terminal");
           onClose();
@@ -48,12 +50,13 @@ export function DesktopContextMenu({
       />
       <MenuItem
         label="Open Files"
+        shortcut="⌘O"
         onSelect={() => {
           openWindow("files");
           onClose();
         }}
       />
-      <div className="my-1 h-px bg-black/8" />
+      <div className="my-1 h-px bg-black/[0.06] dark:bg-white/[0.08]" />
       <MenuItem
         label="About Kairo"
         onSelect={() => {
@@ -70,14 +73,16 @@ export function DesktopContextMenu({
       />
       <MenuItem
         label="Settings"
+        shortcut="⌘,"
         onSelect={() => {
           openWindow("settings");
           onClose();
         }}
       />
-      <div className="my-1 h-px bg-black/8" />
+      <div className="my-1 h-px bg-black/[0.06] dark:bg-white/[0.08]" />
       <MenuItem
         label="Leave server"
+        shortcut="⌘Q"
         onSelect={() => {
           onLogOut();
           onClose();
@@ -87,15 +92,24 @@ export function DesktopContextMenu({
   );
 }
 
-function MenuItem({ label, onSelect }: { label: string; onSelect: () => void }) {
+function MenuItem({
+  label,
+  shortcut,
+  onSelect,
+}: {
+  label: string;
+  shortcut?: string;
+  onSelect: () => void;
+}) {
   return (
     <button
       type="button"
       role="menuitem"
-      className="block w-full px-3 py-1.5 text-left outline-none hover:bg-sky-500 hover:text-white focus-visible:bg-sky-500 focus-visible:text-white"
+      className="flex w-[calc(100%-8px)] items-center justify-between mx-1 px-3 py-1.5 text-left rounded-md outline-none text-[12px] transition-colors hover:bg-[#007aff] hover:text-white focus-visible:bg-[#007aff] focus-visible:text-white"
       onClick={onSelect}
     >
-      {label}
+      <span>{label}</span>
+      {shortcut && <span className="text-[11px] opacity-60 ml-4 font-mono">{shortcut}</span>}
     </button>
   );
 }

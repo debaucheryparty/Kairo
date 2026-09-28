@@ -183,16 +183,16 @@ export function Window({ window: win, children }: { window: WindowState; childre
       role="dialog"
       aria-label={title}
       aria-modal="false"
-      className={`absolute flex flex-col overflow-hidden ${
+      className={`absolute flex flex-col overflow-hidden backdrop-blur-2xl ${
         win.maximized
           ? "inset-0 h-full w-full rounded-none border-0 shadow-none"
-          : `rounded-[12px] shadow-[0_24px_80px_rgba(0,0,0,0.35)] animate-window-in ${
+          : `rounded-[18px] animate-window-in ${
               isDragging ? "" : "transition-[left,top,width,height] duration-200 ease-out"
             } ${
               light
-                ? "border border-white/70 bg-[var(--window-bg)]"
-                : "border border-white/10 bg-[#161616]"
-            } ${focused ? "ring-1 ring-black/10" : "opacity-95"}`
+                ? "border border-black/[0.08] bg-[var(--window-bg)]/95 shadow-[0_22px_70px_rgba(0,0,0,0.22),0_0_0_1px_rgba(255,255,255,0.7)_inset]"
+                : "border border-white/[0.14] bg-[#1a1a1e]/95 shadow-[0_26px_80px_rgba(0,0,0,0.48),0_0_0_1px_rgba(255,255,255,0.08)_inset]"
+            } ${focused ? "ring-1 ring-black/[0.08] dark:ring-white/[0.18]" : "opacity-95"}`
       } ${win.maximized ? (light ? "bg-[var(--window-bg)]" : "bg-[#161616]") : ""}`}
       style={
         win.maximized
