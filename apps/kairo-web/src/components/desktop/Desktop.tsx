@@ -37,6 +37,10 @@ function DesktopShell() {
   }, [notice]);
 
   useEffect(() => {
+    openWindow("dashboard");
+  }, [openWindow]);
+
+  useEffect(() => {
     function isTypingTarget(target: EventTarget | null) {
       if (!(target instanceof HTMLElement)) return false;
       if (target.closest(".xterm") || target.closest(".xterm-helper-textarea")) return true;

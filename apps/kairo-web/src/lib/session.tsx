@@ -88,11 +88,22 @@ function toWriteInput(input: NewServerInput) {
   };
 }
 
+const DEFAULT_PRIMARY: Server = {
+  id: "primary",
+  name: "Primary Dev VPS",
+  hostname: "kairo-agent.local",
+  address: "127.0.0.1",
+  status: "online",
+  sshPort: 9600,
+  username: "root",
+  authType: "password",
+};
+
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [screen, setScreen] = useState<AppScreen>("server-selection");
-  const [servers, setServers] = useState<Server[]>([]);
-  const [selectedServer, setSelectedServer] = useState<Server | null>(null);
-  const [loadingServers, setLoadingServers] = useState(true);
+  const [screen, setScreen] = useState<AppScreen>("desktop");
+  const [servers, setServers] = useState<Server[]>([DEFAULT_PRIMARY]);
+  const [selectedServer, setSelectedServer] = useState<Server | null>(DEFAULT_PRIMARY);
+  const [loadingServers, setLoadingServers] = useState(false);
   const [serversError, setServersError] = useState<string | null>(null);
 
   const refreshServers = useCallback(async () => {
@@ -102,14 +113,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setServers(next);
       setServersError(null);
       setSelectedServer((current) => {
-        if (!current) return current;
+        if (!current) return next[0] || null;
         return next.find((item) => item.id === current.id) || current;
       });
       return next;
     } catch (err) {
       const message = err instanceof Error ? err.message : "unable to load servers";
       setServersError(message);
-      setServers([]);
       return [];
     } finally {
       setLoadingServers(false);
@@ -121,14 +131,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void listServers()
       .then((items) => {
         if (cancelled) return;
-        setServers(items.map(toSessionServer));
+        const next = items.map(toSessionServer);
+        if (next.length > 0) {
+          setServers(next);
+          setSelectedServer((curr) => curr || next[0]);
+        }
         setServersError(null);
       })
       .catch((err) => {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : "unable to load servers";
         setServersError(message);
-        setServers([]);
       })
       .finally(() => {
         if (!cancelled) setLoadingServers(false);

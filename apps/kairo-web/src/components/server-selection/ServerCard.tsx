@@ -56,11 +56,11 @@ export function ServerCard({
         </p>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-5 flex flex-wrap items-center gap-2.5">
         <button
           type="button"
           onClick={onConnect}
-          className="rounded-full bg-white px-3 py-1.5 text-[12px] font-semibold text-zinc-900 transition hover:bg-white/90"
+          className="inline-flex cursor-pointer items-center justify-center rounded-full bg-white px-4 py-1.5 text-[12px] font-semibold text-zinc-900 shadow-sm transition hover:bg-white/90 active:scale-95"
         >
           Connect
         </button>
@@ -68,21 +68,21 @@ export function ServerCard({
           type="button"
           onClick={onTest}
           disabled={testing}
-          className="rounded-full bg-white/12 px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-white/18 disabled:opacity-60"
+          className="inline-flex cursor-pointer items-center justify-center rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-[12px] font-medium text-white transition hover:bg-white/15 active:scale-95 disabled:opacity-50"
         >
           {testing ? "Testing…" : "Test Connection"}
         </button>
         <button
           type="button"
           onClick={onEdit}
-          className="rounded-full px-3 py-1.5 text-[12px] font-medium text-white/78 transition hover:bg-white/10 hover:text-white"
+          className="inline-flex cursor-pointer items-center justify-center rounded-full border border-white/10 px-3 py-1.5 text-[12px] font-medium text-white/80 transition hover:bg-white/10 hover:text-white active:scale-95"
         >
           Edit
         </button>
         <button
           type="button"
           onClick={onDelete}
-          className="rounded-full px-3 py-1.5 text-[12px] font-medium text-red-300/90 transition hover:bg-red-400/10 hover:text-red-200"
+          className="inline-flex cursor-pointer items-center justify-center rounded-full border border-red-500/20 px-3 py-1.5 text-[12px] font-medium text-red-300 transition hover:bg-red-500/15 hover:text-red-200 active:scale-95"
         >
           Delete
         </button>
