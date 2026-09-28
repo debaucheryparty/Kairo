@@ -24,7 +24,17 @@ export function Desktop() {
 
 function DesktopShell() {
   const { logOut } = useSession();
-  const { clearFocus, windows, focusedId, closeWindow, openWindow } = useWindowManager();
+  const {
+    clearFocus,
+    windows,
+    focusedId,
+    closeWindow,
+    openWindow,
+    snapWindow,
+    maximizeWindow,
+    restoreWindow,
+    tileWindows,
+  } = useWindowManager();
   const fullscreen = windows.some((item) => item.maximized && !item.minimized);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [notice, setNotice] = useState(false);
@@ -75,6 +85,35 @@ function DesktopShell() {
         clearFocus();
         return;
       }
+      if (event.altKey) {
+        if (event.key.toLowerCase() === "t") {
+          event.preventDefault();
+          tileWindows();
+          return;
+        }
+        if (focusedId) {
+          if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            snapWindow(focusedId, "left");
+            return;
+          }
+          if (event.key === "ArrowRight") {
+            event.preventDefault();
+            snapWindow(focusedId, "right");
+            return;
+          }
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            maximizeWindow(focusedId);
+            return;
+          }
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            restoreWindow(focusedId);
+            return;
+          }
+        }
+      }
       if (!meta) return;
       if (event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -96,7 +135,7 @@ function DesktopShell() {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [clearFocus, closeWindow, focusedId, openWindow]);
+  }, [clearFocus, closeWindow, focusedId, maximizeWindow, openWindow, restoreWindow, snapWindow, tileWindows]);
 
   function showComingSoon() {
     setNotice(true);

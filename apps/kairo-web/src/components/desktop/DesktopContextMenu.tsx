@@ -16,7 +16,7 @@ export function DesktopContextMenu({
   onClose,
   onLogOut,
 }: Omit<DesktopContextMenuProps, "onComingSoon"> & { onComingSoon?: () => void }) {
-  const { openWindow } = useWindowManager();
+  const { openWindow, tileWindows } = useWindowManager();
 
   return (
     <div
@@ -28,6 +28,13 @@ export function DesktopContextMenu({
       <MenuItem
         label="Refresh"
         onSelect={() => {
+          onClose();
+        }}
+      />
+      <MenuItem
+        label="Tile Windows"
+        onSelect={() => {
+          tileWindows();
           onClose();
         }}
       />

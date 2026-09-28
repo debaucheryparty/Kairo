@@ -7,6 +7,7 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useState,
   type ReactNode,
 } from "react";
 import { APP_META, type AppId, type WindowChrome } from "@/src/data/apps";
@@ -28,6 +29,15 @@ export type WindowPayload = {
   appIcon?: string;
 };
 
+export type SnapSide = "left" | "right" | "top";
+
+export type SnapRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export type WindowState = {
   id: string;
   title: string;
@@ -38,6 +48,7 @@ export type WindowState = {
   height: number;
   minimized: boolean;
   maximized: boolean;
+  snapped?: "left" | "right" | null;
   zIndex: number;
   payload?: WindowPayload;
   chrome?: WindowChrome;
@@ -61,6 +72,8 @@ type Action =
   | { type: "minimize"; id: string }
   | { type: "maximize"; id: string }
   | { type: "restore"; id: string }
+  | { type: "snap"; id: string; side: "left" | "right" }
+  | { type: "tile" }
   | { type: "focus"; id: string }
   | { type: "clearFocus" }
   | { type: "move"; id: string; x: number; y: number }
@@ -103,6 +116,25 @@ function maximizedRect() {
     y: 0,
     width,
     height: fullscreenHeight,
+  };
+}
+
+export function snapRect(side: SnapSide): SnapRect {
+  const { width: vw, workHeight, fullscreenHeight } = desktopBounds();
+  if (side === "top") {
+    return {
+      x: 0,
+      y: 0,
+      width: vw,
+      height: fullscreenHeight,
+    };
+  }
+  const halfW = Math.floor(vw / 2) - 12;
+  return {
+    x: side === "left" ? 8 : Math.floor(vw / 2) + 4,
+    y: 8,
+    width: halfW,
+    height: workHeight - 16,
   };
 }
 
@@ -210,19 +242,112 @@ function reducer(state: ManagerState, action: Action): ManagerState {
           if (item.minimized) {
             return { ...item, minimized: false, zIndex };
           }
-          if (item.maximized && item.restoreBounds) {
+          if ((item.maximized || item.snapped) && item.restoreBounds) {
             return {
               ...item,
               maximized: false,
+              snapped: null,
               minimized: false,
               zIndex,
               ...item.restoreBounds,
               restoreBounds: undefined,
             };
           }
-          return { ...item, minimized: false, zIndex };
+          return { ...item, minimized: false, snapped: null, zIndex };
         }),
         focusedId: action.id,
+        zCounter: zIndex,
+      };
+    }
+    case "snap": {
+      const zIndex = nextZ(state);
+      const rect = snapRect(action.side);
+      return {
+        windows: state.windows.map((item) => {
+          if (item.id !== action.id) return item;
+          const restoreBounds = item.restoreBounds || {
+            x: item.x,
+            y: item.y,
+            width: item.width,
+            height: item.height,
+          };
+          return {
+            ...item,
+            maximized: false,
+            minimized: false,
+            snapped: action.side,
+            zIndex,
+            restoreBounds,
+            ...rect,
+          };
+        }),
+        focusedId: action.id,
+        zCounter: zIndex,
+      };
+    }
+    case "tile": {
+      const openWindows = state.windows.filter((w) => !w.minimized);
+      if (openWindows.length === 0) return state;
+      const { width: vw, workHeight } = desktopBounds();
+      let zIndex = state.zCounter;
+
+      if (openWindows.length === 1) {
+        const rect = snapRect("left");
+        zIndex = zIndex + 1;
+        return {
+          ...state,
+          windows: state.windows.map((w) =>
+            w.id === openWindows[0].id ? { ...w, ...rect, snapped: "left", zIndex } : w,
+          ),
+          zCounter: zIndex,
+        };
+      }
+
+      if (openWindows.length === 2) {
+        const leftRect = snapRect("left");
+        const rightRect = snapRect("right");
+        return {
+          ...state,
+          windows: state.windows.map((w) => {
+            if (w.id === openWindows[0].id) {
+              zIndex = zIndex + 1;
+              return { ...w, ...leftRect, snapped: "left", zIndex };
+            }
+            if (w.id === openWindows[1].id) {
+              zIndex = zIndex + 1;
+              return { ...w, ...rightRect, snapped: "right", zIndex };
+            }
+            return w;
+          }),
+          zCounter: zIndex,
+        };
+      }
+
+      const cols = 2;
+      const rows = Math.ceil(openWindows.length / 2);
+      const cellW = Math.floor(vw / cols) - 12;
+      const cellH = Math.floor((workHeight - 16) / rows);
+
+      return {
+        ...state,
+        windows: state.windows.map((w) => {
+          const idx = openWindows.findIndex((item) => item.id === w.id);
+          if (idx === -1) return w;
+          const col = idx % cols;
+          const row = Math.floor(idx / cols);
+          zIndex = zIndex + 1;
+          return {
+            ...w,
+            x: 8 + col * (cellW + 8),
+            y: 8 + row * (cellH + 8),
+            width: cellW,
+            height: cellH,
+            snapped: null,
+            maximized: false,
+            minimized: false,
+            zIndex,
+          };
+        }),
         zCounter: zIndex,
       };
     }
@@ -242,7 +367,9 @@ function reducer(state: ManagerState, action: Action): ManagerState {
       const pos = clampPosition(action.x, action.y, 80);
       return {
         windows: state.windows.map((item) =>
-          item.id === action.id && !item.maximized ? { ...item, x: pos.x, y: pos.y } : item,
+          item.id === action.id && !item.maximized
+            ? { ...item, x: pos.x, y: pos.y, snapped: null }
+            : item,
         ),
         zCounter: state.zCounter,
         focusedId: state.focusedId,
@@ -254,7 +381,9 @@ function reducer(state: ManagerState, action: Action): ManagerState {
       const pos = clampPosition(action.x, action.y, width);
       return {
         windows: state.windows.map((item) =>
-          item.id === action.id && !item.maximized ? { ...item, ...pos, width, height } : item,
+          item.id === action.id && !item.maximized
+            ? { ...item, ...pos, width, height, snapped: null }
+            : item,
         ),
         zCounter: state.zCounter,
         focusedId: state.focusedId,
@@ -275,6 +404,10 @@ function reducer(state: ManagerState, action: Action): ManagerState {
 type WindowManagerApi = {
   windows: WindowState[];
   focusedId: string | null;
+  snapPreview: { side: SnapSide; rect: SnapRect } | null;
+  setSnapPreview: (preview: { side: SnapSide; rect: SnapRect } | null) => void;
+  snapWindow: (id: string, side: "left" | "right") => void;
+  tileWindows: () => void;
   openWindow: (app: AppId, payload?: WindowPayload) => void;
   closeWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
@@ -294,6 +427,7 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
     focusedId: null,
     zCounter: 10,
   });
+  const [snapPreview, setSnapPreview] = useState<{ side: SnapSide; rect: SnapRect } | null>(null);
 
   useEffect(() => {
     const onResize = () => dispatch({ type: "syncMaximized" });
@@ -316,6 +450,12 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
   const restoreWindow = useCallback((id: string) => {
     dispatch({ type: "restore", id });
   }, []);
+  const snapWindow = useCallback((id: string, side: "left" | "right") => {
+    dispatch({ type: "snap", id, side });
+  }, []);
+  const tileWindows = useCallback(() => {
+    dispatch({ type: "tile" });
+  }, []);
   const focusWindow = useCallback((id: string) => {
     dispatch({ type: "focus", id });
   }, []);
@@ -336,6 +476,10 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
     () => ({
       windows: state.windows,
       focusedId: state.focusedId,
+      snapPreview,
+      setSnapPreview,
+      snapWindow,
+      tileWindows,
       openWindow,
       closeWindow,
       minimizeWindow,
@@ -349,6 +493,9 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
     [
       state.windows,
       state.focusedId,
+      snapPreview,
+      snapWindow,
+      tileWindows,
       openWindow,
       closeWindow,
       minimizeWindow,

@@ -1,13 +1,18 @@
 "use client";
 
-import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useState, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { APP_META } from "@/src/data/apps";
 import { WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH } from "@/src/lib/desktop";
 import { WindowHeader } from "@/src/components/window/WindowHeader";
 import { useServer } from "@/src/lib/api/server-context";
 import { useSelectedServer } from "@/src/lib/session";
 import { useTheme } from "@/src/lib/theme";
-import { useWindowManager, type WindowState } from "@/src/components/window/window-context";
+import {
+  useWindowManager,
+  type WindowState,
+  snapRect,
+  type SnapSide,
+} from "@/src/components/window/window-context";
 
 type ResizeEdge = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
@@ -21,12 +26,15 @@ export function Window({ window: win, children }: { window: WindowState; childre
     minimizeWindow,
     maximizeWindow,
     restoreWindow,
+    snapWindow,
+    setSnapPreview,
     updateWindowPosition,
     updateWindowSize,
   } = useWindowManager();
   const { server } = useServer();
   const selected = useSelectedServer();
   const { theme } = useTheme();
+  const [isDragging, setIsDragging] = useState(false);
   const drag = useRef<{
     offsetX: number;
     offsetY: number;
@@ -52,29 +60,62 @@ export function Window({ window: win, children }: { window: WindowState; childre
   function onHeaderPointerDown(event: ReactPointerEvent<HTMLElement>) {
     if (event.button !== 0) return;
     focusWindow(win.id);
-    if (win.maximized) return;
 
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
-    drag.current = {
-      offsetX: event.clientX - win.x,
-      offsetY: event.clientY - win.y,
-    };
+    setIsDragging(true);
+
+    if (win.maximized || win.snapped) {
+      const origBounds = win.restoreBounds || { width: 720, height: 520 };
+      const restoreWidth = origBounds.width;
+      const restoreHeight = origBounds.height;
+      const newX = Math.round(event.clientX - restoreWidth / 2);
+      const newY = Math.round(event.clientY - 16);
+      restoreWindow(win.id);
+      updateWindowSize(win.id, restoreWidth, restoreHeight, newX, newY);
+      drag.current = {
+        offsetX: restoreWidth / 2,
+        offsetY: 16,
+      };
+    } else {
+      drag.current = {
+        offsetX: event.clientX - win.x,
+        offsetY: event.clientY - win.y,
+      };
+    }
 
     function onMove(moveEvent: PointerEvent) {
       if (!drag.current) return;
-      updateWindowPosition(
-        win.id,
-        moveEvent.clientX - drag.current.offsetX,
-        moveEvent.clientY - drag.current.offsetY,
-      );
+      const newX = moveEvent.clientX - drag.current.offsetX;
+      const newY = moveEvent.clientY - drag.current.offsetY;
+      updateWindowPosition(win.id, newX, newY);
+
+      if (moveEvent.clientX <= 28) {
+        setSnapPreview({ side: "left", rect: snapRect("left") });
+      } else if (moveEvent.clientX >= window.innerWidth - 28) {
+        setSnapPreview({ side: "right", rect: snapRect("right") });
+      } else if (moveEvent.clientY <= 36) {
+        setSnapPreview({ side: "top", rect: snapRect("top") });
+      } else {
+        setSnapPreview(null);
+      }
     }
 
-    function onUp() {
+    function onUp(upEvent: PointerEvent) {
       drag.current = null;
+      setIsDragging(false);
       target.releasePointerCapture(event.pointerId);
       target.removeEventListener("pointermove", onMove);
       target.removeEventListener("pointerup", onUp);
+
+      if (upEvent.clientX <= 28) {
+        snapWindow(win.id, "left");
+      } else if (upEvent.clientX >= window.innerWidth - 28) {
+        snapWindow(win.id, "right");
+      } else if (upEvent.clientY <= 36) {
+        maximizeWindow(win.id);
+      }
+      setSnapPreview(null);
     }
 
     target.addEventListener("pointermove", onMove);
@@ -146,6 +187,8 @@ export function Window({ window: win, children }: { window: WindowState; childre
         win.maximized
           ? "inset-0 h-full w-full rounded-none border-0 shadow-none"
           : `rounded-[12px] shadow-[0_24px_80px_rgba(0,0,0,0.35)] animate-window-in ${
+              isDragging ? "" : "transition-[left,top,width,height] duration-200 ease-out"
+            } ${
               light
                 ? "border border-white/70 bg-[var(--window-bg)]"
                 : "border border-white/10 bg-[#161616]"
@@ -168,11 +211,16 @@ export function Window({ window: win, children }: { window: WindowState; childre
         title={title}
         focused={focused}
         chrome={light ? "light" : "dark"}
-        maximized={win.maximized}
+        maximized={win.maximized || Boolean(win.snapped)}
         onPointerDown={onHeaderPointerDown}
-        onDoubleClick={() => (win.maximized ? restoreWindow(win.id) : maximizeWindow(win.id))}
+        onDoubleClick={() =>
+          win.maximized || win.snapped ? restoreWindow(win.id) : maximizeWindow(win.id)
+        }
         onMinimize={() => minimizeWindow(win.id)}
-        onMaximize={() => (win.maximized ? restoreWindow(win.id) : maximizeWindow(win.id))}
+        onMaximize={() =>
+          win.maximized || win.snapped ? restoreWindow(win.id) : maximizeWindow(win.id)
+        }
+        onSnap={(side) => snapWindow(win.id, side)}
         onClose={() => closeWindow(win.id)}
       />
       <div className="min-h-0 flex-1 overflow-hidden">{children}</div>

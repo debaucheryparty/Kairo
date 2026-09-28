@@ -16,10 +16,21 @@ import { useWindowManager, type WindowPayload } from "@/src/components/window/wi
 import type { AppId } from "@/src/data/apps";
 
 export function WindowManager() {
-  const { windows } = useWindowManager();
+  const { windows, snapPreview } = useWindowManager();
 
   return (
     <>
+      {snapPreview && (
+        <div
+          className="pointer-events-none fixed z-[9990] rounded-2xl border-2 border-sky-400/50 bg-sky-500/15 backdrop-blur-md shadow-2xl shadow-sky-500/20 transition-all duration-150 ease-out"
+          style={{
+            left: snapPreview.rect.x,
+            top: snapPreview.rect.y,
+            width: snapPreview.rect.width,
+            height: snapPreview.rect.height,
+          }}
+        />
+      )}
       {windows
         .filter((item) => !item.minimized)
         .map((item) => (

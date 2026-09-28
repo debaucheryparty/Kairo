@@ -1,6 +1,6 @@
 "use client";
 
-import type { PointerEvent, ReactNode } from "react";
+import { useState, useRef, type PointerEvent, type ReactNode } from "react";
 import type { WindowChrome } from "@/src/data/apps";
 
 type WindowHeaderProps = {
@@ -12,6 +12,7 @@ type WindowHeaderProps = {
   onDoubleClick: () => void;
   onMinimize: () => void;
   onMaximize: () => void;
+  onSnap?: (side: "left" | "right") => void;
   onClose: () => void;
 };
 
@@ -24,9 +25,24 @@ export function WindowHeader({
   onDoubleClick,
   onMinimize,
   onMaximize,
+  onSnap,
   onClose,
 }: WindowHeaderProps) {
   const light = chrome === "light";
+  const [snapMenuOpen, setSnapMenuOpen] = useState(false);
+  const snapTimerRef = useRef<number | null>(null);
+
+  const handleGreenMouseEnter = () => {
+    snapTimerRef.current = window.setTimeout(() => {
+      setSnapMenuOpen(true);
+    }, 350);
+  };
+
+  const handleGreenMouseLeave = () => {
+    if (snapTimerRef.current) {
+      window.clearTimeout(snapTimerRef.current);
+    }
+  };
 
   return (
     <header
@@ -65,17 +81,77 @@ export function WindowHeader({
         >
           <MinimizeGlyph />
         </TrafficLight>
-        <TrafficLight
-          label={maximized ? "Restore" : "Maximize"}
-          className={
-            focused
-              ? "bg-[#28c840] text-[#0b5a12]"
-              : "bg-[#8e8e93] text-[#0b5a12] group-hover/traffic:bg-[#28c840]"
-          }
-          onClick={onMaximize}
+        <div
+          className="relative inline-flex items-center"
+          onMouseEnter={handleGreenMouseEnter}
+          onMouseLeave={handleGreenMouseLeave}
         >
-          <ZoomGlyph restore={maximized} />
-        </TrafficLight>
+          <TrafficLight
+            label={maximized ? "Restore" : "Maximize"}
+            className={
+              focused
+                ? "bg-[#28c840] text-[#0b5a12]"
+                : "bg-[#8e8e93] text-[#0b5a12] group-hover/traffic:bg-[#28c840]"
+            }
+            onClick={onMaximize}
+          >
+            <ZoomGlyph restore={maximized} />
+          </TrafficLight>
+
+          {snapMenuOpen && onSnap && (
+            <div
+              className="absolute left-0 top-6 z-50 flex items-center gap-1.5 rounded-xl border border-white/20 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl animate-menu-in"
+              onMouseEnter={() => {
+                if (snapTimerRef.current) window.clearTimeout(snapTimerRef.current);
+              }}
+              onMouseLeave={() => setSnapMenuOpen(false)}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSnap("left");
+                  setSnapMenuOpen(false);
+                }}
+                className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-white/10 text-[10px] text-slate-300 hover:text-white"
+                title="Snap Left (50%)"
+              >
+                <div className="flex h-5 w-8 overflow-hidden rounded border border-white/30 bg-white/5">
+                  <div className="w-1/2 bg-sky-500/80" />
+                </div>
+                <span>Left</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSnap("right");
+                  setSnapMenuOpen(false);
+                }}
+                className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-white/10 text-[10px] text-slate-300 hover:text-white"
+                title="Snap Right (50%)"
+              >
+                <div className="flex h-5 w-8 overflow-hidden rounded border border-white/30 bg-white/5">
+                  <div className="ml-auto w-1/2 bg-sky-500/80" />
+                </div>
+                <span>Right</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMaximize();
+                  setSnapMenuOpen(false);
+                }}
+                className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-white/10 text-[10px] text-slate-300 hover:text-white"
+                title="Fullscreen"
+              >
+                <div className="h-5 w-8 rounded border border-white/30 bg-sky-500/80" />
+                <span>Full</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       <h2
         className={`pointer-events-none absolute inset-x-16 truncate text-center text-[13px] font-medium ${
