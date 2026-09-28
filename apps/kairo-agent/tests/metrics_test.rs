@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -39,7 +41,6 @@ async fn test_metrics_e2e_over_websocket() {
     let ws_url = format!("ws://{addr}");
     let (mut client_ws, _) = connect_async(&ws_url).await.expect("client connect");
 
-    // 1. Handshake
     let init = HandshakeInit {
         protocol_version: 1,
         client_id: "test-metrics-client".to_string(),
@@ -62,7 +63,6 @@ async fn test_metrics_e2e_over_websocket() {
     let ack = HandshakeAck::decode(ack_msg.payload).expect("decode handshake ack");
     assert!(ack.capabilities.contains(&"metrics.v1".to_string()));
 
-    // 2. Request Metrics
     let req = GetMetricsRequest {};
     let mut req_payload = Vec::new();
     req.encode(&mut req_payload).expect("encode metrics req");

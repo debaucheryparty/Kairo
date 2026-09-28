@@ -11,7 +11,7 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 use tracing::{debug, info};
 
-pub const BACKLOG_CAPACITY: usize = 64 * 1024; // 64KB
+pub const BACKLOG_CAPACITY: usize = 64 * 1024;
 
 #[derive(Debug, Error)]
 pub enum PtyError {
@@ -153,8 +153,6 @@ impl PtyManager {
                         if let Ok(mut bg) = backlog_clone.lock() {
                             bg.push(&chunk);
                         }
-                        // Broadcast chunk to any connected listeners.
-                        // If no clients are connected, the reader keeps running and storing backlog.
                         let _ = btx.send(chunk);
                     }
                     Err(e) => {
@@ -297,6 +295,7 @@ impl PtyManager {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use std::time::Duration;
@@ -320,10 +319,8 @@ mod tests {
         let out = timeout(Duration::from_secs(3), rx.recv()).await;
         assert!(out.is_ok(), "should receive pty output within timeout");
 
-        // Simulate client drop and reattach
         drop(rx);
 
-        // Reattach and verify backlog
         let (backlog, mut reattach_rx) = manager
             .attach_pty(&pty_id.to_string())
             .expect("attach should succeed");
@@ -332,7 +329,6 @@ mod tests {
             "backlog should contain previous output"
         );
 
-        // Further writes stream to reattached receiver
         manager
             .write_input(&pty_id.to_string(), b"\n")
             .expect("write input after reattach");

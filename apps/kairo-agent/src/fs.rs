@@ -289,6 +289,7 @@ impl FilesystemHandler {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use tempfile::TempDir;
@@ -357,16 +358,15 @@ mod tests {
         for _ in 0..5 {
             if let Ok(Some(event)) =
                 tokio::time::timeout(std::time::Duration::from_secs(3), rx.recv()).await
+                && event.path == "watched.txt"
             {
-                if event.path == "watched.txt" {
-                    assert!(
-                        event.kind == FileEventKind::Created as i32
-                            || event.kind == FileEventKind::Modified as i32
-                            || event.kind == FileEventKind::Renamed as i32
-                    );
-                    matched = true;
-                    break;
-                }
+                assert!(
+                    event.kind == FileEventKind::Created as i32
+                        || event.kind == FileEventKind::Modified as i32
+                        || event.kind == FileEventKind::Renamed as i32
+                );
+                matched = true;
+                break;
             }
         }
         assert!(matched, "should receive event for watched.txt");

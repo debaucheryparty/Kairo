@@ -154,7 +154,6 @@ impl SystemManager {
 
     #[must_use]
     pub fn list_services(&self) -> ListServicesResponse {
-        // Attempt systemctl list-units (Linux standard)
         let output = Command::new("systemctl")
             .args([
                 "list-units",
@@ -241,22 +240,20 @@ impl SystemManager {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_list_containers_graceful_when_unavailable() {
         let manager = SystemManager::new();
-        // Should not panic even if docker is not running or not installed
         let resp = manager.list_containers(false);
-        // Returns valid struct without panic
         assert!(resp.docker_available || resp.containers.is_empty());
     }
 
     #[test]
     fn test_list_services_graceful_when_unavailable() {
         let manager = SystemManager::new();
-        // Should not panic on Windows or hosts without systemd
         let resp = manager.list_services();
         assert!(resp.systemd_available || resp.services.is_empty());
     }

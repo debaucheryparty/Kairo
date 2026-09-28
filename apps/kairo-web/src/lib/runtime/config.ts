@@ -1,8 +1,3 @@
-/**
- * In-memory desktop runtime config injected by the Tauri shell.
- * Never persisted to localStorage, sessionStorage, cookies, or disk from the UI.
- */
-
 export type DesktopRuntimeStatus = "starting" | "ready" | "failed" | "stopped";
 
 export type DesktopRuntimeConfig = {
@@ -39,14 +34,12 @@ export function localAuthWSProtocolPrefix() {
   return "serverui-local.";
 }
 
-/** Subprotocol list for WebSocket auth (preferred over query strings). */
 export function localAuthWSProtocols(token?: string | null): string[] | undefined {
   const value = token?.trim();
   if (!value) return undefined;
   return [`${localAuthWSProtocolPrefix()}${value}`];
 }
 
-/** Append localToken only for URLs that cannot send headers (media/download). */
 export function withLocalAuthQuery(url: string, token?: string | null): string {
   const value = token?.trim();
   if (!value) return url;
@@ -54,10 +47,6 @@ export function withLocalAuthQuery(url: string, token?: string | null): string {
   return `${url}${sep}${localAuthQueryName()}=${encodeURIComponent(value)}`;
 }
 
-/**
- * Validates desktop runtime config before the UI makes authenticated calls.
- * Desktop API origins must be loopback HTTP.
- */
 export function validateDesktopConfig(config: DesktopRuntimeConfig): string | null {
   if (config.mode !== "desktop") {
     return "invalid desktop runtime mode";

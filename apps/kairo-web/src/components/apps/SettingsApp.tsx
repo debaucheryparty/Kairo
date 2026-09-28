@@ -13,10 +13,6 @@ type AvailableUpdate = {
   body?: string | null;
 };
 
-/**
- * Settings: About + Runtime for all environments; Updates only on desktop.
- * Never displays tokens, encryption keys, passwords, or private keys.
- */
 export function SettingsApp() {
   const selected = useSelectedServer();
   const desktop = isDesktopRuntime();

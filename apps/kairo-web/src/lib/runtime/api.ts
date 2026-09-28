@@ -9,13 +9,8 @@ export type BrowserLocation = {
 
 export type ApiResolveInput = {
   runtime?: RuntimeMode;
-  /** Explicit browser-facing API origin, e.g. https://api.example.test */
   explicitBase?: string | null;
   location?: BrowserLocation | null;
-  /**
-   * Desktop local backend origin from the Tauri shell,
-   * e.g. http://127.0.0.1:43127
-   */
   desktopBackendOrigin?: string | null;
 };
 
@@ -31,19 +26,6 @@ function readExplicitBase(
   return trimTrailingSlash(env.NEXT_PUBLIC_API_BASE?.trim() || "");
 }
 
-/**
- * Pure API origin resolution. Used by the browser client and unit tests.
- *
- * WEB:
- *   1. NEXT_PUBLIC_API_BASE when set
- *   2. Direct to local Go API when the UI is on localhost:3000 (dev convenience)
- *   3. Same-origin empty string (Next.js rewrites / reverse proxy)
- *
- * DESKTOP:
- *   1. NEXT_PUBLIC_API_BASE when set (unusual)
- *   2. desktopBackendOrigin from Tauri (required in practice)
- *   3. fallback default only for tests
- */
 export function resolveApiOrigin(input: ApiResolveInput = {}): string {
   const explicit = trimTrailingSlash(input.explicitBase?.trim() || "");
   if (explicit) return explicit;
@@ -65,7 +47,6 @@ export function resolveApiOrigin(input: ApiResolveInput = {}): string {
   return "";
 }
 
-/** Browser-facing API origin for the current runtime. */
 export function apiOrigin(
   env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},
 ): string {
@@ -88,10 +69,6 @@ export function apiUrl(
   return `${apiOrigin(env)}${path}`;
 }
 
-/**
- * WebSocket URL without embedding the local auth token in the query string.
- * Pass `localAuthWSProtocols(token)` to `new WebSocket(url, protocols)`.
- */
 export function wsUrl(
   path: string,
   env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},

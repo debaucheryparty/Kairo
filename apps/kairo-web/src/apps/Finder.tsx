@@ -29,7 +29,6 @@ export function Finder({ client }: FinderProps) {
     setIsEditing(false);
     try {
       const list = await client.listDirectory(path);
-      // Sort directories first, then alphabetical
       const sorted = [...list].sort((a, b) => {
         if (a.fileType === 2 && b.fileType !== 2) return -1;
         if (a.fileType !== 2 && b.fileType === 2) return 1;
@@ -79,11 +78,9 @@ export function Finder({ client }: FinderProps) {
 
   const handleEntryClick = async (entry: FileEntry) => {
     if (entry.fileType === 2) {
-      // Directory
       const nextPath = currentPath ? `${currentPath}/${entry.path}` : entry.path;
       setCurrentPath(nextPath);
     } else {
-      // File
       setSelectedFile(entry);
       setIsEditing(false);
       setSaveStatus(null);

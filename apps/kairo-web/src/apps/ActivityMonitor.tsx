@@ -45,19 +45,16 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
   const [streamStats, setStreamStats] = useState<GpuStreamStatsPayload | null>(null);
   const [streamingLoading, setStreamingLoading] = useState(false);
 
-  // Docker state
   const [containers, setContainers] = useState<DockerContainer[]>([]);
   const [dockerAvailable, setDockerAvailable] = useState<boolean>(true);
   const [loadingContainers, setLoadingContainers] = useState(false);
   const [containerLogs, setContainerLogs] = useState<{ id: string; logs: string } | null>(null);
 
-  // Services state
   const [services, setServices] = useState<SystemService[]>([]);
   const [systemdAvailable, setSystemdAvailable] = useState<boolean>(true);
   const [loadingServices, setLoadingServices] = useState(false);
   const [serviceSearch, setServiceSearch] = useState('');
 
-  // Fetch telemetry metrics
   useEffect(() => {
     let isMounted = true;
     const fetchMetrics = async () => {
@@ -109,9 +106,7 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
         if (isMounted) {
           setStreamStats(stats);
         }
-      } catch {
-        // stream may have stopped
-      }
+      } catch {}
     }, 1000);
     return () => {
       isMounted = false;
@@ -152,7 +147,6 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
     }
   };
 
-  // Fetch running processes
   const fetchProcesses = useCallback(async () => {
     try {
       setLoadingProcesses(true);
@@ -173,7 +167,6 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
     }
   }, [activeTab, fetchProcesses]);
 
-  // Fetch Docker containers
   const fetchContainers = useCallback(async () => {
     try {
       setLoadingContainers(true);
@@ -195,7 +188,6 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
     }
   }, [activeTab, fetchContainers]);
 
-  // Fetch System services
   const fetchServices = useCallback(async () => {
     try {
       setLoadingServices(true);
@@ -290,7 +282,6 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
 
   return (
     <div className="monitor-app" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Tab Navigation */}
       <div
         className="monitor-tabs"
         style={{
@@ -385,7 +376,6 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
 
       {activeTab === 'telemetry' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
-          {/* Real-time Hardware Telemetry */}
           <div className="monitor-section">
             <h3>Hardware Utilization</h3>
             <div className="telemetry-grid">
@@ -469,7 +459,6 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
             </div>
           </div>
 
-          {/* Protocol & Session Telemetry */}
           <div className="monitor-section">
             <h3>Session Telemetry</h3>
             <div className="telemetry-grid">
@@ -498,7 +487,6 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
 
       {activeTab === 'processes' && (
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-          {/* Process Controls */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
             <input
               type="text"
@@ -534,7 +522,6 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
             </button>
           </div>
 
-          {/* Process Table */}
           <div
             style={{
               flex: 1,
@@ -804,8 +791,6 @@ export function ActivityMonitor({ client, session }: ActivityMonitorProps) {
                   </tbody>
                 </table>
               </div>
-
-              {/* Logs Drawer */}
               {containerLogs && (
                 <div
                   style={{

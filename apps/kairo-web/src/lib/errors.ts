@@ -1,7 +1,3 @@
-/**
- * Map API / network failures to short, actionable product copy.
- * Never include credentials, tokens, or private key material.
- */
 export function sanitizeErrorText(value: string) {
   return value
     .replace(/-----BEGIN[\s\S]*?-----END [^-]+-----/g, "[redacted key]")

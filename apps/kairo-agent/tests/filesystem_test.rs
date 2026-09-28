@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -44,7 +46,6 @@ async fn test_filesystem_e2e_over_websocket() {
     let ws_url = format!("ws://{addr}");
     let (mut client_ws, _) = connect_async(&ws_url).await.expect("client connect");
 
-    // 1. Handshake
     let init = HandshakeInit {
         protocol_version: 1,
         client_id: "test-fs-client".to_string(),
@@ -69,7 +70,6 @@ async fn test_filesystem_e2e_over_websocket() {
     assert_eq!(ack_msg.kind, MessageKind::HandshakeAck);
     let _ = HandshakeAck::decode(ack_msg.payload).expect("decode ack");
 
-    // 2. Write file
     let write_req = WriteFileRequest {
         path: "hello.txt".to_string(),
         content: b"remote linux filesystem test".to_vec(),
@@ -104,7 +104,6 @@ async fn test_filesystem_e2e_over_websocket() {
     let write_resp = WriteFileResponse::decode(write_resp_msg.payload).expect("decode write resp");
     assert!(!write_resp.revision.is_empty());
 
-    // 3. List directory
     let list_req = ListDirectoryRequest {
         path: String::new(),
     };
@@ -137,7 +136,6 @@ async fn test_filesystem_e2e_over_websocket() {
     assert_eq!(list_resp.entries.len(), 1);
     assert_eq!(list_resp.entries[0].path, "hello.txt");
 
-    // 4. Read file
     let read_req = ReadFileRequest {
         path: "hello.txt".to_string(),
         offset: 0,
@@ -202,7 +200,6 @@ async fn test_filesystem_watch_e2e_over_websocket() {
     let ws_url = format!("ws://{addr}");
     let (mut client_ws, _) = connect_async(&ws_url).await.expect("client connect");
 
-    // Handshake
     let init = HandshakeInit {
         protocol_version: 1,
         client_id: "test-watch-client".to_string(),
@@ -226,7 +223,6 @@ async fn test_filesystem_watch_e2e_over_websocket() {
     };
     assert_eq!(ack_msg.kind, MessageKind::HandshakeAck);
 
-    // Send WatchRequest
     let watch_req = WatchRequest {
         path: String::new(),
         recursive: false,
@@ -259,7 +255,6 @@ async fn test_filesystem_watch_e2e_over_websocket() {
     let watch_resp = WatchResponse::decode(watch_resp_msg.payload).expect("decode watch resp");
     assert!(watch_resp.success);
 
-    // Trigger write to verify real-time event stream
     let write_req = WriteFileRequest {
         path: "watched_file.txt".to_string(),
         content: b"live sync event test".to_vec(),

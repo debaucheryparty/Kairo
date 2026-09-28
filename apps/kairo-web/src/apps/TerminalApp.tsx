@@ -56,14 +56,12 @@ export function TerminalApp({ client }: TerminalAppProps) {
     let activePtyId: string | null = null;
     let isDisposed = false;
 
-    // Output listener from KairoClient
     const unsubscribeOutput = client.onTerminalOutput(({ ptyId: incomingPtyId, data }) => {
       if (activePtyId && incomingPtyId === activePtyId) {
         term.write(data);
       }
     });
 
-    // Input listener to forward keystrokes to PTY
     const dataDisposable = term.onData((data) => {
       if (activePtyId) {
         client.writePty(activePtyId, data).catch((err) => {
@@ -72,7 +70,6 @@ export function TerminalApp({ client }: TerminalAppProps) {
       }
     });
 
-    // Attach to existing detached session or spawn new one
     const initPty = async () => {
       try {
         setStatusMessage('Discovering active sessions...');
@@ -109,7 +106,6 @@ export function TerminalApp({ client }: TerminalAppProps) {
 
     initPty();
 
-    // Resize observer
     const resizeObserver = new ResizeObserver(() => {
       if (isDisposed) return;
       try {
@@ -117,9 +113,7 @@ export function TerminalApp({ client }: TerminalAppProps) {
         if (activePtyId) {
           client.resizePty(activePtyId, term.cols, term.rows).catch(() => {});
         }
-      } catch {
-        // Ignore resize calculation during quick animation
-      }
+      } catch {}
     });
 
     resizeObserver.observe(containerRef.current);
@@ -129,7 +123,6 @@ export function TerminalApp({ client }: TerminalAppProps) {
       resizeObserver.disconnect();
       dataDisposable.dispose();
       unsubscribeOutput();
-      // Detach view without killing the remote process so it survives disconnection!
       term.dispose();
     };
   }, [client]);

@@ -42,7 +42,6 @@ export function ImageViewer({ file, onClose }: { file: ViewerFile; onClose: () =
         </button>
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto sui-app-2 p-6">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt={file.name}

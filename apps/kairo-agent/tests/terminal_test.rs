@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -44,7 +46,6 @@ async fn test_terminal_pty_e2e_over_websocket() {
     let ws_url = format!("ws://{addr}");
     let (mut client_ws, _) = connect_async(&ws_url).await.expect("client connect");
 
-    // 1. Handshake
     let init = HandshakeInit {
         protocol_version: 1,
         client_id: "test-term-client".to_string(),
@@ -69,7 +70,6 @@ async fn test_terminal_pty_e2e_over_websocket() {
     assert_eq!(ack_msg.kind, MessageKind::HandshakeAck);
     let _ = HandshakeAck::decode(ack_msg.payload).expect("decode ack");
 
-    // 2. Create PTY
     let create_req = CreatePtyRequest {
         shell: String::new(),
         cols: 80,
@@ -93,35 +93,31 @@ async fn test_terminal_pty_e2e_over_websocket() {
         .await
         .expect("send create pty");
 
-    // We may receive CreatePtyResponse and/or immediate terminal output events
     let mut pty_id = String::new();
     let mut received_output = false;
 
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     while tokio::time::Instant::now() < deadline && (pty_id.is_empty() || !received_output) {
-        if let Ok(Some(Ok(WsMessage::Binary(b)))) =
-            timeout(Duration::from_secs(2), client_ws.next()).await
-        {
-            if let Ok(parsed) = KairoMessage::decode(b) {
-                if parsed.opcode() == Opcode::TerminalCreatePty
-                    && parsed.kind == MessageKind::Response
-                {
-                    let resp =
-                        CreatePtyResponse::decode(parsed.payload).expect("decode create pty resp");
-                    pty_id = resp.pty_id;
-                } else if parsed.opcode() == Opcode::TerminalOutput {
-                    let out = PtyOutput::decode(parsed.payload).expect("decode pty out");
-                    if !out.data.is_empty() {
-                        received_output = true;
-                    }
-                }
+        let next_msg = timeout(Duration::from_secs(2), client_ws.next()).await;
+        let Ok(Some(Ok(WsMessage::Binary(b)))) = next_msg else {
+            continue;
+        };
+        let Ok(parsed) = KairoMessage::decode(b) else {
+            continue;
+        };
+        if parsed.opcode() == Opcode::TerminalCreatePty && parsed.kind == MessageKind::Response {
+            let resp = CreatePtyResponse::decode(parsed.payload).expect("decode create pty resp");
+            pty_id = resp.pty_id;
+        } else if parsed.opcode() == Opcode::TerminalOutput {
+            let out = PtyOutput::decode(parsed.payload).expect("decode pty out");
+            if !out.data.is_empty() {
+                received_output = true;
             }
         }
     }
 
     assert!(!pty_id.is_empty(), "should receive pty_id");
 
-    // 3. Write input to PTY
     let input_req = PtyInput {
         pty_id: pty_id.clone(),
         data: b"echo kairo_alive\n".to_vec(),
@@ -141,7 +137,6 @@ async fn test_terminal_pty_e2e_over_websocket() {
         .await
         .expect("send input");
 
-    // 4. Resize PTY
     let resize_req = ResizePtyRequest {
         pty_id: pty_id.clone(),
         cols: 120,
@@ -164,7 +159,6 @@ async fn test_terminal_pty_e2e_over_websocket() {
         .await
         .expect("send resize");
 
-    // 5. Close PTY
     let close_req = ClosePtyRequest {
         pty_id: pty_id.clone(),
     };
@@ -205,7 +199,6 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
     let s_pty1 = Arc::clone(&shared_pty);
     let s_config1 = Arc::clone(&config);
 
-    // Multi-connection server loop simulating persistent agent
     let _server_handle = tokio::spawn(async move {
         while let Ok((stream, _)) = listener.accept().await {
             if let Ok(ws_stream) = tokio_tungstenite::accept_async(stream).await {
@@ -219,10 +212,8 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
 
     let ws_url = format!("ws://{addr}");
 
-    // --- Client 1: Connect, create PTY, send input, receive output, then abruptly disconnect ---
     let (mut client_ws1, _) = connect_async(&ws_url).await.expect("client1 connect");
 
-    // Handshake 1
     let init1 = HandshakeInit {
         protocol_version: 1,
         client_id: "client-1".to_string(),
@@ -246,7 +237,6 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
     };
     assert_eq!(ack1_msg.kind, MessageKind::HandshakeAck);
 
-    // Create PTY on Client 1
     let create_req = CreatePtyRequest {
         shell: String::new(),
         cols: 80,
@@ -265,7 +255,7 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
     );
     client_ws1
         .send(WsMessage::Binary(
-            create_msg.encode().expect("encode create msg"),
+            create_msg.encode().expect("encode create"),
         ))
         .await
         .expect("send create");
@@ -273,23 +263,20 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
     let mut pty_id = String::new();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     while tokio::time::Instant::now() < deadline && pty_id.is_empty() {
-        if let Ok(Some(Ok(WsMessage::Binary(b)))) =
-            timeout(Duration::from_secs(2), client_ws1.next()).await
-        {
-            if let Ok(parsed) = KairoMessage::decode(b) {
-                if parsed.opcode() == Opcode::TerminalCreatePty
-                    && parsed.kind == MessageKind::Response
-                {
-                    let resp =
-                        CreatePtyResponse::decode(parsed.payload).expect("decode create resp");
-                    pty_id = resp.pty_id;
-                }
-            }
+        let next_msg = timeout(Duration::from_secs(2), client_ws1.next()).await;
+        let Ok(Some(Ok(WsMessage::Binary(b)))) = next_msg else {
+            continue;
+        };
+        let Ok(parsed) = KairoMessage::decode(b) else {
+            continue;
+        };
+        if parsed.opcode() == Opcode::TerminalCreatePty && parsed.kind == MessageKind::Response {
+            let resp = CreatePtyResponse::decode(parsed.payload).expect("decode create resp");
+            pty_id = resp.pty_id;
         }
     }
     assert!(!pty_id.is_empty(), "expected pty_id");
 
-    // Write input from client 1
     let mut input_payload = Vec::new();
     PtyInput {
         pty_id: pty_id.clone(),
@@ -310,17 +297,13 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
         .await
         .expect("send input");
 
-    // Wait for at least one chunk of output to be received on client 1
     let _ = timeout(Duration::from_secs(3), client_ws1.next()).await;
 
-    // ABRUPT CLIENT 1 DISCONNECT (simulating dropped Wi-Fi or closed tab)
     drop(client_ws1);
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // --- Client 2: Reconnects, queries active PTYs, attaches with backlog replay ---
     let (mut client_ws2, _) = connect_async(&ws_url).await.expect("client2 connect");
 
-    // Handshake 2
     let init2 = HandshakeInit {
         protocol_version: 1,
         client_id: "client-2".to_string(),
@@ -344,7 +327,6 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
     };
     assert_eq!(ack2_msg.kind, MessageKind::HandshakeAck);
 
-    // List PTYs on Client 2
     let mut list_payload = Vec::new();
     ListPtysRequest {}
         .encode(&mut list_payload)
@@ -377,7 +359,6 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
         "expected previously created PTY to survive client disconnect"
     );
 
-    // Attach to the surviving PTY with Client 2
     let mut attach_payload = Vec::new();
     AttachPtyRequest {
         pty_id: pty_id.clone(),
@@ -415,7 +396,6 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
         "backlog replay should contain output generated during or before disconnect"
     );
 
-    // Cleanup: Close PTY
     let mut close_payload = Vec::new();
     ClosePtyRequest {
         pty_id: pty_id.clone(),

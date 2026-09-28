@@ -3,16 +3,11 @@
 type BrandMarkProps = {
   size?: number;
   className?: string;
-  /** Show "ServerUI" text beside the mark */
   withWordmark?: boolean;
   wordmarkClassName?: string;
   alt?: string;
 };
 
-/**
- * Canonical ServerUI brand mark (shared web + desktop UI).
- * Asset source of truth: branding/serverui-icon-1024.png
- */
 export function BrandMark({
   size = 28,
   className = "",
@@ -22,7 +17,6 @@ export function BrandMark({
 }: BrandMarkProps) {
   return (
     <span className={`inline-flex items-center gap-2 ${className}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/brand/serverui-icon.png"
         width={size}

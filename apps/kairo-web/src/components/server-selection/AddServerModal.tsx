@@ -17,7 +17,6 @@ export function AddServerModal({
   server?: Server | null;
   busy?: boolean;
   error?: string | null;
-  /** When true, primary action saves then the parent may connect immediately. */
   connectAfterSave?: boolean;
   onClose: () => void;
   onSubmit: (input: NewServerInput, options?: { connect?: boolean }) => Promise<void> | void;

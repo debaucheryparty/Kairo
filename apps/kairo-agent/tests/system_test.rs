@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -43,7 +45,6 @@ async fn test_system_and_docker_e2e_over_websocket() {
     let ws_url = format!("ws://{addr}");
     let (mut client_ws, _) = connect_async(&ws_url).await.expect("client connect");
 
-    // 1. Handshake with capability assertion
     let init = HandshakeInit {
         protocol_version: 1,
         client_id: "test-system-client".to_string(),
@@ -70,7 +71,6 @@ async fn test_system_and_docker_e2e_over_websocket() {
     assert!(ack.capabilities.contains(&"docker.v1".to_string()));
     assert!(ack.capabilities.contains(&"system.v1".to_string()));
 
-    // 2. Query Docker containers
     let docker_req = ListContainersRequest { all: true };
     let mut docker_payload = Vec::new();
     docker_req
@@ -102,10 +102,8 @@ async fn test_system_and_docker_e2e_over_websocket() {
     assert_eq!(docker_resp_msg.opcode(), Opcode::DockerListContainers);
     let docker_resp =
         ListContainersResponse::decode(docker_resp_msg.payload).expect("decode docker resp");
-    // Verify response integrity without assuming docker is running in CI/dev
     assert!(docker_resp.docker_available || docker_resp.containers.is_empty());
 
-    // 3. Query System services
     let service_req = ListServicesRequest {};
     let mut service_payload = Vec::new();
     service_req

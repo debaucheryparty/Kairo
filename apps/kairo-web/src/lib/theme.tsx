@@ -32,9 +32,7 @@ function applyTheme(theme: Theme) {
   document.documentElement.style.colorScheme = theme;
   try {
     localStorage.setItem(STORAGE_KEY, theme);
-  } catch {
-    // Ignore private-mode storage failures.
-  }
+  } catch {}
   window.dispatchEvent(new Event(THEME_EVENT));
 }
 

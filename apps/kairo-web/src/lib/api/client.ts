@@ -15,9 +15,7 @@ async function readError(response: Response) {
   try {
     const body = (await response.json()) as { error?: string };
     if (body.error) return body.error;
-  } catch {
-    // Ignore non-JSON error bodies.
-  }
+  } catch {}
   if (response.status === 401) return "unauthorized";
   if (response.status === 502 || response.status === 503) {
     return "unable to connect to server";
