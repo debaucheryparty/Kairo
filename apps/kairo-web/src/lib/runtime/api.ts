@@ -26,7 +26,7 @@ function trimTrailingSlash(value: string) {
 }
 
 function readExplicitBase(
-  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+  env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},
 ): string {
   return trimTrailingSlash(env.NEXT_PUBLIC_API_BASE?.trim() || "");
 }
@@ -67,7 +67,7 @@ export function resolveApiOrigin(input: ApiResolveInput = {}): string {
 
 /** Browser-facing API origin for the current runtime. */
 export function apiOrigin(
-  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+  env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},
 ): string {
   if (typeof window === "undefined") return "";
   const injected = getInjectedDesktopConfig();
@@ -82,7 +82,7 @@ export function apiOrigin(
 
 export function apiUrl(
   path: string,
-  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+  env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},
 ): string {
   if (/^https?:\/\//.test(path)) return path;
   return `${apiOrigin(env)}${path}`;
@@ -94,7 +94,7 @@ export function apiUrl(
  */
 export function wsUrl(
   path: string,
-  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+  env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},
 ): string {
   const origin = apiOrigin(env);
   if (!origin) {
@@ -119,7 +119,7 @@ export function resolveWsUrl(
 
 export function authenticatedApiUrl(
   path: string,
-  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+  env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},
 ): string {
   return withLocalAuthQuery(apiUrl(path, env), getInjectedDesktopConfig()?.localAuthToken);
 }
