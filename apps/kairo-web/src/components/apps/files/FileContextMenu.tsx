@@ -31,8 +31,14 @@ export function FileContextMenu({
     <div
       role="menu"
       aria-label="File actions"
-      className="sui-menu fixed z-[80] min-w-48 overflow-hidden rounded-xl border py-1 text-sm shadow-2xl animate-menu-in backdrop-blur-xl"
-      style={{ left: x, top: y }}
+      className="fixed z-[120] min-w-48 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
+      style={{
+        left: x,
+        top: y,
+        background: "var(--menu-bg)",
+        borderColor: "var(--menu-border)",
+        color: "var(--menu-fg)",
+      }}
     >
       <MenuItem
         label="Open"
@@ -58,7 +64,7 @@ export function FileContextMenu({
           }}
         />
       )}
-      <div className="my-1 h-px bg-black/8" />
+      <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
       <MenuItem
         label="Copy Path"
         onSelect={() => {
@@ -82,7 +88,7 @@ function MenuItem({ label, onSelect }: { label: string; onSelect: () => void }) 
     <button
       type="button"
       role="menuitem"
-      className="block w-full px-3 py-1.5 text-left outline-none hover:bg-sky-500 hover:text-white focus-visible:bg-sky-500 focus-visible:text-white"
+      className="flex w-[calc(100%-12px)] items-center mx-1.5 px-3 py-1.5 text-left rounded-[8px] outline-none text-[13px] font-normal transition-colors hover:bg-[#007aff] hover:!text-white focus-visible:bg-[#007aff] focus-visible:!text-white"
       onClick={onSelect}
     >
       {label}

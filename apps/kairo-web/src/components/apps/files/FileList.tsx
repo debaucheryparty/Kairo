@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  ChevronDown,
+  ChevronRight,
   File as FileIcon,
   FileArchive,
   FileAudio,
@@ -10,10 +12,13 @@ import {
   FileVideo,
   Folder,
 } from "lucide-react";
-import type { MouseEvent } from "react";
-import { getFileType } from "@/src/lib/files/file-type";
+import { useState, type MouseEvent } from "react";
+import { getFileType, getFileKindLabel } from "@/src/lib/files/file-type";
 import { formatModified, formatSize } from "@/src/lib/files/format";
 import type { FileEntry } from "@/src/lib/api/files";
+
+type SortField = "name" | "modified" | "size" | "kind";
+type SortOrder = "asc" | "desc";
 
 export function FileList({
   path,
@@ -23,6 +28,8 @@ export function FileList({
   onOpen,
   onParent,
   onContextMenu,
+  expandedPaths,
+  onToggleExpand,
 }: {
   path: string;
   entries: FileEntry[];
@@ -31,103 +38,194 @@ export function FileList({
   onOpen: (entry: FileEntry) => void;
   onParent: () => void;
   onContextMenu: (event: MouseEvent, entry: FileEntry | null) => void;
+  expandedPaths?: Set<string>;
+  onToggleExpand?: (path: string) => void;
 }) {
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+
+  function handleSort(field: SortField) {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  }
+
+  const sortedEntries = [...entries].sort((a, b) => {
+    if (a.type !== b.type) {
+      return a.type === "dir" ? -1 : 1;
+    }
+    let cmp = 0;
+    if (sortField === "name") {
+      cmp = a.name.localeCompare(b.name);
+    } else if (sortField === "modified") {
+      cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime();
+    } else if (sortField === "size") {
+      cmp = a.size - b.size;
+    } else if (sortField === "kind") {
+      cmp = getFileKindLabel(a.name, a.type).localeCompare(getFileKindLabel(b.name, b.type));
+    }
+    return sortOrder === "asc" ? cmp : -cmp;
+  });
+
   return (
     <div
-      className="min-h-0 flex-1 overflow-y-auto"
+      className="min-h-0 flex-1 overflow-y-auto select-none"
       onContextMenu={(event) => {
         if (event.target === event.currentTarget) {
           onContextMenu(event, null);
         }
       }}
     >
-      <table className="w-full text-left text-[13px]">
-        <thead className="sticky top-0 z-10 sui-app text-[11px] sui-muted">
-          <tr className="border-b sui-hairline">
-            <th className="px-4 py-2 font-medium">Name</th>
-            <th className="px-4 py-2 font-medium">Size</th>
-            <th className="px-4 py-2 font-medium">Modified</th>
-          </tr>
-        </thead>
-        <tbody>
-          {path !== "/" ? (
-            <tr className="cursor-default border-b sui-hairline sui-hover" onDoubleClick={onParent}>
-              <td className="px-4 py-1.5" colSpan={3}>
-                <button
-                  type="button"
-                  className="flex items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-                  onClick={onParent}
+      <div className="w-full min-w-[540px]">
+        <div className="sticky top-0 z-10 grid grid-cols-12 gap-2 border-b border-black/[0.06] dark:border-white/[0.08] bg-white/70 dark:bg-[#1f1f23]/75 px-4 py-1.5 text-[11px] font-medium text-neutral-500 dark:text-neutral-400 backdrop-blur-md">
+          <button
+            type="button"
+            onClick={() => handleSort("name")}
+            className="col-span-5 flex items-center gap-1 text-left outline-none hover:text-neutral-800 dark:hover:text-white"
+          >
+            <span>Name</span>
+            {sortField === "name" && (
+              <ChevronDown className={`size-3 transition-transform ${sortOrder === "desc" ? "rotate-180" : ""}`} />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSort("modified")}
+            className="col-span-3 flex items-center gap-1 text-left outline-none hover:text-neutral-800 dark:hover:text-white"
+          >
+            <span>Date Modified</span>
+            {sortField === "modified" && (
+              <ChevronDown className={`size-3 transition-transform ${sortOrder === "desc" ? "rotate-180" : ""}`} />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSort("size")}
+            className="col-span-2 flex items-center gap-1 text-left outline-none hover:text-neutral-800 dark:hover:text-white"
+          >
+            <span>Size</span>
+            {sortField === "size" && (
+              <ChevronDown className={`size-3 transition-transform ${sortOrder === "desc" ? "rotate-180" : ""}`} />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSort("kind")}
+            className="col-span-2 flex items-center gap-1 text-left outline-none hover:text-neutral-800 dark:hover:text-white"
+          >
+            <span>Kind</span>
+            {sortField === "kind" && (
+              <ChevronDown className={`size-3 transition-transform ${sortOrder === "desc" ? "rotate-180" : ""}`} />
+            )}
+          </button>
+        </div>
+
+        <div className="p-1 space-y-0.5">
+          {path !== "/" && (
+            <div
+              className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-[12px] text-neutral-600 dark:text-neutral-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] cursor-pointer"
+              onDoubleClick={onParent}
+              onClick={onParent}
+            >
+              <Folder aria-hidden className="size-4 text-[#007aff] fill-[#007aff]/20" />
+              <span>..</span>
+            </div>
+          )}
+
+          {sortedEntries.map((entry) => {
+            const isSelected = selected === entry.path;
+            const isDir = entry.type === "dir";
+            const isExpanded = Boolean(expandedPaths?.has(entry.path));
+
+            return (
+              <div
+                key={entry.path}
+                onClick={() => onSelect(entry.path)}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  onOpen(entry);
+                }}
+                onContextMenu={(event) => onContextMenu(event, entry)}
+                className={`grid grid-cols-12 gap-2 items-center rounded-[8px] px-3 py-1.5 text-[12px] cursor-default transition-colors ${
+                  isSelected
+                    ? "bg-[#007aff] text-white shadow-sm font-medium"
+                    : "text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                }`}
+              >
+                <div className="col-span-5 flex items-center gap-1.5 min-w-0">
+                  {isDir ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onToggleExpand) onToggleExpand(entry.path);
+                        else onOpen(entry);
+                      }}
+                      className="rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className={`size-3.5 ${isSelected ? "text-white" : "opacity-60"}`} />
+                      ) : (
+                        <ChevronRight className={`size-3.5 ${isSelected ? "text-white" : "opacity-60"}`} />
+                      )}
+                    </button>
+                  ) : (
+                    <span className="w-4 shrink-0" />
+                  )}
+                  <EntryIcon entry={entry} isSelected={isSelected} />
+                  <span className="truncate">{entry.name}</span>
+                </div>
+
+                <div
+                  className={`col-span-3 truncate text-[11px] ${
+                    isSelected ? "text-white/90" : "opacity-60"
+                  }`}
                 >
-                  <Folder aria-hidden className="size-4 fill-sky-400 text-sky-500" />
-                  ..
-                </button>
-              </td>
-            </tr>
-          ) : null}
-          {entries.map((entry) => (
-            <FileItem
-              key={entry.path}
-              entry={entry}
-              selected={selected === entry.path}
-              onSelect={() => onSelect(entry.path)}
-              onOpen={() => onOpen(entry)}
-              onContextMenu={(event) => onContextMenu(event, entry)}
-            />
-          ))}
-        </tbody>
-      </table>
+                  {formatModified(entry.modified)}
+                </div>
+
+                <div
+                  className={`col-span-2 truncate text-[11px] ${
+                    isSelected ? "text-white/90" : "opacity-60"
+                  }`}
+                >
+                  {isDir ? "—" : formatSize(entry.size)}
+                </div>
+
+                <div
+                  className={`col-span-2 truncate text-[11px] ${
+                    isSelected ? "text-white/90" : "opacity-60"
+                  }`}
+                >
+                  {getFileKindLabel(entry.name, entry.type)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
 
-function FileItem({
-  entry,
-  selected,
-  onSelect,
-  onOpen,
-  onContextMenu,
-}: {
-  entry: FileEntry;
-  selected: boolean;
-  onSelect: () => void;
-  onOpen: () => void;
-  onContextMenu: (event: MouseEvent) => void;
-}) {
-  return (
-    <tr
-      className={`cursor-default border-b sui-hairline sui-hover ${selected ? "sui-selected" : ""}`}
-      onClick={onSelect}
-      onDoubleClick={onOpen}
-      onContextMenu={onContextMenu}
-    >
-      <td className="px-4 py-1.5">
-        <button
-          type="button"
-          className="flex max-w-full items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-          onClick={onSelect}
-          onDoubleClick={(event) => {
-            event.preventDefault();
-            onOpen();
-          }}
-        >
-          <EntryIcon entry={entry} />
-          <span className="truncate">{entry.name}</span>
-        </button>
-      </td>
-      <td className="px-4 py-1.5 whitespace-nowrap sui-muted">
-        {entry.type === "dir" ? "—" : formatSize(entry.size)}
-      </td>
-      <td className="px-4 py-1.5 whitespace-nowrap sui-muted">{formatModified(entry.modified)}</td>
-    </tr>
-  );
-}
-
-function EntryIcon({ entry }: { entry: FileEntry }) {
+function EntryIcon({ entry, isSelected }: { entry: FileEntry; isSelected: boolean }) {
   if (entry.type === "dir") {
-    return <Folder aria-hidden className="size-4 shrink-0 fill-sky-400 text-sky-500" />;
+    return (
+      <Folder
+        aria-hidden
+        className={`size-4 shrink-0 ${
+          isSelected ? "text-white fill-white/20" : "text-[#007aff] fill-[#007aff]/25"
+        }`}
+      />
+    );
   }
+
   const kind = getFileType({ name: entry.name, mime: entry.mime });
-  const className = "size-4 shrink-0 text-neutral-400";
+  const className = `size-4 shrink-0 ${isSelected ? "text-white" : "text-neutral-500 dark:text-neutral-400"}`;
+
   switch (kind) {
     case "image":
       return <FileImage aria-hidden className={className} />;

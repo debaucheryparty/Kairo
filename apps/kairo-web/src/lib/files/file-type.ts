@@ -237,3 +237,22 @@ export function getHighlightLanguage(name: string) {
 export function viewerTitle(name: string) {
   return name.split("/").pop() || name;
 }
+
+export function getFileKindLabel(name: string, type: string): string {
+  if (type === "dir") return "Folder";
+  const ext = fileExtension(name);
+  if (ext === "sh" || ext === "bash" || ext === "zsh") return "Shell Script";
+  if (ext === "json") return "JSON Document";
+  if (ext === "md" || ext === "markdown") return "Markdown Document";
+  if (ext === "ts" || ext === "tsx") return "TypeScript Source";
+  if (ext === "js" || ext === "jsx" || ext === "mjs") return "JavaScript Source";
+  if (ext === "py") return "Python Script";
+  if (ext === "rs") return "Rust Source";
+  if (ext === "txt" || ext === "log") return "Plain Text";
+  if (ext === "yaml" || ext === "yml") return "YAML Document";
+  if (ext === "png" || ext === "jpg" || ext === "jpeg" || ext === "svg" || ext === "webp") return "Image";
+  if (ext === "zip" || ext === "tar" || ext === "gz" || ext === "7z") return "Archive";
+  if (ext === "pdf") return "PDF Document";
+  if (ext === "toml" || ext === "ini" || ext === "conf") return "Config Document";
+  return "File";
+}

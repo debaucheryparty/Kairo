@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { ChevronLeft, ChevronRight, Home, Search } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  FilePlus,
+  Folder,
+  FolderPlus,
+  Info,
+  PanelLeft,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { ApiError } from "@/src/lib/api/client";
 import {
   createDirectory,
@@ -19,10 +32,9 @@ import { useWindowManager } from "@/src/components/window/window-context";
 import { useServer } from "@/src/lib/api/server-context";
 import { useSelectedServer } from "@/src/lib/session";
 import { formatSize, totalSize } from "@/src/lib/files/format";
-import { Breadcrumbs } from "@/src/components/apps/files/Breadcrumbs";
 import { FileContextMenu } from "@/src/components/apps/files/FileContextMenu";
 import { FileList } from "@/src/components/apps/files/FileList";
-import { FileToolbar, toolbarClass } from "@/src/components/apps/files/FileToolbar";
+import { ModalAlert } from "@/src/components/desktop/ModalAlert";
 
 type Dialog =
   | { type: "file"; value: string }
@@ -50,6 +62,10 @@ export function FilesApp() {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [pendingDelete, setPendingDelete] = useState<FileEntry | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sectionOpen, setSectionOpen] = useState(true);
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+
   const uploadRef = useRef<HTMLInputElement>(null);
   const serverId = selectedServer?.id || "";
   const homePath =
@@ -104,16 +120,14 @@ export function FilesApp() {
     };
   }, [serverId]);
 
-  function goTo(next: string) {
-    const normalized = next.replace(/\/+/g, "/").replace(/\/$/, "") || "/";
-    const nextHistory = [...history.slice(0, historyIndex + 1), normalized];
+  function goTo(nextPath: string) {
+    if (nextPath === path) return;
+    const nextHistory = history.slice(0, historyIndex + 1);
+    nextHistory.push(nextPath);
     setHistory(nextHistory);
     setHistoryIndex(nextHistory.length - 1);
     setSelected(null);
-    setQuery("");
-    setPath(normalized);
-    setMenu(null);
-    void load(normalized);
+    void load(nextPath);
   }
 
   function back() {
@@ -121,7 +135,6 @@ export function FilesApp() {
     const nextIndex = historyIndex - 1;
     setHistoryIndex(nextIndex);
     setSelected(null);
-    setPath(history[nextIndex]);
     void load(history[nextIndex]);
   }
 
@@ -130,7 +143,6 @@ export function FilesApp() {
     const nextIndex = historyIndex + 1;
     setHistoryIndex(nextIndex);
     setSelected(null);
-    setPath(history[nextIndex]);
     void load(history[nextIndex]);
   }
 
@@ -145,6 +157,16 @@ export function FilesApp() {
       fileSize: entry.size,
       modified: entry.modified,
       mime: entry.mime,
+      isDirectory: false,
+    });
+  }
+
+  function toggleExpandPath(itemPath: string) {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemPath)) next.delete(itemPath);
+      else next.add(itemPath);
+      return next;
     });
   }
 
@@ -241,94 +263,228 @@ export function FilesApp() {
   const places = [
     { label: "Root", path: "/" },
     { label: "Home", path: homePath },
-    { label: "tmp", path: "/tmp" },
-    { label: "etc", path: "/etc" },
     { label: "var", path: "/var" },
+    { label: "etc", path: "/etc" },
+    { label: "tmp", path: "/tmp" },
   ];
+
+  const currentFolderTitle =
+    path === "/"
+      ? "Root"
+      : path.split("/").filter(Boolean).pop() || "Root";
 
   return (
     <div
-      className="flex h-full min-h-0 overflow-hidden sui-app"
+      className="relative flex h-full min-h-0 overflow-hidden bg-white/80 dark:bg-[#1a1a1e]/85 text-neutral-800 dark:text-neutral-200 select-none backdrop-blur-3xl"
       onClick={() => setMenu(null)}
       onKeyDown={(event) => {
         if (event.key === "Enter") openSelected();
       }}
     >
-      <aside className="flex w-[188px] shrink-0 flex-col overflow-y-auto bg-[#6d7278] px-3 py-4 text-[12px] text-white/90">
-        <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
-          Favorites
-        </p>
-        {places.map((place) => (
-          <button
-            key={place.path}
-            type="button"
-            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/70 ${
-              path === place.path ? "bg-white/15" : ""
-            }`}
-            onClick={() => goTo(place.path)}
-          >
-            <Home aria-hidden className="size-3.5 opacity-80" />
-            {place.label}
-          </button>
-        ))}
-      </aside>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col sui-app">
-        <div className="flex items-center gap-2 border-b sui-hairline px-3 py-2">
-          <button
-            type="button"
-            aria-label="Back"
-            className="sui-hover rounded-md p-1 sui-muted outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-30"
-            onClick={back}
-            disabled={historyIndex <= 0}
-          >
-            <ChevronLeft aria-hidden className="size-4" />
-          </button>
-          <button
-            type="button"
-            aria-label="Forward"
-            className="sui-hover rounded-md p-1 sui-muted outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-30"
-            onClick={forward}
-            disabled={historyIndex >= history.length - 1}
-          >
-            <ChevronRight aria-hidden className="size-4" />
-          </button>
-          <button
-            type="button"
-            aria-label="Home"
-            className="sui-hover rounded-md p-1 sui-muted outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-            onClick={() => goTo(homePath)}
-          >
-            <Home aria-hidden className="size-4" />
-          </button>
-          <Breadcrumbs path={path} onNavigate={goTo} />
-          <label className="relative shrink-0">
-            <Search
-              aria-hidden
-              className="pointer-events-none absolute left-2 top-1.5 size-3.5 sui-muted"
-            />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search"
-              className="sui-input w-36 rounded-md py-1 pl-7 pr-2 text-[12px] outline-none focus:ring-2 focus:ring-sky-400"
-            />
-          </label>
-        </div>
-        <FileToolbar
-          selected={selectedEntry}
-          onOpen={openSelected}
-          onDownload={() => {
-            if (selectedEntry?.type === "file") {
-              window.location.href = downloadUrl(serverId, selectedEntry.path);
-            }
-          }}
-          onUploadClick={() => uploadRef.current?.click()}
-          onRename={() =>
-            selectedEntry &&
-            setDialog({ type: "rename", value: selectedEntry.name, from: selectedEntry.path })
-          }
-          onDelete={() => selectedEntry && setPendingDelete(selectedEntry)}
-        />{" "}
+      {sidebarOpen && (
+        <aside className="flex w-[210px] shrink-0 flex-col overflow-y-auto border-r border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-black/20 p-2.5 text-[13px]">
+          <div className="flex items-center justify-between px-2 py-1.5 mb-1">
+            <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 dark:text-neutral-500">
+              Favorites
+            </span>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="rounded p-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-white transition-colors"
+              title="Hide Sidebar"
+            >
+              <PanelLeft className="size-3.5" />
+            </button>
+          </div>
+
+          <div className="space-y-0.5">
+            {places.map((place) => {
+              const active = path === place.path;
+              return (
+                <button
+                  key={place.path}
+                  type="button"
+                  className={`flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-[13px] outline-none transition-colors ${
+                    active
+                      ? "bg-black/[0.08] dark:bg-white/[0.12] font-medium text-neutral-900 dark:text-white shadow-sm"
+                      : "text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                  }`}
+                  onClick={() => goTo(place.path)}
+                >
+                  <Folder
+                    aria-hidden
+                    className={`size-4 shrink-0 ${
+                      active
+                        ? "text-[#007aff] fill-[#007aff]/30"
+                        : "text-[#007aff]/80 fill-[#007aff]/20"
+                    }`}
+                  />
+                  <span className="truncate">{place.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-black/[0.06] dark:border-white/[0.08]">
+            <button
+              type="button"
+              onClick={() => setSectionOpen((prev) => !prev)}
+              className="flex w-full items-center justify-between px-2 py-1 mb-1 text-[11px] font-semibold tracking-wider uppercase text-neutral-400 dark:text-neutral-500 outline-none"
+            >
+              <span>Locations</span>
+              <ChevronDown
+                className={`size-3 transition-transform ${
+                  sectionOpen ? "" : "-rotate-90"
+                }`}
+              />
+            </button>
+
+            {sectionOpen && (
+              <div className="space-y-0.5">
+                <button
+                  type="button"
+                  className={`flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-[13px] outline-none transition-colors ${
+                    path === "/"
+                      ? "bg-black/[0.08] dark:bg-white/[0.12] font-medium text-neutral-900 dark:text-white shadow-sm"
+                      : "text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                  }`}
+                  onClick={() => goTo("/")}
+                >
+                  <Folder aria-hidden className="size-4 shrink-0 text-[#007aff] fill-[#007aff]/30" />
+                  <span className="truncate">Root Volume</span>
+                </button>
+                <button
+                  type="button"
+                  className={`flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-[13px] outline-none transition-colors ${
+                    path === homePath
+                      ? "bg-black/[0.08] dark:bg-white/[0.12] font-medium text-neutral-900 dark:text-white shadow-sm"
+                      : "text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                  }`}
+                  onClick={() => goTo(homePath)}
+                >
+                  <Folder aria-hidden className="size-4 shrink-0 text-[#007aff] fill-[#007aff]/30" />
+                  <span className="truncate">Home Volume</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </aside>
+      )}
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex h-11 shrink-0 items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] px-3.5 bg-black/[0.01] dark:bg-white/[0.02]">
+          <div className="flex items-center gap-2 min-w-0">
+            {!sidebarOpen && (
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                className="rounded p-1 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors"
+                title="Show Sidebar"
+              >
+                <PanelLeft className="size-4" />
+              </button>
+            )}
+
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                aria-label="Back"
+                className="rounded-full p-1 text-neutral-600 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
+                onClick={back}
+                disabled={historyIndex <= 0}
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Forward"
+                className="rounded-full p-1 text-neutral-600 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
+                onClick={forward}
+                disabled={historyIndex >= history.length - 1}
+              >
+                <ChevronRight className="size-4" />
+              </button>
+            </div>
+
+            <h2 className="ml-1 text-[14px] font-semibold text-neutral-900 dark:text-neutral-100 truncate">
+              {currentFolderTitle}
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setDialog({ type: "dir", value: "" })}
+              className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 transition-colors"
+              title="New Folder"
+            >
+              <FolderPlus className="size-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDialog({ type: "file", value: "" })}
+              className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 transition-colors"
+              title="New File"
+            >
+              <FilePlus className="size-4" />
+            </button>
+
+            <button
+              type="button"
+              disabled={!selectedEntry}
+              onClick={() => selectedEntry && setPendingDelete(selectedEntry)}
+              className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
+              title="Delete Item"
+            >
+              <Trash2 className="size-4" />
+            </button>
+
+            <button
+              type="button"
+              disabled={!selectedEntry || selectedEntry.type !== "file"}
+              onClick={() => {
+                if (selectedEntry?.type === "file") {
+                  window.location.href = downloadUrl(serverId, selectedEntry.path);
+                }
+              }}
+              className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
+              title="Download File"
+            >
+              <Download className="size-4" />
+            </button>
+
+            <button
+              type="button"
+              disabled={!selectedEntry}
+              onClick={() => openInfo(selectedEntry)}
+              className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
+              title="Get Info"
+            >
+              <Info className="size-4" />
+            </button>
+
+            <div className="relative ml-1">
+              <Search className="pointer-events-none absolute left-2.5 top-2 size-3.5 text-neutral-400" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search"
+                className="w-36 rounded-full border border-black/10 dark:border-white/15 bg-black/[0.04] dark:bg-white/[0.08] py-1 pl-8 pr-6 text-[12px] text-neutral-800 dark:text-neutral-200 placeholder-neutral-400 outline-none focus:w-44 focus:ring-2 focus:ring-[#007aff]/50 transition-all"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="absolute right-2 top-2 text-neutral-400 hover:text-neutral-700 dark:hover:text-white"
+                >
+                  <X className="size-3" />
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </header>
+
         <input
           ref={uploadRef}
           type="file"
@@ -338,91 +494,24 @@ export function FilesApp() {
             event.target.value = "";
           }}
         />
-        <div className="flex flex-wrap items-center gap-2 border-b sui-hairline px-3 py-2 text-[12px]">
-          <button
-            type="button"
-            className={toolbarClass}
-            onClick={() => setDialog({ type: "file", value: "" })}
-          >
-            New file
-          </button>
-          <button
-            type="button"
-            className={toolbarClass}
-            onClick={() => setDialog({ type: "dir", value: "" })}
-          >
-            New folder
-          </button>
-        </div>
-        {dialog ? (
-          <form
-            className="flex items-center gap-2 border-b sui-hairline px-3 py-2 text-[12px]"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submitDialog();
-            }}
-          >
-            <label className="text-neutral-500">
-              {dialog.type === "dir"
-                ? "Folder name"
-                : dialog.type === "file"
-                  ? "File name"
-                  : "Rename"}
-            </label>
-            <input
-              autoFocus
-              className="sui-input min-w-0 flex-1 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-sky-400"
-              value={dialog.value}
-              onChange={(event) => setDialog({ ...dialog, value: event.target.value })}
-            />
-            <button type="submit" className={toolbarClass}>
-              {dialog.type === "rename" ? "Rename" : "Create"}
-            </button>
-            <button type="button" className={toolbarClass} onClick={() => setDialog(null)}>
-              Cancel
-            </button>
-          </form>
-        ) : null}
+
         {error ? (
           <p
-            className="border-b border-red-200 bg-red-50 px-4 py-2 text-[12px] text-red-700"
+            className="border-b border-red-500/20 bg-red-500/10 px-4 py-2 text-[12px] text-red-600 dark:text-red-400"
             role="alert"
           >
             {error}
           </p>
         ) : null}
-        {pendingDelete ? (
-          <div
-            className="flex flex-wrap items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[12px] text-amber-950"
-            role="alertdialog"
-            aria-labelledby="delete-file-title"
-          >
-            <p id="delete-file-title" className="min-w-0 flex-1">
-              Delete{" "}
-              <span className="font-medium">
-                {pendingDelete.type === "dir" ? "folder" : "file"} “{pendingDelete.name}”
-              </span>
-              ? This cannot be undone on the remote server.
-            </p>
-            <button type="button" className={toolbarClass} onClick={() => setPendingDelete(null)}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="rounded-md bg-red-600 px-2.5 py-1 text-[12px] font-medium text-white"
-              onClick={() => void onDelete()}
-            >
-              Delete
-            </button>
-          </div>
-        ) : null}
+
         {loading ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-neutral-400">
+          <div className="flex min-h-0 flex-1 items-center justify-center text-[13px] text-neutral-400">
             Loading files…
           </div>
         ) : visible.length === 0 ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-neutral-400">
-            This folder is empty
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-[13px] text-neutral-400">
+            <Folder className="size-10 text-neutral-300 dark:text-neutral-600 mb-2" />
+            <span>This folder is empty</span>
           </div>
         ) : (
           <FileList
@@ -433,16 +522,75 @@ export function FilesApp() {
             onOpen={openEntry}
             onParent={() => path !== "/" && goTo(parentPath(path))}
             onContextMenu={openContextMenu}
+            expandedPaths={expandedPaths}
+            onToggleExpand={toggleExpandPath}
           />
         )}
-        <div className="flex shrink-0 items-center justify-between border-t sui-hairline px-4 py-1.5 text-[11px] sui-muted">
+
+        <footer className="flex h-7 shrink-0 items-center justify-between border-t border-black/[0.06] dark:border-white/[0.08] px-4 text-[11px] text-neutral-500 dark:text-neutral-400 bg-black/[0.01] dark:bg-white/[0.02]">
           <span>
             {visible.length} {visible.length === 1 ? "item" : "items"}
           </span>
           <span>{formatSize(totalSize(visible))}</span>
-        </div>
+        </footer>
       </div>
-      {menu ? (
+
+      {dialog && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/25 backdrop-blur-[3px] animate-fade-in"
+          onClick={() => setDialog(null)}
+        >
+          <div
+            className="w-[320px] rounded-[20px] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur-3xl border border-black/10 dark:border-white/15 bg-white/95 dark:bg-[#242428]/95 text-neutral-900 dark:text-neutral-100 animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-center text-[13px] font-semibold mb-1">
+              {dialog.type === "dir"
+                ? "New Folder"
+                : dialog.type === "file"
+                  ? "New File"
+                  : "Rename Item"}
+            </h3>
+            <p className="text-center text-[11px] opacity-70 mb-3.5">
+              Enter a name for this {dialog.type === "dir" ? "folder" : "file"}.
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void submitDialog();
+              }}
+            >
+              <input
+                autoFocus
+                className="w-full rounded-lg border border-black/15 dark:border-white/20 bg-black/[0.03] dark:bg-white/[0.08] px-3 py-1.5 text-[13px] text-neutral-900 dark:text-neutral-100 outline-none focus:border-[#007aff] focus:ring-1 focus:ring-[#007aff]"
+                value={dialog.value}
+                onChange={(e) => setDialog({ ...dialog, value: e.target.value })}
+              />
+
+              <div className="flex items-center gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setDialog(null)}
+                  className="flex-1 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 py-1.5 text-[12px] font-medium text-neutral-800 dark:text-neutral-200 transition-colors outline-none"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 rounded-full bg-[#007aff] hover:bg-[#0071eb] py-1.5 text-[12px] font-medium text-white shadow-sm transition-colors outline-none"
+                >
+                  {dialog.type === "rename" ? "Rename" : "Create"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {menu && (
         <FileContextMenu
           x={menu.x}
           y={menu.y}
@@ -461,7 +609,23 @@ export function FilesApp() {
           onTerminalHere={() => openTerminalHere(menu.entry)}
           onClose={() => setMenu(null)}
         />
-      ) : null}
+      )}
+
+      <ModalAlert
+        open={Boolean(pendingDelete)}
+        title="Delete Item?"
+        message={
+          pendingDelete
+            ? `Are you sure you want to delete “${pendingDelete.name}”? This action cannot be undone on the remote host.`
+            : ""
+        }
+        confirmLabel="Delete"
+        confirmDestructive={true}
+        cancelLabel="Cancel"
+        onConfirm={() => void onDelete()}
+        onCancel={() => setPendingDelete(null)}
+        layout="stacked"
+      />
     </div>
   );
 }
