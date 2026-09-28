@@ -11,12 +11,16 @@
   },
   "dependencies": {
     "@kairo/runtime": "workspace:*",
+    "@tailwindcss/vite": "^4.3.3",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
+    "lucide-react": "^1.48.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
+    "@types/node": "^26.6.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.4.0",
