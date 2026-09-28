@@ -3,7 +3,6 @@ export const APP_IDS = [
   "files",
   "terminal",
   "editor",
-  "applications",
   "domains",
   "databases",
   "settings",
@@ -51,13 +50,6 @@ export const APP_META: Record<
     height: 480,
     available: false,
     chrome: "light",
-  },
-  applications: {
-    title: "Applications",
-    width: 720,
-    height: 520,
-    available: true,
-    chrome: "dark",
   },
   surface: {
     title: "Remote Surface",

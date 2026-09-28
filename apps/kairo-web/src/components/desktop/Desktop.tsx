@@ -9,7 +9,11 @@ import { Dock } from "@/src/components/desktop/Dock";
 import { TopBar } from "@/src/components/desktop/TopBar";
 import { BrandMark } from "@/src/components/brand/BrandMark";
 import { WindowManager } from "@/src/components/window/WindowManager";
-import { WindowManagerProvider, useWindowManager } from "@/src/components/window/window-context";
+import {
+  WindowManagerProvider,
+  useWindowManager,
+  type WindowPayload,
+} from "@/src/components/window/window-context";
 
 export function Desktop() {
   const { selectedServer } = useSession();
@@ -69,6 +73,27 @@ function DesktopShell() {
   useEffect(() => {
     openWindow("dashboard");
   }, [openWindow]);
+
+  useEffect(() => {
+    const onOpenSurface = (e: Event) => {
+      const customEvent = e as CustomEvent<WindowPayload>;
+      if (customEvent.detail) {
+        openWindow("surface", customEvent.detail);
+      }
+    };
+    const onCloseSurface = (e: Event) => {
+      const customEvent = e as CustomEvent<{ surfaceId: string }>;
+      if (customEvent.detail?.surfaceId) {
+        closeWindow(`surface:${customEvent.detail.surfaceId}`);
+      }
+    };
+    window.addEventListener("kairo:open-surface", onOpenSurface);
+    window.addEventListener("kairo:close-surface", onCloseSurface);
+    return () => {
+      window.removeEventListener("kairo:open-surface", onOpenSurface);
+      window.removeEventListener("kairo:close-surface", onCloseSurface);
+    };
+  }, [closeWindow, openWindow]);
 
   useEffect(() => {
     function isTypingTarget(target: EventTarget | null) {

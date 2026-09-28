@@ -3,7 +3,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
   AppWindow,
-  Boxes,
   Code2,
   Database,
   Eye,
@@ -21,7 +20,6 @@ export const APP_ICONS: Record<AppId, LucideIcon> = {
   files: Folder,
   terminal: Terminal,
   editor: Code2,
-  applications: Boxes,
   domains: Globe,
   databases: Database,
   settings: Settings,

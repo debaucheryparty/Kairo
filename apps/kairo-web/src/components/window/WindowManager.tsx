@@ -1,7 +1,6 @@
 "use client";
 
 import { AboutApp } from "@/src/components/apps/AboutApp";
-import { ApplicationsApp } from "@/src/components/apps/ApplicationsApp";
 import { DashboardApp } from "@/src/components/apps/DashboardApp";
 import { DatabasesApp } from "@/src/components/apps/DatabasesApp";
 import { DomainsApp } from "@/src/components/apps/DomainsApp";
@@ -60,12 +59,10 @@ function AppBody({
       return <TerminalApp payload={payload} />;
     case "editor":
       return <EditorApp />;
-    case "viewer":
-      return <FileViewer payload={payload} windowId={windowId} />;
-    case "applications":
-      return <ApplicationsApp />;
-    case "surface":
-      return <RemoteSurfaceViewer payload={payload} windowId={windowId} />;
+      case "viewer":
+        return <FileViewer payload={payload} windowId={windowId} />;
+      case "surface":
+        return <RemoteSurfaceViewer payload={payload} windowId={windowId} />;
     case "domains":
       return <DomainsApp />;
     case "databases":

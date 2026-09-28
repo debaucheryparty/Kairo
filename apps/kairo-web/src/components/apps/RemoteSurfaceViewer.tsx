@@ -2,20 +2,16 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { WindowPayload } from "@/src/components/window/window-context";
-import { useWindowManager } from "@/src/components/window/window-context";
 
 interface RemoteSurfaceViewerProps {
   payload?: WindowPayload;
-  windowId: string;
+  windowId?: string;
 }
 
-export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerProps) {
-  const { closeWindow } = useWindowManager();
+export function RemoteSurfaceViewer({ payload }: RemoteSurfaceViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [fps, setFps] = useState(60);
   const [latencyMs, setLatencyMs] = useState(14);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showStats, setShowStats] = useState(true);
   const [scaleMode, setScaleMode] = useState<"fit" | "native">("fit");
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -46,116 +42,109 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
       const w = canvas.width;
       const h = canvas.height;
 
-      ctx.fillStyle = "#0f172a";
+      ctx.fillStyle = "#1e1e2e";
       ctx.fillRect(0, 0, w, h);
 
       if (isBrowser) {
-        ctx.fillStyle = "#1e293b";
-        ctx.fillRect(0, 0, w, 44);
+        ctx.fillStyle = "#181825";
+        ctx.fillRect(0, 0, w, 40);
 
-        ctx.fillStyle = "#334155";
+        ctx.fillStyle = "#313244";
         ctx.beginPath();
-        ctx.roundRect(140, 8, w - 280, 28, 6);
+        ctx.roundRect(8, 6, 210, 30, [6, 6, 0, 0]);
         ctx.fill();
 
-        ctx.fillStyle = "#94a3b8";
+        ctx.fillStyle = "#ff7b00";
+        ctx.beginPath();
+        ctx.arc(24, 21, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#cdd6f4";
         ctx.font = "12px sans-serif";
-        ctx.fillText("🔒 https://kairo.internal/welcome", 154, 26);
+        ctx.fillText("Mozilla Firefox", 38, 25);
 
-        ctx.fillStyle = "#38bdf8";
+        ctx.fillStyle = "#a6adc8";
+        ctx.font = "11px sans-serif";
+        ctx.fillText("×", 204, 24);
+
+        ctx.fillStyle = "#313244";
+        ctx.fillRect(0, 40, w, 38);
+
+        ctx.fillStyle = "#9399b2";
+        ctx.font = "15px sans-serif";
+        ctx.fillText("←", 16, 64);
+        ctx.fillText("→", 44, 64);
+        ctx.fillText("⟳", 72, 64);
+
+        ctx.fillStyle = "#1e1e2e";
         ctx.beginPath();
-        ctx.arc(40, 22, 10, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(70, 22, 10, 0, Math.PI * 2);
+        ctx.roundRect(100, 45, w - 200, 28, 6);
         ctx.fill();
 
-        ctx.fillStyle = "#090d16";
-        ctx.fillRect(0, 44, w, h - 44);
+        ctx.fillStyle = "#6c7086";
+        ctx.font = "12px sans-serif";
+        ctx.fillText("Search with Google or enter address", 116, 64);
 
-        const t = time * 0.001;
-        const grad = ctx.createLinearGradient(0, 44, w, h);
-        grad.addColorStop(0, "#0b0f19");
-        grad.addColorStop(1, "#1e1b4b");
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 44, w, h - 44);
+        ctx.fillStyle = "#181825";
+        ctx.fillRect(0, 78, w, h - 78);
 
-        ctx.fillStyle = "#f8fafc";
-        ctx.font = "bold 28px sans-serif";
+        ctx.fillStyle = "#cdd6f4";
+        ctx.font = "bold 26px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Remote Linux Web Browser", w / 2, 180);
+        ctx.fillText("Firefox", w / 2, 220);
 
-        ctx.fillStyle = "#94a3b8";
+        ctx.fillStyle = "#313244";
+        ctx.beginPath();
+        ctx.roundRect(w / 2 - 280, 260, 560, 46, 23);
+        ctx.fill();
+
+        ctx.fillStyle = "#6c7086";
         ctx.font = "14px sans-serif";
-        ctx.fillText("Running live on Linux host with hardware video acceleration", w / 2, 220);
+        ctx.textAlign = "left";
+        ctx.fillText("Search the web", w / 2 - 250, 289);
 
-        ctx.fillStyle = "rgba(56, 189, 248, 0.1)";
-        ctx.strokeStyle = "rgba(56, 189, 248, 0.3)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(w / 2 - 260, 260, 520, 110, 10);
-        ctx.fill();
-        ctx.stroke();
+        const shortcuts = ["GitHub", "Reddit", "YouTube", "Wikipedia", "Docs"];
+        const boxW = 80;
+        const gap = 20;
+        const totalW = shortcuts.length * boxW + (shortcuts.length - 1) * gap;
+        const startX = (w - totalW) / 2;
 
-        ctx.fillStyle = "#38bdf8";
-        ctx.font = "bold 13px sans-serif";
-        ctx.fillText("⚡ Downloads & File Persistence Active", w / 2, 290);
+        shortcuts.forEach((label, i) => {
+          const bx = startX + i * (boxW + gap);
+          const by = 350;
 
-        ctx.fillStyle = "#cbd5e1";
-        ctx.font = "12px sans-serif";
-        ctx.fillText("Any file downloaded in this browser saves directly to ~/Downloads", w / 2, 320);
-        ctx.fillText("on the remote Linux host and syncs immediately in Kairo Files.", w / 2, 342);
+          ctx.fillStyle = "#313244";
+          ctx.beginPath();
+          ctx.roundRect(bx, by, boxW, boxW, 12);
+          ctx.fill();
 
-        const circleX = w / 2 + Math.cos(t * 2) * 80;
-        const circleY = 460 + Math.sin(t * 2) * 30;
-        ctx.fillStyle = "rgba(168, 85, 247, 0.4)";
-        ctx.beginPath();
-        ctx.arc(circleX, circleY, 40, 0, Math.PI * 2);
-        ctx.fill();
+          ctx.fillStyle = "#89b4fa";
+          ctx.beginPath();
+          ctx.arc(bx + boxW / 2, by + 34, 14, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#a6adc8";
+          ctx.font = "11px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(label, bx + boxW / 2, by + 66);
+        });
 
         ctx.textAlign = "left";
       } else {
-        const t = time * 0.001;
         const grad = ctx.createLinearGradient(0, 0, w, h);
-        grad.addColorStop(0, "#090d16");
-        grad.addColorStop(1, "#111827");
+        grad.addColorStop(0, "#11111b");
+        grad.addColorStop(1, "#181825");
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, w, h);
 
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
-        ctx.lineWidth = 1;
-        for (let x = 0; x < w; x += 40) {
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, h);
-          ctx.stroke();
-        }
-        for (let y = 0; y < h; y += 40) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(w, y);
-          ctx.stroke();
-        }
-
-        ctx.fillStyle = "#f8fafc";
-        ctx.font = "bold 24px sans-serif";
+        ctx.fillStyle = "#cdd6f4";
+        ctx.font = "bold 22px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(appName, w / 2, h / 2 - 40);
+        ctx.fillText(appName, w / 2, h / 2 - 20);
 
-        ctx.fillStyle = "#94a3b8";
-        ctx.font = "14px sans-serif";
-        ctx.fillText(`Process: ${appExec} • Native Linux GUI Remote Surface`, w / 2, h / 2);
-
-        const pulse = 1 + Math.sin(t * 4) * 0.05;
-        ctx.fillStyle = "#10b981";
-        ctx.beginPath();
-        ctx.arc(w / 2 - 120, h / 2 + 50, 6 * pulse, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "#6ee7b7";
-        ctx.font = "12px sans-serif";
-        ctx.textAlign = "left";
-        ctx.fillText("Rendering 60 FPS Remote Wayland/X11 Buffer", w / 2 - 105, h / 2 + 54);
+        ctx.fillStyle = "#a6adc8";
+        ctx.font = "13px sans-serif";
+        ctx.fillText(`Remote Host Process: ${appExec}`, w / 2, h / 2 + 15);
       }
 
       ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
@@ -180,73 +169,8 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
     setMousePos({ x, y });
   }, []);
 
-  const handleTerminate = () => {
-    closeWindow(windowId);
-  };
-
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-slate-950 text-slate-100 select-none">
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-white/10 bg-slate-900/90 px-3 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <span className="flex h-2.5 w-2.5 items-center justify-center">
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-ping opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          <span className="text-xs font-semibold tracking-wide text-slate-200">{appName}</span>
-          <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
-            {appExec}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {showStats && (
-            <div className="flex items-center gap-2 rounded-md bg-white/5 px-2 py-1 text-[11px] font-mono text-slate-300">
-              <span className="text-emerald-400">{fps} FPS</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-sky-400">{latencyMs}ms</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-amber-400">NVENC</span>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setShowStats((s) => !s)}
-            className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-slate-200"
-            title="Toggle Stream HUD"
-          >
-            📊
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setScaleMode((m) => (m === "fit" ? "native" : "fit"))}
-            className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-slate-200"
-            title="Toggle Native Resolution"
-          >
-            {scaleMode === "fit" ? "🔍 Fit" : "1:1"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsFullscreen((f) => !f)}
-            className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-slate-200"
-            title="Toggle View"
-          >
-            {isFullscreen ? "🗗" : "🗖"}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleTerminate}
-            className="rounded bg-rose-500/20 px-2 py-1 text-xs font-medium text-rose-300 hover:bg-rose-500/30"
-            title="Close Remote Surface"
-          >
-            Terminate
-          </button>
-        </div>
-      </div>
-
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-black text-slate-100 select-none">
       <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
         <canvas
           ref={canvasRef}
@@ -258,11 +182,22 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
           }`}
         />
 
-        {isBrowser && (
-          <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg border border-sky-500/30 bg-slate-900/90 px-3 py-2 text-xs text-sky-200 shadow-xl backdrop-blur-md">
-            <span className="font-semibold text-sky-400">Downloads Active:</span> Downloaded files go directly to VPS <code className="font-mono text-white">~/Downloads</code>
-          </div>
-        )}
+        <div className="pointer-events-auto absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/80 px-2.5 py-1 text-[11px] font-mono text-slate-300 shadow-lg backdrop-blur-md transition-opacity opacity-40 hover:opacity-100">
+          <span className="flex h-2 w-2 items-center justify-center">
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          </span>
+          <span className="text-emerald-400">{fps} FPS</span>
+          <span className="text-slate-500">•</span>
+          <span className="text-sky-400">{latencyMs}ms</span>
+          <button
+            type="button"
+            onClick={() => setScaleMode((m) => (m === "fit" ? "native" : "fit"))}
+            className="ml-1 text-[10px] text-slate-400 hover:text-white"
+            title="Toggle Native Resolution"
+          >
+            {scaleMode === "fit" ? "Fit" : "1:1"}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -92,33 +92,6 @@ export function EditorGlyph({ className }: IconProps) {
   );
 }
 
-export function ApplicationsGlyph({ className }: IconProps) {
-  const top = useGid("cube-top");
-  const left = useGid("cube-left");
-  const right = useGid("cube-right");
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden>
-      <defs>
-        <linearGradient id={top} x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0%" stopColor="#c4b5fd" />
-          <stop offset="100%" stopColor="#8b5cf6" />
-        </linearGradient>
-        <linearGradient id={left} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#7c3aed" />
-          <stop offset="100%" stopColor="#4c1d95" />
-        </linearGradient>
-        <linearGradient id={right} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#a78bfa" />
-          <stop offset="100%" stopColor="#6d28d9" />
-        </linearGradient>
-      </defs>
-      <rect width="100" height="100" rx="22" fill="#f3e8ff" />
-      <path fill={`url(#${top})`} d="M50 18L84 36 50 54 16 36z" />
-      <path fill={`url(#${left})`} d="M16 36l34 18v28L16 64z" />
-      <path fill={`url(#${right})`} d="M84 36L50 54v28l34-18z" />
-    </svg>
-  );
-}
 
 export function DomainsGlyph({ className }: IconProps) {
   const fill = useGid("domains");
@@ -208,7 +181,6 @@ export const DOCK_GLYPHS: Record<DockAppId | "trash", ComponentType<IconProps>> 
   files: FilesGlyph,
   terminal: TerminalGlyph,
   editor: EditorGlyph,
-  applications: ApplicationsGlyph,
   domains: DomainsGlyph,
   databases: DatabasesGlyph,
   settings: SettingsGlyph,
