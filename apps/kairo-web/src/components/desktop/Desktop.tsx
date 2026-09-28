@@ -253,22 +253,17 @@ function DesktopShell() {
       {notice ? (
         <div
           role="status"
-          className="fixed right-4 top-11 z-[120] flex w-80 items-start gap-3 rounded-[18px] border p-3.5 shadow-2xl backdrop-blur-3xl animate-menu-in select-none"
-          style={{
-            background: "var(--menu-bg)",
-            borderColor: "var(--menu-border)",
-            color: "var(--menu-fg)",
-          }}
+          className="fixed right-4 top-10 z-[120] flex w-[350px] max-w-[92vw] items-start gap-3.5 rounded-[22px] border border-white/60 dark:border-white/12 bg-white/80 dark:bg-[#1e1e24]/85 p-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.14),inset_0_1px_1px_rgba(255,255,255,0.7)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.45),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-3xl animate-menu-in select-none text-neutral-900 dark:text-neutral-100"
         >
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#007aff]/15 text-[#007aff] text-lg font-semibold">
-            ⚡
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[11px] bg-gradient-to-b from-[#0084ff] to-[#0060df] text-white shadow-sm overflow-hidden">
+            <BrandMark className="size-6 text-white" />
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 pt-0.5">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[12px] font-semibold tracking-tight truncate">System Notice</span>
-              <span className="text-[10px] opacity-40 shrink-0">now</span>
+              <span className="text-[13px] font-semibold tracking-tight truncate">System Notice</span>
+              <span className="text-[11px] text-neutral-400 dark:text-neutral-500 font-normal shrink-0">now</span>
             </div>
-            <p className="text-[11px] opacity-70 mt-0.5 leading-relaxed">
+            <p className="text-[12px] text-neutral-600 dark:text-neutral-300 font-normal leading-snug mt-0.5">
               This feature is coming soon in the next Kairo release.
             </p>
           </div>

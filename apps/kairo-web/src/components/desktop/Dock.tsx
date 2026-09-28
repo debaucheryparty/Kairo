@@ -114,7 +114,7 @@ export function Dock({ onComingSoon, onOpenSpotlight }: DockProps) {
           aria-label="Trash"
           title="Trash"
           className="group relative flex w-[48px] sm:w-[52px] flex-col items-center outline-none"
-          onClick={onComingSoon}
+          onClick={() => handleSelect("files")}
         >
           <div className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 rounded-md bg-black/75 px-2.5 py-1 text-[11px] font-medium text-white shadow-lg backdrop-blur-md opacity-0 transition-opacity group-hover:opacity-100 whitespace-nowrap z-50 border border-white/10">
             Trash
