@@ -10,6 +10,7 @@ import { TopBar } from "@/src/components/desktop/TopBar";
 import { BrandMark } from "@/src/components/brand/BrandMark";
 import { WindowManager } from "@/src/components/window/WindowManager";
 import { ModalAlert } from "@/src/components/desktop/ModalAlert";
+import { SpotlightModal } from "@/src/components/desktop/SpotlightModal";
 import {
   WindowManagerProvider,
   useWindowManager,
@@ -44,8 +45,15 @@ function DesktopShell() {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [notice, setNotice] = useState(false);
   const [logoutAlertOpen, setLogoutAlertOpen] = useState(false);
+  const [spotlightOpen, setSpotlightOpen] = useState(false);
   const [wallpaper, setWallpaper] = useState("/wallpaper.jpg");
   const desktopRuntime = isDesktopRuntime();
+
+  useEffect(() => {
+    const onToggle = () => setSpotlightOpen((prev) => !prev);
+    window.addEventListener("kairo:toggle-spotlight", onToggle);
+    return () => window.removeEventListener("kairo:toggle-spotlight", onToggle);
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem("kairo_wallpaper");
@@ -142,6 +150,11 @@ function DesktopShell() {
         }
       }
       if (!meta) return;
+      if (event.key === " " || event.code === "Space") {
+        event.preventDefault();
+        setSpotlightOpen((prev) => !prev);
+        return;
+      }
       if (event.key.toLowerCase() === "k") {
         event.preventDefault();
         window.dispatchEvent(new Event("kairo:toggle-server-menu"));
@@ -222,7 +235,12 @@ function DesktopShell() {
       >
         <WindowManager />
       </div>
-      {fullscreen ? null : <Dock onComingSoon={showComingSoon} />}
+      {fullscreen ? null : (
+        <Dock
+          onComingSoon={showComingSoon}
+          onOpenSpotlight={() => setSpotlightOpen(true)}
+        />
+      )}
       {menu ? (
         <DesktopContextMenu
           x={menu.x}
@@ -256,6 +274,11 @@ function DesktopShell() {
           </div>
         </div>
       ) : null}
+
+      <SpotlightModal
+        open={spotlightOpen}
+        onClose={() => setSpotlightOpen(false)}
+      />
 
       <ModalAlert
         open={logoutAlertOpen}

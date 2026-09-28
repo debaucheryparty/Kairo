@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, ChevronDown, LogOut, Server, SlidersHorizontal, Wifi } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, LogOut, Search, Server, SlidersHorizontal, Wifi } from "lucide-react";
 import { ThemeToggle } from "@/src/components/desktop/ThemeToggle";
 import { BrandMark } from "@/src/components/brand/BrandMark";
 import { useServer } from "@/src/lib/api/server-context";
@@ -412,6 +412,15 @@ export function TopBar() {
               style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
             >
               <MenuItem
+                label="Spotlight Search"
+                shortcut="⌘Space"
+                onSelect={() => {
+                  closeMenus();
+                  window.dispatchEvent(new Event("kairo:toggle-spotlight"));
+                }}
+              />
+              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
+              <MenuItem
                 label="Kairo Help"
                 onSelect={() => {
                   openWindow("about");
@@ -526,6 +535,15 @@ export function TopBar() {
 
         <div className="flex items-center gap-2 opacity-80">
           <Wifi className="size-3.5" />
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("kairo:toggle-spotlight"))}
+            className="rounded p-0.5 hover:opacity-100 hover:bg-white/10 transition-colors"
+            title="Spotlight Search (⌘Space)"
+            aria-label="Spotlight Search"
+          >
+            <Search className="size-3.5" />
+          </button>
           <SlidersHorizontal className="size-3.5" />
         </div>
 

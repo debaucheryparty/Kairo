@@ -176,13 +176,108 @@ export function TrashGlyph({ className }: IconProps) {
   );
 }
 
-export const DOCK_GLYPHS: Record<DockAppId | "trash", ComponentType<IconProps>> = {
-  dashboard: DashboardGlyph,
-  files: FilesGlyph,
+export function LaunchpadGlyph({ className }: IconProps) {
+  const bg = useGid("launchpad-bg");
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={bg} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#2c2d30" />
+          <stop offset="100%" stopColor="#1a1a1c" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="22" fill={`url(#${bg})`} />
+      <rect x="18" y="18" width="18" height="18" rx="5" fill="#ff5f57" />
+      <rect x="41" y="18" width="18" height="18" rx="5" fill="#ffbd2e" />
+      <rect x="64" y="18" width="18" height="18" rx="5" fill="#28c840" />
+      <rect x="18" y="41" width="18" height="18" rx="5" fill="#007aff" />
+      <rect x="41" y="41" width="18" height="18" rx="5" fill="#af52de" />
+      <rect x="64" y="41" width="18" height="18" rx="5" fill="#ff2d55" />
+      <rect x="18" y="64" width="18" height="18" rx="5" fill="#5856d6" />
+      <rect x="41" y="64" width="18" height="18" rx="5" fill="#30b0c7" />
+      <rect x="64" y="64" width="18" height="18" rx="5" fill="#34c759" />
+    </svg>
+  );
+}
+
+export function FinderGlyph({ className }: IconProps) {
+  const bg = useGid("finder-bg");
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={bg} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#76d0ff" />
+          <stop offset="100%" stopColor="#1f7fe8" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="22" fill={`url(#${bg})`} />
+      <path
+        d="M20 20 H50 V80 H20 Z"
+        fill="#aee5ff"
+        opacity="0.8"
+      />
+      <circle cx="35" cy="40" r="4.5" fill="#1d1d1f" />
+      <circle cx="65" cy="40" r="4.5" fill="#1d1d1f" />
+      <path
+        d="M50 34 v24 c0 4 -4 7 -8 7 h-4"
+        fill="none"
+        stroke="#1d1d1f"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M30 63 c6 9 34 9 40 0"
+        fill="none"
+        stroke="#1d1d1f"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function ActivityMonitorGlyph({ className }: IconProps) {
+  const bg = useGid("monitor-bg");
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={bg} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#252528" />
+          <stop offset="100%" stopColor="#121214" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="22" fill={`url(#${bg})`} />
+      <path
+        d="M14 50 h18 l6 -20 l12 40 l10 -30 l8 16 l6 -6 h12"
+        fill="none"
+        stroke="#30d158"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14 50 h18 l6 -20 l12 40 l10 -30 l8 16 l6 -6 h12"
+        fill="none"
+        stroke="#64d2ff"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export const DOCK_GLYPHS: Record<DockAppId | "trash" | "launchpad" | "finder" | "monitor", ComponentType<IconProps>> = {
+  dashboard: ActivityMonitorGlyph,
+  monitor: ActivityMonitorGlyph,
+  files: FinderGlyph,
+  finder: FinderGlyph,
   terminal: TerminalGlyph,
   editor: EditorGlyph,
   domains: DomainsGlyph,
   databases: DatabasesGlyph,
   settings: SettingsGlyph,
   trash: TrashGlyph,
+  launchpad: LaunchpadGlyph,
 };
