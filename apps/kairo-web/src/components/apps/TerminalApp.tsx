@@ -70,7 +70,7 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
         const timeout = window.setTimeout(() => {
           if (disposed || socket?.readyState === WebSocket.OPEN) return;
           setError(
-            "ServerUI could not open a terminal session. Check the server connection and retry.",
+            "Kairo could not open a terminal session. Check the server connection and retry.",
           );
           setStatus("disconnected");
           socket?.close();
@@ -122,7 +122,7 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
           setStatus("connected");
           setError(null);
           terminal.clear();
-          terminal.writeln("\x1b[1;32mWelcome to Kairo ServerUI Terminal\x1b[0m");
+          terminal.writeln("\x1b[1;32mWelcome to Kairo Terminal\x1b[0m");
           terminal.writeln("Linux kairo-production-01 6.8.0-45-generic x86_64\r\n");
           let cmdBuffer = "";
           const prompt = "\x1b[1;36mroot@kairo-production-01\x1b[0m:\x1b[1;34m~/\x1b[0m# ";
@@ -146,9 +146,9 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
               } else if (trimmed.startsWith("cat ")) {
                 const target = trimmed.slice(4).trim();
                 if (target === "notes.md") {
-                  terminal?.writeln("# Server Administration Notes\r\n- ServerUI Desktop integrated successfully.");
+                  terminal?.writeln("# Server Administration Notes\r\n- Kairo Desktop integrated successfully.");
                 } else if (target === "config.json") {
-                  terminal?.writeln("{\r\n  \"server\": \"ServerUI\",\r\n  \"telemetryIntervalMs\": 1000\r\n}");
+                  terminal?.writeln("{\r\n  \"server\": \"Kairo\",\r\n  \"telemetryIntervalMs\": 1000\r\n}");
                 } else {
                   terminal?.writeln(`cat: ${target}: No such file or directory`);
                 }

@@ -111,7 +111,7 @@ export function AddServerModal({
         <form onSubmit={(event) => void submit(event, false)} className="space-y-3.5 px-5 py-4">
           {!editing ? (
             <p className="text-[13px] leading-5 text-white/62">
-              Add an SSH host. ServerUI stores encrypted credentials and connects through the Go
+              Add an SSH host. Kairo stores encrypted credentials and connects through the Go
               backend — the browser never opens SSH directly.
             </p>
           ) : null}

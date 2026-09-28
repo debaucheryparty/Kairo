@@ -19,7 +19,7 @@ const STEPS = [
   "Authenticating",
   "Checking server environment",
   "Loading filesystem",
-  "Starting ServerUI session",
+  "Starting Kairo session",
 ] as const;
 
 export function BootScreen({ server, onComplete }: BootScreenProps) {
@@ -91,7 +91,7 @@ export function BootScreen({ server, onComplete }: BootScreenProps) {
         />
         <h1 className="mt-5 text-[28px] font-semibold tracking-tight text-white">{errorTitle}</h1>
         <p className="mt-2 max-w-md text-[14px] leading-6 text-white/62">
-          ServerUI couldn&apos;t connect to {server.name}.{" "}
+          Kairo couldn&apos;t connect to {server.name}.{" "}
           {error || "Try again or edit the server."}
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -164,7 +164,7 @@ export function BootScreen({ server, onComplete }: BootScreenProps) {
       </ol>
 
       <p className="mt-10 text-[13px] text-white/42">
-        {status === "ready" ? "Welcome to ServerUI" : "Initializing environment…"}
+        {status === "ready" ? "Welcome to Kairo" : "Initializing environment…"}
       </p>
     </BootFrame>
   );
@@ -176,7 +176,7 @@ function BootFrame({ children }: { children: ReactNode }) {
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-25"
-        style={{ backgroundImage: "url('/wallpaper.jpg?v=luffy')" }}
+        style={{ backgroundImage: "url('/wallpaper.jpg')" }}
       />
       <div
         aria-hidden

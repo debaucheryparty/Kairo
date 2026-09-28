@@ -22,7 +22,43 @@ export function SettingsApp() {
   const [available, setAvailable] = useState<AvailableUpdate | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
+  const [wallpaperInput, setWallpaperInput] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("kairo_wallpaper") || "/wallpaper.jpg";
+    }
+    return "/wallpaper.jpg";
+  });
   const downloadedRef = useRef(0);
+
+  const applyWallpaper = () => {
+    const val = wallpaperInput.trim();
+    if (val && val !== "/wallpaper.jpg") {
+      localStorage.setItem("kairo_wallpaper", val);
+    } else {
+      localStorage.removeItem("kairo_wallpaper");
+    }
+    window.dispatchEvent(new Event("kairo:wallpaper-change"));
+  };
+
+  const resetWallpaper = () => {
+    localStorage.removeItem("kairo_wallpaper");
+    setWallpaperInput("/wallpaper.jpg");
+    window.dispatchEvent(new Event("kairo:wallpaper-change"));
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setWallpaperInput(reader.result);
+        localStorage.setItem("kairo_wallpaper", reader.result);
+        window.dispatchEvent(new Event("kairo:wallpaper-change"));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const checkForUpdates = useCallback(async () => {
     setPhase("checking");
@@ -37,7 +73,7 @@ export function SettingsApp() {
       <div className="flex items-start gap-4">
         <BrandMark size={48} />
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.22em] sui-muted">ServerUI</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.22em] sui-muted">Kairo</p>
           <h3 className="mt-2 text-2xl font-semibold tracking-tight sui-title">Settings</h3>
           <p className="mt-2 max-w-md text-sm leading-6 sui-muted">
             Application information and safe preferences. Secrets and credentials are never shown
@@ -55,7 +91,7 @@ export function SettingsApp() {
             <dt>Application</dt>
             <dd className="flex items-center gap-2 sui-title">
               <BrandMark size={18} />
-              ServerUI
+              Kairo
             </dd>
           </div>
           <div className="flex justify-between gap-4">
@@ -71,7 +107,7 @@ export function SettingsApp() {
           Documentation:{" "}
           <a
             className="underline underline-offset-2"
-            href="https://github.com/rakhechashubham/serverui"
+            href="https://github.com/debaucheryparty/Kairo"
             target="_blank"
             rel="noreferrer"
           >
@@ -154,7 +190,7 @@ export function SettingsApp() {
           {phase === "downloading" ? (
             <p className="text-sm sui-muted">
               Downloading update
-              {progress !== null ? ` (${progress}%)` : ""}… ServerUI will restart when finished.
+              {progress !== null ? ` (${progress}%)` : ""}… Kairo will restart when finished.
             </p>
           ) : null}
           {phase === "error" && error ? (
@@ -174,6 +210,49 @@ export function SettingsApp() {
           </p>
         </section>
       )}
+
+      <section className="max-w-lg space-y-3" aria-labelledby="settings-wallpaper">
+        <h4 id="settings-wallpaper" className="text-sm font-medium sui-title">
+          Desktop Wallpaper
+        </h4>
+        <p className="text-sm leading-6 sui-muted">
+          The default wallpaper is hosted on the VPS at <code className="font-mono text-xs">/wallpaper.jpg</code>. Set a custom image URL or select a local image.
+        </p>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="/wallpaper.jpg or custom URL"
+              value={wallpaperInput}
+              onChange={(e) => setWallpaperInput(e.target.value)}
+              className="flex-1 rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-white placeholder-white/40 outline-none focus:border-sky-500 font-mono"
+            />
+            <button
+              type="button"
+              onClick={applyWallpaper}
+              className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20"
+            >
+              Apply
+            </button>
+            <button
+              type="button"
+              onClick={resetWallpaper}
+              className="rounded-md border border-white/10 px-3 py-1.5 text-xs font-medium text-white/70 hover:bg-white/5 hover:text-white"
+            >
+              Reset
+            </button>
+          </div>
+          <div className="flex items-center gap-2 text-xs sui-muted">
+            <span>Upload from local disk:</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileUpload}
+              className="text-xs text-white/70 file:mr-2 file:rounded file:border-0 file:bg-white/10 file:px-2 file:py-1 file:text-xs file:font-medium file:text-white hover:file:bg-white/20"
+            />
+          </div>
+        </div>
+      </section>
 
       <section className="max-w-lg space-y-2" aria-labelledby="settings-shortcuts">
         <h4 id="settings-shortcuts" className="text-sm font-medium sui-title">

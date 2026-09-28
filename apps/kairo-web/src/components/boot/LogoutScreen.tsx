@@ -56,7 +56,7 @@ export function LogoutScreen({ server, onComplete }: LogoutScreenProps) {
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-25"
-        style={{ backgroundImage: "url('/wallpaper.jpg?v=luffy')" }}
+        style={{ backgroundImage: "url('/wallpaper.jpg')" }}
       />
       <div
         aria-hidden

@@ -8,7 +8,7 @@ export function ComingSoonApp({ feature }: { feature: string }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 sui-app px-8 text-center">
       <BrandMark size={48} />
-      <p className="text-[11px] font-medium uppercase tracking-[0.22em] sui-muted">ServerUI</p>
+      <p className="text-[11px] font-medium uppercase tracking-[0.22em] sui-muted">Kairo</p>
       <h3 className="text-2xl font-semibold tracking-tight sui-title">{feature}</h3>
       <p className="max-w-sm text-sm leading-6 sui-muted">
         Coming soon. Dashboard, Terminal, and Files operate against the selected server; Editor and

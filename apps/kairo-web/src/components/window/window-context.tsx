@@ -22,6 +22,10 @@ export type WindowPayload = {
   cwd?: string;
   isDirectory?: boolean;
   infoOnly?: boolean;
+  surfaceId?: string;
+  appName?: string;
+  appExec?: string;
+  appIcon?: string;
 };
 
 export type WindowState = {
@@ -375,12 +379,18 @@ function windowId(app: AppId, payload?: WindowPayload) {
     }
     return `viewer:${payload.filePath}`;
   }
+  if (app === "surface" && payload?.surfaceId) {
+    return `surface:${payload.surfaceId}`;
+  }
   return app;
 }
 
 function windowTitle(app: AppId, payload?: WindowPayload) {
   if (app === "viewer") {
     return payload?.fileName || payload?.filePath?.split("/").filter(Boolean).pop() || "Viewer";
+  }
+  if (app === "surface") {
+    return payload?.appName || "Remote Surface";
   }
   return APP_META[app].title;
 }

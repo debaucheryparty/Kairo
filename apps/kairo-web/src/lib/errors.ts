@@ -48,7 +48,7 @@ export function friendlyError(err: unknown, fallback = "Something went wrong.") 
   ) {
     return {
       title: "Host unavailable",
-      detail: "ServerUI could not reach this host. Verify the IP/hostname and SSH port.",
+      detail: "Kairo could not reach this host. Verify the IP/hostname and SSH port.",
       raw: message,
     };
   }
@@ -60,7 +60,7 @@ export function friendlyError(err: unknown, fallback = "Something went wrong.") 
     lower.includes("backend")
   ) {
     return {
-      title: "ServerUI backend unavailable",
+      title: "Kairo backend unavailable",
       detail: "The local or remote API did not respond. Retry in a moment.",
       raw: message,
     };

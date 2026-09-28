@@ -39,9 +39,9 @@ const VIRTUAL_FS: Record<string, { content?: string; isDir: boolean; size: numbe
   "/etc/os-release": { isDir: false, content: "NAME=\"Ubuntu\"\nVERSION=\"24.04 LTS (Noble Numbat)\"\nID=ubuntu\nPRETTY_NAME=\"Ubuntu 24.04 LTS\"\n", size: 92, modified: new Date().toISOString(), mime: "text/plain" },
   "/home": { isDir: true, size: 4096, modified: new Date().toISOString() },
   "/home/root": { isDir: true, size: 4096, modified: new Date().toISOString() },
-  "/home/root/config.json": { isDir: false, content: "{\n  \"server\": \"ServerUI\",\n  \"telemetryIntervalMs\": 1000,\n  \"securityMode\": \"enforced\",\n  \"version\": \"1.0.0\"\n}\n", size: 104, modified: new Date().toISOString(), mime: "application/json" },
+  "/home/root/config.json": { isDir: false, content: "{\n  \"server\": \"Kairo\",\n  \"telemetryIntervalMs\": 1000,\n  \"securityMode\": \"enforced\",\n  \"version\": \"1.0.0\"\n}\n", size: 104, modified: new Date().toISOString(), mime: "application/json" },
   "/home/root/deploy.sh": { isDir: false, content: "#!/usr/bin/env bash\necho \"Deploying Kairo Agent services...\"\ncargo build --release\nsystemctl restart kairo-agent\necho \"Deployment complete.\"\n", size: 142, modified: new Date().toISOString(), mime: "text/x-shellscript" },
-  "/home/root/notes.md": { isDir: false, content: "# Server Administration Notes\n\n- ServerUI Desktop integrated successfully.\n- Traffic lights and window manager running.\n- Telemetry polling active.\n", size: 148, modified: new Date().toISOString(), mime: "text/markdown" },
+  "/home/root/notes.md": { isDir: false, content: "# Server Administration Notes\n\n- Kairo Desktop integrated successfully.\n- Traffic lights and window manager running.\n- Telemetry polling active.\n", size: 148, modified: new Date().toISOString(), mime: "text/markdown" },
 };
 
 export async function listFiles(serverId: string, path: string): Promise<FileList> {

@@ -70,8 +70,8 @@ export function TopBar() {
       event.preventDefault();
       setMenuOpen((open) => !open);
     }
-    window.addEventListener("serverui:toggle-server-menu", onToggle);
-    return () => window.removeEventListener("serverui:toggle-server-menu", onToggle);
+    window.addEventListener("kairo:toggle-server-menu", onToggle);
+    return () => window.removeEventListener("kairo:toggle-server-menu", onToggle);
   }, []);
 
   return (

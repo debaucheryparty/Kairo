@@ -23,7 +23,7 @@ export function clearInjectedDesktopConfig() {
 }
 
 export function localAuthHeaderName() {
-  return "X-ServerUI-Local-Token";
+  return "X-Kairo-Local-Token";
 }
 
 export function localAuthQueryName() {
@@ -31,7 +31,7 @@ export function localAuthQueryName() {
 }
 
 export function localAuthWSProtocolPrefix() {
-  return "serverui-local.";
+  return "kairo-local.";
 }
 
 export function localAuthWSProtocols(token?: string | null): string[] | undefined {

@@ -8,7 +8,7 @@ export function currentRuntime(
   const injected = getInjectedDesktopConfig();
   if (injected?.mode === "desktop") return "desktop";
 
-  const raw = env.NEXT_PUBLIC_SERVERUI_RUNTIME?.trim().toLowerCase();
+  const raw = env.NEXT_PUBLIC_KAIRO_RUNTIME?.trim().toLowerCase();
   if (raw === "desktop") return "desktop";
   return "web";
 }

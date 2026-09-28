@@ -117,7 +117,7 @@ export function ServerSelection() {
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-40"
-        style={{ backgroundImage: "url('/wallpaper.jpg?v=luffy')" }}
+        style={{ backgroundImage: "url('/wallpaper.jpg')" }}
       />
       <div
         aria-hidden
@@ -133,7 +133,7 @@ export function ServerSelection() {
             wordmarkClassName="text-[12px] font-medium uppercase tracking-[0.28em] text-white/48"
           />
           <h1 className="mt-3 text-[32px] font-semibold tracking-tight text-white">
-            {empty ? "Welcome to ServerUI" : "Your Servers"}
+            {empty ? "Welcome to Kairo" : "Your Servers"}
           </h1>
           <p className="mt-2 text-[15px] leading-6 text-white/62">
             {empty
@@ -287,7 +287,7 @@ function DeleteServerModal({
           Delete “{server.name}”?
         </h2>
         <p className="mt-2 text-[13px] leading-6 text-white/62">
-          This permanently removes the server configuration and encrypted credentials from ServerUI.
+          This permanently removes the server configuration and encrypted credentials from Kairo.
           The remote machine is not deleted or modified.
         </p>
         {error ? (

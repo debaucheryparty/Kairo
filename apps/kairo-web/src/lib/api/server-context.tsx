@@ -113,10 +113,16 @@ export function ServerProvider({ serverId, children }: { serverId: string; child
   );
 }
 
-export function useServer() {
+export function useServer(): ServerContextValue {
   const context = useContext(ServerContext);
   if (!context) {
-    throw new Error("useServer must be used within ServerProvider");
+    return {
+      server: null,
+      loading: false,
+      error: null,
+      lastUpdatedAt: null,
+      refresh: async () => null,
+    };
   }
   return context;
 }

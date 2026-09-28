@@ -8,6 +8,7 @@ import { DomainsApp } from "@/src/components/apps/DomainsApp";
 import { EditorApp } from "@/src/components/apps/EditorApp";
 import { FileViewer } from "@/src/components/apps/files/viewers/FileViewer";
 import { FilesApp } from "@/src/components/apps/FilesApp";
+import { RemoteSurfaceViewer } from "@/src/components/apps/RemoteSurfaceViewer";
 import { SettingsApp } from "@/src/components/apps/SettingsApp";
 import { TerminalApp } from "@/src/components/apps/TerminalApp";
 import { Window } from "@/src/components/window/Window";
@@ -52,6 +53,8 @@ function AppBody({
       return <FileViewer payload={payload} windowId={windowId} />;
     case "applications":
       return <ApplicationsApp />;
+    case "surface":
+      return <RemoteSurfaceViewer payload={payload} windowId={windowId} />;
     case "domains":
       return <DomainsApp />;
     case "databases":

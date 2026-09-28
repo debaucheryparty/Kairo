@@ -13,14 +13,14 @@ type GateState =
   | { phase: "desktop-failed"; message: string };
 
 function statusMessage(config: DesktopRuntimeConfig | undefined) {
-  if (!config) return "Starting ServerUI backend...";
+  if (!config) return "Starting Kairo backend...";
   if (config.status === "failed") {
-    return config.error?.trim() || "ServerUI backend failed to start.";
+    return config.error?.trim() || "Kairo backend failed to start.";
   }
   if (config.status === "stopped") {
-    return config.error?.trim() || "ServerUI backend stopped unexpectedly.";
+    return config.error?.trim() || "Kairo backend stopped unexpectedly.";
   }
-  return "Starting ServerUI backend...";
+  return "Starting Kairo backend...";
 }
 
 export function RuntimeProvider({ children }: { children: ReactNode }) {
@@ -54,7 +54,7 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
         const detail =
           err instanceof Error && err.message.trim()
             ? err.message.trim()
-            : "Unable to reach the ServerUI desktop shell.";
+            : "Unable to reach the Kairo desktop shell.";
         setState({
           phase: "desktop-failed",
           message: detail,
@@ -70,7 +70,7 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
     return (
       <div className="flex h-dvh w-full flex-col items-center justify-center gap-4 bg-background text-foreground">
         <BrandMark size={56} />
-        <p className="text-sm opacity-80">Starting ServerUI backend...</p>
+        <p className="text-sm opacity-80">Starting Kairo backend...</p>
       </div>
     );
   }
@@ -79,7 +79,7 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
     return (
       <div className="flex h-dvh w-full flex-col items-center justify-center gap-3 bg-background px-6 text-center text-foreground">
         <BrandMark size={56} />
-        <p className="text-base font-medium">Unable to connect to local ServerUI backend.</p>
+        <p className="text-base font-medium">Unable to connect to local Kairo backend.</p>
         <p className="max-w-lg whitespace-pre-wrap text-sm opacity-80">{state.message}</p>
       </div>
     );

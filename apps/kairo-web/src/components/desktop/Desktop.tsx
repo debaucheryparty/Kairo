@@ -28,7 +28,27 @@ function DesktopShell() {
   const fullscreen = windows.some((item) => item.maximized && !item.minimized);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [notice, setNotice] = useState(false);
+  const [wallpaper, setWallpaper] = useState("/wallpaper.jpg");
   const desktopRuntime = isDesktopRuntime();
+
+  useEffect(() => {
+    const saved = localStorage.getItem("kairo_wallpaper");
+    if (saved) setWallpaper(saved);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "kairo_wallpaper") {
+        setWallpaper(e.newValue || "/wallpaper.jpg");
+      }
+    };
+    const onCustom = () => {
+      setWallpaper(localStorage.getItem("kairo_wallpaper") || "/wallpaper.jpg");
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("kairo:wallpaper-change", onCustom);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("kairo:wallpaper-change", onCustom);
+    };
+  }, []);
 
   useEffect(() => {
     if (!notice) return;
@@ -58,7 +78,7 @@ function DesktopShell() {
       if (!meta) return;
       if (event.key.toLowerCase() === "k") {
         event.preventDefault();
-        window.dispatchEvent(new Event("serverui:toggle-server-menu"));
+        window.dispatchEvent(new Event("kairo:toggle-server-menu"));
         return;
       }
       if (event.key.toLowerCase() === ",") {
@@ -121,7 +141,7 @@ function DesktopShell() {
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url('/wallpaper.jpg?v=luffy')" }}
+        style={{ backgroundImage: `url('${wallpaper}')` }}
       />
       <div
         aria-hidden
@@ -129,26 +149,6 @@ function DesktopShell() {
         style={{ background: "var(--desktop-scrim)" }}
       />
       <TopBar />
-      <div className="pointer-events-none absolute left-6 top-12 z-10 text-white drop-shadow-md">
-        <BrandMark size={44} />
-        <span className="mt-3 block text-[28px] font-semibold leading-none tracking-tight">
-          ServerUI
-        </span>
-        <span className="mt-2 block text-[13px] leading-5 text-white/85">
-          Your servers.
-          <br />
-          {desktopRuntime ? "On your desktop." : "In your browser."}
-        </span>
-      </div>
-      <p className="pointer-events-none absolute bottom-28 left-6 z-10 max-w-[9rem] text-[13px] leading-5 text-white/80 drop-shadow">
-        Control
-        <br />
-        Deploy
-        <br />
-        Monitor
-        <br />
-        {desktopRuntime ? "Locally." : "From anywhere."}
-      </p>
       <div
         className={`absolute inset-x-0 top-8 bottom-0 ${fullscreen ? "z-40" : "z-20"}`}
         aria-label="Server desktop"

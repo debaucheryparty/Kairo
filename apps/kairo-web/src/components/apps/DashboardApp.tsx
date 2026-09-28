@@ -40,7 +40,7 @@ export function DashboardApp() {
     <div className="h-full overflow-auto sui-app p-6">
       <div className="flex items-center gap-3">
         <BrandMark size={36} />
-        <p className="text-[11px] font-medium uppercase tracking-[0.22em] sui-muted">ServerUI</p>
+        <p className="text-[11px] font-medium uppercase tracking-[0.22em] sui-muted">Kairo</p>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <h3 className="text-2xl font-semibold tracking-tight sui-title">{name}</h3>

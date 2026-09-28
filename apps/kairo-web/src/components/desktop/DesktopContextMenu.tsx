@@ -48,7 +48,7 @@ export function DesktopContextMenu({
       />
       <div className="my-1 h-px bg-black/8" />
       <MenuItem
-        label="About ServerUI"
+        label="About Kairo"
         onSelect={() => {
           openWindow("about");
           onClose();

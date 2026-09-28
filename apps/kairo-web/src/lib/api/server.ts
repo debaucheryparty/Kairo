@@ -37,7 +37,7 @@ export type ConnectionTestResult = {
   server: ServerInfo;
 };
 
-const STORAGE_KEY = "kairo_serverui_servers";
+const STORAGE_KEY = "kairo_servers";
 
 const DEFAULT_SERVERS: ServerInfo[] = [
   {

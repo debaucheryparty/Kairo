@@ -2,6 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
+  AppWindow,
   Boxes,
   Code2,
   Database,
@@ -26,4 +27,5 @@ export const APP_ICONS: Record<AppId, LucideIcon> = {
   settings: Settings,
   about: Info,
   viewer: Eye,
+  surface: AppWindow,
 };

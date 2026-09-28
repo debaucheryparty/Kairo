@@ -11,8 +11,8 @@ import {
 
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "serverui-theme";
-const THEME_EVENT = "serverui-theme";
+const STORAGE_KEY = "kairo-theme";
+const THEME_EVENT = "kairo-theme";
 
 type ThemeContextValue = {
   theme: Theme;
