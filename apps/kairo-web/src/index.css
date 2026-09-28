@@ -1,13 +1,18 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
+
 :root,
-html[data-theme="dark"] {
+html[data-theme="dark"],
+html.dark {
   color-scheme: dark;
   --background: #1b2430;
   --foreground: #edf2f7;
-  --topbar-bg: rgba(0, 0, 0, 0.28);
-  --topbar-fg: rgba(255, 255, 255, 0.92);
+  --topbar-bg: rgba(18, 18, 22, 0.45);
+  --topbar-fg: rgba(255, 255, 255, 0.95);
   --topbar-muted: rgba(255, 255, 255, 0.62);
+  --topbar-hover: rgba(255, 255, 255, 0.12);
+  --topbar-active: rgba(255, 255, 255, 0.2);
   --toggle-bg: rgba(255, 255, 255, 0.12);
   --toggle-active: rgba(255, 255, 255, 0.92);
   --toggle-active-fg: #111111;
@@ -27,9 +32,14 @@ html[data-theme="dark"] {
   --window-header-inactive: #252528;
   --window-title: rgba(255, 255, 255, 0.82);
   --window-border: rgba(255, 255, 255, 0.1);
-  --menu-bg: rgba(44, 44, 46, 0.92);
-  --menu-fg: #f2f2f7;
-  --menu-border: rgba(255, 255, 255, 0.12);
+  --menu-bg: rgba(30, 30, 36, 0.88);
+  --menu-fg: #f5f5f7;
+  --menu-border: rgba(255, 255, 255, 0.14);
+  --menu-muted: rgba(255, 255, 255, 0.45);
+  --menu-hover-bg: #007aff;
+  --menu-hover-fg: #ffffff;
+  --dock-bg: rgba(0, 0, 0, 0.38);
+  --dock-border: rgba(255, 255, 255, 0.2);
   --desktop-scrim: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 0.22),
@@ -38,13 +48,16 @@ html[data-theme="dark"] {
   );
 }
 
-html[data-theme="light"] {
+html[data-theme="light"],
+html.light {
   color-scheme: light;
   --background: #c5d4e4;
   --foreground: #1d1d1f;
-  --topbar-bg: rgba(255, 255, 255, 0.58);
+  --topbar-bg: rgba(255, 255, 255, 0.55);
   --topbar-fg: #1d1d1f;
   --topbar-muted: rgba(29, 29, 31, 0.58);
+  --topbar-hover: rgba(0, 0, 0, 0.08);
+  --topbar-active: rgba(0, 0, 0, 0.14);
   --toggle-bg: rgba(0, 0, 0, 0.08);
   --toggle-active: #ffffff;
   --toggle-active-fg: #1d1d1f;
@@ -64,9 +77,14 @@ html[data-theme="light"] {
   --window-header-inactive: #f3f3f4;
   --window-title: #3f3f46;
   --window-border: rgba(255, 255, 255, 0.7);
-  --menu-bg: rgba(255, 255, 255, 0.9);
+  --menu-bg: rgba(255, 255, 255, 0.85);
   --menu-fg: #1d1d1f;
-  --menu-border: rgba(0, 0, 0, 0.1);
+  --menu-border: rgba(255, 255, 255, 0.75);
+  --menu-muted: rgba(0, 0, 0, 0.45);
+  --menu-hover-bg: #007aff;
+  --menu-hover-fg: #ffffff;
+  --dock-bg: rgba(255, 255, 255, 0.38);
+  --dock-border: rgba(255, 255, 255, 0.65);
   --desktop-scrim: linear-gradient(
     to bottom,
     rgba(255, 255, 255, 0.18),

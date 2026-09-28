@@ -29,6 +29,8 @@ function readTheme(): Theme {
 
 function applyTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme;
+  document.documentElement.classList.toggle("dark", theme === "dark");
+  document.documentElement.classList.toggle("light", theme === "light");
   document.documentElement.style.colorScheme = theme;
   try {
     localStorage.setItem(STORAGE_KEY, theme);

@@ -135,7 +135,7 @@ export function TopBar() {
             onClick={() => handleMenuClick("apple")}
             onMouseEnter={() => handleMenuHover("apple")}
             className={`flex items-center rounded-md px-2 py-0.5 transition-colors outline-none ${
-              activeMenu === "apple" ? "bg-white/20 dark:bg-white/15" : "hover:bg-white/10"
+              activeMenu === "apple" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
             }`}
             aria-label="System Menu"
           >
@@ -143,7 +143,10 @@ export function TopBar() {
           </button>
 
           {activeMenu === "apple" && (
-            <div className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[14px] border border-black/10 dark:border-white/15 bg-white/80 dark:bg-[#1c1c20]/90 py-1 shadow-2xl backdrop-blur-3xl animate-menu-in">
+            <div
+              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
+              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
+            >
               <MenuItem
                 label="About Kairo"
                 onSelect={() => {
@@ -151,7 +154,7 @@ export function TopBar() {
                   closeMenus();
                 }}
               />
-              <div className="my-1 h-px bg-black/[0.06] dark:bg-white/[0.08]" />
+              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
               <MenuItem
                 label="Settings..."
                 shortcut="⌘,"
@@ -168,7 +171,7 @@ export function TopBar() {
                   window.dispatchEvent(new Event("kairo:toggle-server-menu"));
                 }}
               />
-              <div className="my-1 h-px bg-black/[0.06] dark:bg-white/[0.08]" />
+              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
               <MenuItem
                 label="Leave Server"
                 shortcut="⌘Q"
@@ -187,14 +190,17 @@ export function TopBar() {
             onClick={() => handleMenuClick("kairo")}
             onMouseEnter={() => handleMenuHover("kairo")}
             className={`rounded-md px-2.5 py-0.5 font-semibold text-[13px] transition-colors outline-none ${
-              activeMenu === "kairo" ? "bg-white/20 dark:bg-white/15" : "hover:bg-white/10"
+              activeMenu === "kairo" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
             }`}
           >
             Kairo
           </button>
 
           {activeMenu === "kairo" && (
-            <div className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[14px] border border-black/10 dark:border-white/15 bg-white/80 dark:bg-[#1c1c20]/90 py-1 shadow-2xl backdrop-blur-3xl animate-menu-in">
+            <div
+              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
+              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
+            >
               <MenuItem
                 label="About Kairo"
                 onSelect={() => {
@@ -210,7 +216,7 @@ export function TopBar() {
                   closeMenus();
                 }}
               />
-              <div className="my-1 h-px bg-black/[0.06] dark:bg-white/[0.08]" />
+              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
               <MenuItem
                 label="Leave Server"
                 shortcut="⌘Q"
@@ -229,14 +235,17 @@ export function TopBar() {
             onClick={() => handleMenuClick("file")}
             onMouseEnter={() => handleMenuHover("file")}
             className={`rounded-md px-2 py-0.5 text-[13px] transition-colors outline-none ${
-              activeMenu === "file" ? "bg-white/20 dark:bg-white/15" : "hover:bg-white/10"
+              activeMenu === "file" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
             }`}
           >
             File
           </button>
 
           {activeMenu === "file" && (
-            <div className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[14px] border border-black/10 dark:border-white/15 bg-white/80 dark:bg-[#1c1c20]/90 py-1 shadow-2xl backdrop-blur-3xl animate-menu-in">
+            <div
+              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
+              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
+            >
               <MenuItem
                 label="New Terminal Window"
                 shortcut="⌘T"
@@ -260,7 +269,7 @@ export function TopBar() {
                   closeMenus();
                 }}
               />
-              <div className="my-1 h-px bg-black/[0.06] dark:bg-white/[0.08]" />
+              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
               <MenuItem
                 label="Close Window"
                 shortcut="⌘W"
@@ -280,14 +289,17 @@ export function TopBar() {
             onClick={() => handleMenuClick("view")}
             onMouseEnter={() => handleMenuHover("view")}
             className={`rounded-md px-2 py-0.5 text-[13px] transition-colors outline-none ${
-              activeMenu === "view" ? "bg-white/20 dark:bg-white/15" : "hover:bg-white/10"
+              activeMenu === "view" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
             }`}
           >
             View
           </button>
 
           {activeMenu === "view" && (
-            <div className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[14px] border border-black/10 dark:border-white/15 bg-white/80 dark:bg-[#1c1c20]/90 py-1 shadow-2xl backdrop-blur-3xl animate-menu-in">
+            <div
+              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
+              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
+            >
               <MenuItem
                 label="Tile Windows"
                 shortcut="⌥T"
@@ -342,14 +354,17 @@ export function TopBar() {
             onClick={() => handleMenuClick("window")}
             onMouseEnter={() => handleMenuHover("window")}
             className={`rounded-md px-2 py-0.5 text-[13px] transition-colors outline-none ${
-              activeMenu === "window" ? "bg-white/20 dark:bg-white/15" : "hover:bg-white/10"
+              activeMenu === "window" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
             }`}
           >
             Window
           </button>
 
           {activeMenu === "window" && (
-            <div className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[14px] border border-black/10 dark:border-white/15 bg-white/80 dark:bg-[#1c1c20]/90 py-1 shadow-2xl backdrop-blur-3xl animate-menu-in">
+            <div
+              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
+              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
+            >
               <MenuItem
                 label="Minimize"
                 shortcut="⌘M"
@@ -385,14 +400,17 @@ export function TopBar() {
             onClick={() => handleMenuClick("help")}
             onMouseEnter={() => handleMenuHover("help")}
             className={`rounded-md px-2 py-0.5 text-[13px] transition-colors outline-none ${
-              activeMenu === "help" ? "bg-white/20 dark:bg-white/15" : "hover:bg-white/10"
+              activeMenu === "help" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
             }`}
           >
             Help
           </button>
 
           {activeMenu === "help" && (
-            <div className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[14px] border border-black/10 dark:border-white/15 bg-white/80 dark:bg-[#1c1c20]/90 py-1 shadow-2xl backdrop-blur-3xl animate-menu-in">
+            <div
+              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
+              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
+            >
               <MenuItem
                 label="Kairo Help"
                 onSelect={() => {
@@ -424,7 +442,7 @@ export function TopBar() {
           <button
             type="button"
             onClick={() => setServerMenuOpen((open) => !open)}
-            className="inline-flex min-w-0 max-w-[200px] items-center gap-1 rounded-full px-2 py-0.5 outline-none hover:bg-white/15 transition-colors focus-visible:ring-2 focus-visible:ring-white/40"
+            className="inline-flex min-w-0 max-w-[200px] items-center gap-1 rounded-full px-2 py-0.5 outline-none hover:bg-[var(--topbar-hover)] transition-colors focus-visible:ring-2 focus-visible:ring-white/40"
             aria-haspopup="menu"
             aria-expanded={serverMenuOpen}
             aria-label={`Current server ${name}. Open server menu.`}
@@ -437,7 +455,8 @@ export function TopBar() {
             <div
               role="menu"
               aria-label="Server menu"
-              className="absolute right-0 top-[calc(100%+6px)] z-[100] w-[240px] overflow-hidden rounded-[16px] border border-black/10 dark:border-white/15 bg-white/85 dark:bg-[#18181c]/95 py-1 text-left shadow-2xl backdrop-blur-3xl animate-menu-in"
+              className="absolute right-0 top-[calc(100%+6px)] z-[100] w-[240px] overflow-hidden rounded-[16px] border py-1.5 text-left shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
+              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
             >
               <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] opacity-40">
                 Current server
@@ -448,7 +467,7 @@ export function TopBar() {
               </div>
               {otherServers.length > 0 && (
                 <>
-                  <div className="my-1 h-px bg-black/[0.06] dark:bg-white/[0.08]" />
+                  <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
                   <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] opacity-40">
                     Switch to
                   </p>
@@ -461,7 +480,7 @@ export function TopBar() {
                         setServerMenuOpen(false);
                         switchServer(item);
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] hover:bg-[#007aff] hover:text-white transition-colors"
+                      className="flex w-[calc(100%-12px)] items-center gap-2 mx-1.5 px-3 py-1.5 text-[12px] rounded-[8px] hover:bg-[#007aff] hover:!text-white transition-colors"
                     >
                       <ArrowLeftRight aria-hidden className="size-3.5 opacity-70" />
                       <span className="truncate">{item.name}</span>
@@ -469,7 +488,7 @@ export function TopBar() {
                   ))}
                 </>
               )}
-              <div className="my-1 h-px bg-black/[0.06] dark:bg-white/[0.08]" />
+              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
               <button
                 type="button"
                 role="menuitem"
@@ -477,7 +496,7 @@ export function TopBar() {
                   setServerMenuOpen(false);
                   backToServers();
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] hover:bg-[#007aff] hover:text-white transition-colors"
+                className="flex w-[calc(100%-12px)] items-center gap-2 mx-1.5 px-3 py-1.5 text-[12px] rounded-[8px] hover:bg-[#007aff] hover:!text-white transition-colors"
               >
                 <Server aria-hidden className="size-3.5 opacity-80" />
                 All servers
@@ -489,7 +508,7 @@ export function TopBar() {
                   setServerMenuOpen(false);
                   logOut();
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] hover:bg-[#007aff] hover:text-white transition-colors"
+                className="flex w-[calc(100%-12px)] items-center gap-2 mx-1.5 px-3 py-1.5 text-[12px] rounded-[8px] hover:bg-[#007aff] hover:!text-white transition-colors"
               >
                 <LogOut aria-hidden className="size-3.5 opacity-80" />
                 Leave server
@@ -505,9 +524,9 @@ export function TopBar() {
           RAM {metric(server?.memoryUsage, loading, ready && online)}
         </span>
 
-        <div className="flex items-center gap-2 text-white/80">
-          <Wifi className="size-3.5 opacity-80" />
-          <SlidersHorizontal className="size-3.5 opacity-80" />
+        <div className="flex items-center gap-2 opacity-80">
+          <Wifi className="size-3.5" />
+          <SlidersHorizontal className="size-3.5" />
         </div>
 
         <ThemeToggle />
@@ -537,10 +556,14 @@ function MenuItem({
       role="menuitem"
       disabled={disabled}
       onClick={onSelect}
-      className="flex w-[calc(100%-8px)] items-center justify-between mx-1 px-2.5 py-1 text-left rounded-md outline-none text-[12px] transition-colors disabled:opacity-40 disabled:pointer-events-none hover:bg-[#007aff] hover:text-white focus-visible:bg-[#007aff] focus-visible:text-white"
+      className="flex w-[calc(100%-12px)] items-center justify-between mx-1.5 px-3 py-1.5 text-left rounded-[8px] outline-none text-[13px] font-normal transition-colors disabled:opacity-35 disabled:pointer-events-none hover:bg-[#007aff] hover:!text-white focus-visible:bg-[#007aff] focus-visible:!text-white group/item"
     >
       <span>{label}</span>
-      {shortcut && <span className="text-[11px] opacity-60 ml-4 font-mono">{shortcut}</span>}
+      {shortcut && (
+        <span className="text-[11px] opacity-50 ml-4 font-mono group-hover/item:opacity-90 group-hover/item:!text-white">
+          {shortcut}
+        </span>
+      )}
     </button>
   );
 }

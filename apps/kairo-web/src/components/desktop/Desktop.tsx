@@ -9,6 +9,7 @@ import { Dock } from "@/src/components/desktop/Dock";
 import { TopBar } from "@/src/components/desktop/TopBar";
 import { BrandMark } from "@/src/components/brand/BrandMark";
 import { WindowManager } from "@/src/components/window/WindowManager";
+import { ModalAlert } from "@/src/components/desktop/ModalAlert";
 import {
   WindowManagerProvider,
   useWindowManager,
@@ -42,6 +43,7 @@ function DesktopShell() {
   const fullscreen = windows.some((item) => item.maximized && !item.minimized);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [notice, setNotice] = useState(false);
+  const [logoutAlertOpen, setLogoutAlertOpen] = useState(false);
   const [wallpaper, setWallpaper] = useState("/wallpaper.jpg");
   const desktopRuntime = isDesktopRuntime();
 
@@ -227,17 +229,48 @@ function DesktopShell() {
           y={menu.y}
           onClose={() => setMenu(null)}
           onComingSoon={showComingSoon}
-          onLogOut={logOut}
+          onLogOut={() => setLogoutAlertOpen(true)}
         />
       ) : null}
       {notice ? (
         <div
           role="status"
-          className="absolute left-1/2 top-12 z-[90] -translate-x-1/2 rounded-full bg-black/55 px-4 py-1.5 text-sm text-white shadow-lg animate-menu-in backdrop-blur-md"
+          className="fixed right-4 top-11 z-[120] flex w-80 items-start gap-3 rounded-[18px] border p-3.5 shadow-2xl backdrop-blur-3xl animate-menu-in select-none"
+          style={{
+            background: "var(--menu-bg)",
+            borderColor: "var(--menu-border)",
+            color: "var(--menu-fg)",
+          }}
         >
-          Coming soon
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#007aff]/15 text-[#007aff] text-lg font-semibold">
+            ⚡
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[12px] font-semibold tracking-tight truncate">System Notice</span>
+              <span className="text-[10px] opacity-40 shrink-0">now</span>
+            </div>
+            <p className="text-[11px] opacity-70 mt-0.5 leading-relaxed">
+              This feature is coming soon in the next Kairo release.
+            </p>
+          </div>
         </div>
       ) : null}
+
+      <ModalAlert
+        open={logoutAlertOpen}
+        title="Leave this server?"
+        message="Your background services will remain running on the remote host, and you can reconnect at any time."
+        confirmLabel="Leave"
+        confirmDestructive={true}
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          setLogoutAlertOpen(false);
+          logOut();
+        }}
+        onCancel={() => setLogoutAlertOpen(false)}
+        layout="stacked"
+      />
     </div>
   );
 }
