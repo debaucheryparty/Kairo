@@ -3,281 +3,616 @@
 import { useId, type ComponentType } from "react";
 import type { DockAppId } from "@/src/data/apps";
 
-type IconProps = { className?: string };
-
-function useGid(prefix: string) {
-  return `${prefix}${useId().replace(/:/g, "")}`;
+export interface IconProps {
+  className?: string;
 }
 
-export function DashboardGlyph({ className }: IconProps) {
-  const fill = useGid("dashboard");
+export function FinderGlyph({ className }: IconProps) {
+  const baseGrad = useId();
+  const leftGrad = useId();
+  const rightGrad = useId();
+  const rimGrad = useId();
+  const shadowFilter = useId();
+  const clipId = useId();
+
   return (
     <svg viewBox="0 0 100 100" className={className} aria-hidden>
       <defs>
-        <linearGradient id={fill} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#7ec8ff" />
-          <stop offset="100%" stopColor="#1e7dff" />
+        <linearGradient id={baseGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#62c2fd" />
+          <stop offset="100%" stopColor="#1a7cf7" />
         </linearGradient>
+        <linearGradient id={leftGrad} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#76d3ff" />
+          <stop offset="100%" stopColor="#3094fa" />
+        </linearGradient>
+        <linearGradient id={rightGrad} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#1e84fa" />
+          <stop offset="100%" stopColor="#0555c8" />
+        </linearGradient>
+        <linearGradient id={rimGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.1" />
+        </linearGradient>
+        <filter id={shadowFilter} x="-10%" y="-10%" width="120%" height="125%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.25" />
+        </filter>
+        <clipPath id={clipId}>
+          <rect x="2" y="2" width="96" height="96" rx="22" />
+        </clipPath>
       </defs>
-      <rect width="100" height="100" rx="22" fill={`url(#${fill})`} />
-      <rect x="18" y="18" width="28" height="28" rx="7" fill="#fff" />
-      <rect x="54" y="18" width="28" height="28" rx="7" fill="#fff" />
-      <rect x="18" y="54" width="28" height="28" rx="7" fill="#fff" />
-      <rect x="54" y="54" width="28" height="28" rx="7" fill="#fff" />
-    </svg>
-  );
-}
 
-export function FilesGlyph({ className }: IconProps) {
-  const tab = useGid("folder-tab");
-  const body = useGid("folder-body");
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden>
-      <defs>
-        <linearGradient id={tab} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#8fdfff" />
-          <stop offset="100%" stopColor="#4bb8f0" />
-        </linearGradient>
-        <linearGradient id={body} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#5ec8f5" />
-          <stop offset="100%" stopColor="#1f8fd4" />
-        </linearGradient>
-      </defs>
-      <rect width="100" height="100" rx="22" fill="#e8f7ff" />
-      <path fill={`url(#${tab})`} d="M18 32c0-4.4 3.6-8 8-8h18l8 8h22c4.4 0 8 3.6 8 8v6H18V32z" />
-      <rect x="14" y="38" width="72" height="46" rx="10" fill={`url(#${body})`} />
-    </svg>
-  );
-}
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="96"
+        rx="22"
+        fill={`url(#${baseGrad})`}
+        filter={`url(#${shadowFilter})`}
+      />
 
-export function TerminalGlyph({ className }: IconProps) {
-  const fill = useGid("terminal");
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden>
-      <defs>
-        <linearGradient id={fill} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#3a3a3a" />
-          <stop offset="100%" stopColor="#111" />
-        </linearGradient>
-      </defs>
-      <rect width="100" height="100" rx="22" fill={`url(#${fill})`} />
-      <path
-        d="M24 32l22 18-22 18"
+      <g clipPath={`url(#${clipId})`}>
+        <rect x="2" y="2" width="48" height="96" fill={`url(#${leftGrad})`} />
+        <rect x="50" y="2" width="48" height="96" fill={`url(#${rightGrad})`} />
+
+        <path
+          d="M 50 14 V 54 C 50 62 44 67 36 67 H 32"
+          fill="none"
+          stroke="#0f172a"
+          strokeWidth="3.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        <circle cx="34" cy="38" r="4.2" fill="#0f172a" />
+        <circle cx="66" cy="38" r="4.2" fill="#0f172a" />
+        <circle cx="35.2" cy="36.8" r="1.2" fill="#ffffff" />
+        <circle cx="67.2" cy="36.8" r="1.2" fill="#ffffff" />
+
+        <path
+          d="M 28 66 C 36 78 64 78 72 66"
+          fill="none"
+          stroke="#0f172a"
+          strokeWidth="3.8"
+          strokeLinecap="round"
+        />
+      </g>
+
+      <rect
+        x="2.5"
+        y="2.5"
+        width="95"
+        height="95"
+        rx="21.5"
         fill="none"
-        stroke="#fff"
-        strokeWidth="8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        stroke={`url(#${rimGrad})`}
+        strokeWidth="1.2"
       />
-      <path d="M52 68h24" fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-export function EditorGlyph({ className }: IconProps) {
-  const fill = useGid("editor");
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden>
-      <defs>
-        <linearGradient id={fill} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#3ec6ff" />
-          <stop offset="55%" stopColor="#0078d4" />
-          <stop offset="100%" stopColor="#005a9e" />
-        </linearGradient>
-      </defs>
-      <rect width="100" height="100" rx="22" fill={`url(#${fill})`} />
-      <path d="M22 50L42 28v13L31 50l11 9v13L22 50z" fill="#fff" />
-      <path d="M78 50L58 28v13l11 9-11 9v13L78 50z" fill="#fff" />
-    </svg>
-  );
-}
-
-
-export function DomainsGlyph({ className }: IconProps) {
-  const fill = useGid("domains");
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden>
-      <defs>
-        <linearGradient id={fill} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#7dd3fc" />
-          <stop offset="100%" stopColor="#0284c7" />
-        </linearGradient>
-      </defs>
-      <rect width="100" height="100" rx="22" fill={`url(#${fill})`} />
-      <circle cx="50" cy="50" r="28" fill="none" stroke="#fff" strokeWidth="5" />
-      <ellipse cx="50" cy="50" rx="12" ry="28" fill="none" stroke="#fff" strokeWidth="5" />
-      <path
-        d="M22 50h56M26 38h48M26 62h48"
-        fill="none"
-        stroke="#fff"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-export function DatabasesGlyph({ className }: IconProps) {
-  const fill = useGid("db");
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden>
-      <defs>
-        <linearGradient id={fill} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#93c5fd" />
-          <stop offset="100%" stopColor="#2563eb" />
-        </linearGradient>
-      </defs>
-      <rect width="100" height="100" rx="22" fill={`url(#${fill})`} />
-      <ellipse cx="50" cy="30" rx="24" ry="10" fill="#fff" />
-      <path fill="#fff" d="M26 30v28c0 6 10.7 10 24 10s24-4 24-10V30H26z" />
-      <ellipse cx="50" cy="58" rx="24" ry="10" fill="#dbeafe" />
-      <ellipse cx="50" cy="44" rx="24" ry="10" fill="none" stroke="#fff" strokeWidth="4" />
-    </svg>
-  );
-}
-
-export function SettingsGlyph({ className }: IconProps) {
-  const fill = useGid("settings");
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden>
-      <defs>
-        <linearGradient id={fill} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#e5e7eb" />
-          <stop offset="100%" stopColor="#9ca3af" />
-        </linearGradient>
-      </defs>
-      <rect width="100" height="100" rx="22" fill={`url(#${fill})`} />
-      <path
-        fill="#4b5563"
-        d="M50 22l6.2 4.2 7.2-2.2 3.4 6.6 7.4.8.8 7.4 6.6 3.4-2.2 7.2L83 50l-4.2 6.2 2.2 7.2-6.6 3.4-.8 7.4-7.4.8-3.4 6.6-7.2-2.2L50 78l-6.2 4.2-7.2 2.2-3.4-6.6-7.4-.8-.8-7.4-6.6-3.4 2.2-7.2L17 50l4.2-6.2-2.2-7.2 6.6-3.4.8-7.4 7.4-.8 3.4-6.6 7.2 2.2L50 22z"
-      />
-      <circle cx="50" cy="50" r="12" fill="#e5e7eb" />
-      <circle cx="50" cy="50" r="7" fill="#6b7280" />
-    </svg>
-  );
-}
-
-export function TrashGlyph({ className }: IconProps) {
-  const fill = useGid("trash");
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden>
-      <defs>
-        <linearGradient id={fill} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#fff" />
-          <stop offset="100%" stopColor="#d1d5db" />
-        </linearGradient>
-      </defs>
-      <rect width="100" height="100" rx="22" fill="#f3f4f6" />
-      <rect x="22" y="18" width="56" height="10" rx="5" fill="#fff" />
-      <rect x="40" y="12" width="20" height="10" rx="4" fill="#e5e7eb" />
-      <path fill={`url(#${fill})`} d="M26 32h48l-4 50H30L26 32z" />
-      <path fill="#9ca3af" opacity=".35" d="M40 40h4v34h-4zm16 0h4v34h-4z" />
     </svg>
   );
 }
 
 export function LaunchpadGlyph({ className }: IconProps) {
-  const bg = useGid("launchpad-bg");
+  const bgGrad = useId();
+  const rimGrad = useId();
+  const shadowFilter = useId();
+
   return (
     <svg viewBox="0 0 100 100" className={className} aria-hidden>
       <defs>
-        <linearGradient id={bg} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#2c2d30" />
-          <stop offset="100%" stopColor="#1a1a1c" />
+        <linearGradient id={bgGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#2e3138" />
+          <stop offset="100%" stopColor="#15171a" />
         </linearGradient>
+        <linearGradient id={rimGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.08" />
+        </linearGradient>
+        <filter id={shadowFilter} x="-10%" y="-10%" width="120%" height="125%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.3" />
+        </filter>
       </defs>
-      <rect width="100" height="100" rx="22" fill={`url(#${bg})`} />
-      <rect x="18" y="18" width="18" height="18" rx="5" fill="#ff5f57" />
-      <rect x="41" y="18" width="18" height="18" rx="5" fill="#ffbd2e" />
-      <rect x="64" y="18" width="18" height="18" rx="5" fill="#28c840" />
-      <rect x="18" y="41" width="18" height="18" rx="5" fill="#007aff" />
-      <rect x="41" y="41" width="18" height="18" rx="5" fill="#af52de" />
-      <rect x="64" y="41" width="18" height="18" rx="5" fill="#ff2d55" />
-      <rect x="18" y="64" width="18" height="18" rx="5" fill="#5856d6" />
-      <rect x="41" y="64" width="18" height="18" rx="5" fill="#30b0c7" />
-      <rect x="64" y="64" width="18" height="18" rx="5" fill="#34c759" />
+
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="96"
+        rx="22"
+        fill={`url(#${bgGrad})`}
+        filter={`url(#${shadowFilter})`}
+      />
+      <rect
+        x="2.5"
+        y="2.5"
+        width="95"
+        height="95"
+        rx="21.5"
+        fill="none"
+        stroke={`url(#${rimGrad})`}
+        strokeWidth="1.2"
+      />
+
+      <g transform="translate(18, 18)">
+        <rect x="0" y="0" width="18" height="18" rx="4.5" fill="#ff3b30" />
+        <rect x="23" y="0" width="18" height="18" rx="4.5" fill="#ff9500" />
+        <rect x="46" y="0" width="18" height="18" rx="4.5" fill="#ffcc00" />
+
+        <rect x="0" y="23" width="18" height="18" rx="4.5" fill="#34c759" />
+        <rect x="23" y="23" width="18" height="18" rx="4.5" fill="#00c7be" />
+        <rect x="46" y="23" width="18" height="18" rx="4.5" fill="#007aff" />
+
+        <rect x="0" y="46" width="18" height="18" rx="4.5" fill="#5856d6" />
+        <rect x="23" y="46" width="18" height="18" rx="4.5" fill="#af52de" />
+        <rect x="46" y="46" width="18" height="18" rx="4.5" fill="#ff2d55" />
+      </g>
     </svg>
   );
 }
 
-export function FinderGlyph({ className }: IconProps) {
-  const bg = useGid("finder-bg");
+export function TerminalGlyph({ className }: IconProps) {
+  const bgGrad = useId();
+  const rimGrad = useId();
+  const shadowFilter = useId();
+
   return (
     <svg viewBox="0 0 100 100" className={className} aria-hidden>
       <defs>
-        <linearGradient id={bg} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#76d0ff" />
-          <stop offset="100%" stopColor="#1f7fe8" />
+        <linearGradient id={bgGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#252830" />
+          <stop offset="100%" stopColor="#111317" />
         </linearGradient>
+        <linearGradient id={rimGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.08" />
+        </linearGradient>
+        <filter id={shadowFilter} x="-10%" y="-10%" width="120%" height="125%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.3" />
+        </filter>
       </defs>
-      <rect width="100" height="100" rx="22" fill={`url(#${bg})`} />
-      <path
-        d="M20 20 H50 V80 H20 Z"
-        fill="#aee5ff"
-        opacity="0.8"
+
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="96"
+        rx="22"
+        fill={`url(#${bgGrad})`}
+        filter={`url(#${shadowFilter})`}
       />
-      <circle cx="35" cy="40" r="4.5" fill="#1d1d1f" />
-      <circle cx="65" cy="40" r="4.5" fill="#1d1d1f" />
-      <path
-        d="M50 34 v24 c0 4 -4 7 -8 7 h-4"
+      <rect
+        x="2.5"
+        y="2.5"
+        width="95"
+        height="95"
+        rx="21.5"
         fill="none"
-        stroke="#1d1d1f"
-        strokeWidth="3.5"
+        stroke={`url(#${rimGrad})`}
+        strokeWidth="1.2"
+      />
+
+      <line x1="6" y1="21" x2="94" y2="21" stroke="#ffffff" strokeOpacity="0.1" strokeWidth="1" />
+      <circle cx="16" cy="14" r="2.5" fill="#ff5f56" />
+      <circle cx="23" cy="14" r="2.5" fill="#ffbd2e" />
+      <circle cx="30" cy="14" r="2.5" fill="#27c93f" />
+
+      <path
+        d="M 22 40 L 37 52 L 22 64"
+        fill="none"
+        stroke="#38bdf8"
+        strokeWidth="4.2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path
-        d="M30 63 c6 9 34 9 40 0"
+      <rect x="45" y="58" width="18" height="4" rx="1.5" fill="#34d399" />
+    </svg>
+  );
+}
+
+export function EditorGlyph({ className }: IconProps) {
+  const bgGrad = useId();
+  const rimGrad = useId();
+  const shadowFilter = useId();
+  const clipId = useId();
+
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={bgGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#e8ecf2" />
+        </linearGradient>
+        <linearGradient id={rimGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#000000" stopOpacity="0.1" />
+        </linearGradient>
+        <filter id={shadowFilter} x="-10%" y="-10%" width="120%" height="125%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.22" />
+        </filter>
+        <clipPath id={clipId}>
+          <rect x="2" y="2" width="96" height="96" rx="22" />
+        </clipPath>
+      </defs>
+
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="96"
+        rx="22"
+        fill={`url(#${bgGrad})`}
+        filter={`url(#${shadowFilter})`}
+      />
+
+      <g clipPath={`url(#${clipId})`}>
+        <rect x="2" y="2" width="96" height="15" fill="#f59e0b" />
+        <rect x="2" y="15" width="96" height="2" fill="#d97706" />
+
+        <line x1="18" y1="30" x2="82" y2="30" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="18" y1="42" x2="82" y2="42" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="18" y1="54" x2="68" y2="54" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="18" y1="66" x2="76" y2="66" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="18" y1="78" x2="52" y2="78" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" />
+
+        <g transform="rotate(-36 58 60)">
+          <path
+            d="M 54 26 L 62 26 L 62 70 L 58 84 L 54 70 Z"
+            fill="#1e293b"
+            stroke="#0f172a"
+            strokeWidth="1"
+          />
+          <path d="M 54 70 L 58 84 L 62 70 Z" fill="#fbbf24" />
+          <circle cx="58" cy="74" r="1.2" fill="#0f172a" />
+          <rect x="53.5" y="32" width="9" height="3" fill="#fbbf24" />
+        </g>
+      </g>
+
+      <rect
+        x="2.5"
+        y="2.5"
+        width="95"
+        height="95"
+        rx="21.5"
         fill="none"
-        stroke="#1d1d1f"
-        strokeWidth="4"
-        strokeLinecap="round"
+        stroke={`url(#${rimGrad})`}
+        strokeWidth="1.2"
       />
     </svg>
   );
 }
 
 export function ActivityMonitorGlyph({ className }: IconProps) {
-  const bg = useGid("monitor-bg");
+  const bgGrad = useId();
+  const rimGrad = useId();
+  const shadowFilter = useId();
+  const glowFilter = useId();
+
   return (
     <svg viewBox="0 0 100 100" className={className} aria-hidden>
       <defs>
-        <linearGradient id={bg} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#252528" />
-          <stop offset="100%" stopColor="#121214" />
+        <linearGradient id={bgGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#1e222b" />
+          <stop offset="100%" stopColor="#0d0f13" />
         </linearGradient>
+        <linearGradient id={rimGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.08" />
+        </linearGradient>
+        <filter id={shadowFilter} x="-10%" y="-10%" width="120%" height="125%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.3" />
+        </filter>
+        <filter id={glowFilter} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="2.5" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
-      <rect width="100" height="100" rx="22" fill={`url(#${bg})`} />
+
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="96"
+        rx="22"
+        fill={`url(#${bgGrad})`}
+        filter={`url(#${shadowFilter})`}
+      />
+      <rect
+        x="2.5"
+        y="2.5"
+        width="95"
+        height="95"
+        rx="21.5"
+        fill="none"
+        stroke={`url(#${rimGrad})`}
+        strokeWidth="1.2"
+      />
+
+      <circle cx="50" cy="50" r="32" fill="none" stroke="#334155" strokeWidth="1" strokeDasharray="2 3" opacity="0.4" />
+      <circle cx="50" cy="50" r="18" fill="none" stroke="#334155" strokeWidth="1" strokeDasharray="2 3" opacity="0.3" />
+      <line x1="50" y1="18" x2="50" y2="82" stroke="#334155" strokeWidth="1" opacity="0.3" />
+      <line x1="18" y1="50" x2="82" y2="50" stroke="#334155" strokeWidth="1" opacity="0.3" />
+
       <path
-        d="M14 50 h18 l6 -20 l12 40 l10 -30 l8 16 l6 -6 h12"
+        d="M 12 50 H 28 L 34 32 L 44 68 L 54 38 L 62 58 L 68 50 H 88"
         fill="none"
         stroke="#30d158"
-        strokeWidth="5"
+        strokeWidth="3.6"
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
-      <path
-        d="M14 50 h18 l6 -20 l12 40 l10 -30 l8 16 l6 -6 h12"
-        fill="none"
-        stroke="#64d2ff"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        filter={`url(#${glowFilter})`}
       />
     </svg>
   );
 }
 
-export const DOCK_GLYPHS: Record<DockAppId | "trash" | "launchpad" | "finder" | "monitor", ComponentType<IconProps>> = {
+export function DatabasesGlyph({ className }: IconProps) {
+  const bgGrad = useId();
+  const rimGrad = useId();
+  const shadowFilter = useId();
+
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={bgGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3b82f6" />
+          <stop offset="100%" stopColor="#1d4ed8" />
+        </linearGradient>
+        <linearGradient id={rimGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.1" />
+        </linearGradient>
+        <filter id={shadowFilter} x="-10%" y="-10%" width="120%" height="125%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.25" />
+        </filter>
+      </defs>
+
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="96"
+        rx="22"
+        fill={`url(#${bgGrad})`}
+        filter={`url(#${shadowFilter})`}
+      />
+      <rect
+        x="2.5"
+        y="2.5"
+        width="95"
+        height="95"
+        rx="21.5"
+        fill="none"
+        stroke={`url(#${rimGrad})`}
+        strokeWidth="1.2"
+      />
+
+      <g transform="translate(23, 20)">
+        <path d="M 0 10 C 0 4.5 12 0 27 0 C 42 0 54 4.5 54 10 V 22 C 54 27.5 42 32 27 32 C 12 32 0 27.5 0 22 Z" fill="#ffffff" fillOpacity="0.2" />
+        <ellipse cx="27" cy="10" rx="27" ry="10" fill="#ffffff" />
+        <ellipse cx="27" cy="10" rx="23" ry="8" fill="#dbeafe" />
+
+        <path d="M 0 24 C 0 29.5 12 34 27 34 C 42 34 54 29.5 54 24 V 36 C 54 41.5 42 46 27 46 C 12 46 0 41.5 0 36 Z" fill="#ffffff" />
+        <path d="M 0 24 C 0 29.5 12 34 27 34 C 42 34 54 29.5 54 24" fill="none" stroke="#bfdbfe" strokeWidth="2" />
+
+        <path d="M 0 38 C 0 43.5 12 48 27 48 C 42 48 54 43.5 54 38 V 50 C 54 55.5 42 60 27 60 C 12 60 0 55.5 0 50 Z" fill="#ffffff" />
+        <path d="M 0 38 C 0 43.5 12 48 27 48 C 42 48 54 43.5 54 38" fill="none" stroke="#bfdbfe" strokeWidth="2" />
+
+        <circle cx="10" cy="22" r="2.5" fill="#3b82f6" />
+        <circle cx="10" cy="36" r="2.5" fill="#3b82f6" />
+        <circle cx="10" cy="50" r="2.5" fill="#3b82f6" />
+      </g>
+    </svg>
+  );
+}
+
+export function DomainsGlyph({ className }: IconProps) {
+  const bgGrad = useId();
+  const rimGrad = useId();
+  const shadowFilter = useId();
+
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={bgGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#0ea5e9" />
+          <stop offset="100%" stopColor="#0284c7" />
+        </linearGradient>
+        <linearGradient id={rimGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.1" />
+        </linearGradient>
+        <filter id={shadowFilter} x="-10%" y="-10%" width="120%" height="125%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.25" />
+        </filter>
+      </defs>
+
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="96"
+        rx="22"
+        fill={`url(#${bgGrad})`}
+        filter={`url(#${shadowFilter})`}
+      />
+      <rect
+        x="2.5"
+        y="2.5"
+        width="95"
+        height="95"
+        rx="21.5"
+        fill="none"
+        stroke={`url(#${rimGrad})`}
+        strokeWidth="1.2"
+      />
+
+      <circle cx="50" cy="50" r="32" fill="#ffffff" fillOpacity="0.15" stroke="#ffffff" strokeWidth="2.5" strokeOpacity="0.8" />
+      <ellipse cx="50" cy="50" rx="15" ry="32" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeOpacity="0.5" />
+      <line x1="18" y1="50" x2="82" y2="50" stroke="#ffffff" strokeWidth="1.5" strokeOpacity="0.5" />
+      <line x1="24" y1="34" x2="76" y2="34" stroke="#ffffff" strokeWidth="1.2" strokeOpacity="0.4" />
+      <line x1="24" y1="66" x2="76" y2="66" stroke="#ffffff" strokeWidth="1.2" strokeOpacity="0.4" />
+
+      <g transform="rotate(45 50 50)">
+        <polygon points="50,18 45,50 50,46" fill="#ef4444" />
+        <polygon points="50,18 55,50 50,46" fill="#dc2626" />
+        <polygon points="50,82 45,50 50,54" fill="#ffffff" />
+        <polygon points="50,82 55,50 50,54" fill="#e2e8f0" />
+        <circle cx="50" cy="50" r="4.5" fill="#facc15" stroke="#ca8a04" strokeWidth="1" />
+      </g>
+    </svg>
+  );
+}
+
+export function SettingsGlyph({ className }: IconProps) {
+  const bgGrad = useId();
+  const rimGrad = useId();
+  const gearGrad = useId();
+  const shadowFilter = useId();
+
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={bgGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f8fafc" />
+          <stop offset="100%" stopColor="#cbd5e1" />
+        </linearGradient>
+        <linearGradient id={rimGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7" />
+          <stop offset="100%" stopColor="#000000" stopOpacity="0.1" />
+        </linearGradient>
+        <linearGradient id={gearGrad} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#64748b" />
+          <stop offset="100%" stopColor="#334155" />
+        </linearGradient>
+        <filter id={shadowFilter} x="-10%" y="-10%" width="120%" height="125%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.2" />
+        </filter>
+      </defs>
+
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="96"
+        rx="22"
+        fill={`url(#${bgGrad})`}
+        filter={`url(#${shadowFilter})`}
+      />
+      <rect
+        x="2.5"
+        y="2.5"
+        width="95"
+        height="95"
+        rx="21.5"
+        fill="none"
+        stroke={`url(#${rimGrad})`}
+        strokeWidth="1.2"
+      />
+
+      <g transform="translate(50, 50)">
+        <circle cx="0" cy="0" r="28" fill={`url(#${gearGrad})`} />
+        {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((angle) => (
+          <rect
+            key={angle}
+            x="-4.5"
+            y="-34"
+            width="9"
+            height="9"
+            rx="2"
+            fill={`url(#${gearGrad})`}
+            transform={`rotate(${angle})`}
+          />
+        ))}
+        <circle cx="0" cy="0" r="14" fill="#f8fafc" stroke="#94a3b8" strokeWidth="1.5" />
+        <circle cx="0" cy="0" r="8" fill="#475569" />
+      </g>
+    </svg>
+  );
+}
+
+export function TrashGlyph({ className }: IconProps) {
+  const bgGrad = useId();
+  const rimGrad = useId();
+  const shadowFilter = useId();
+
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={bgGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f8fafc" />
+          <stop offset="100%" stopColor="#e2e8f0" />
+        </linearGradient>
+        <linearGradient id={rimGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7" />
+          <stop offset="100%" stopColor="#000000" stopOpacity="0.1" />
+        </linearGradient>
+        <filter id={shadowFilter} x="-10%" y="-10%" width="120%" height="125%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.18" />
+        </filter>
+      </defs>
+
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="96"
+        rx="22"
+        fill={`url(#${bgGrad})`}
+        filter={`url(#${shadowFilter})`}
+      />
+      <rect
+        x="2.5"
+        y="2.5"
+        width="95"
+        height="95"
+        rx="21.5"
+        fill="none"
+        stroke={`url(#${rimGrad})`}
+        strokeWidth="1.2"
+      />
+
+      <g transform="translate(24, 20)">
+        <rect x="2" y="4" width="48" height="6" rx="3" fill="#94a3b8" />
+        <rect x="18" y="0" width="16" height="5" rx="2.5" fill="#64748b" />
+        <path
+          d="M 6 10 L 10 52 C 10.5 55 13 57 16 57 H 36 C 39 57 41.5 55 42 52 L 46 10 Z"
+          fill="#cbd5e1"
+          stroke="#94a3b8"
+          strokeWidth="1.5"
+        />
+        <line x1="18" y1="18" x2="19" y2="48" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="26" y1="18" x2="26" y2="48" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="34" y1="18" x2="33" y2="48" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" />
+      </g>
+    </svg>
+  );
+}
+
+export function DashboardGlyph(props: IconProps) {
+  return <ActivityMonitorGlyph {...props} />;
+}
+
+export function FilesGlyph(props: IconProps) {
+  return <FinderGlyph {...props} />;
+}
+
+export const DOCK_GLYPHS: Record<
+  DockAppId | "trash" | "finder" | "monitor" | "files" | "launchpad",
+  ComponentType<IconProps>
+> = {
   dashboard: ActivityMonitorGlyph,
   monitor: ActivityMonitorGlyph,
   files: FinderGlyph,
   finder: FinderGlyph,
   terminal: TerminalGlyph,
   editor: EditorGlyph,
-  domains: DomainsGlyph,
   databases: DatabasesGlyph,
+  domains: DomainsGlyph,
   settings: SettingsGlyph,
-  trash: TrashGlyph,
   launchpad: LaunchpadGlyph,
+  trash: TrashGlyph,
 };

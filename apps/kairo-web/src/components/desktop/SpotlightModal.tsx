@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { Search, MoreHorizontal, X } from "lucide-react";
 import { listVpsApplications, type VpsApp, APP_CATEGORIES, type AppCategory } from "@/src/lib/api/applications";
-import { DOCK_GLYPHS } from "@/src/components/desktop/dock-icons";
+import { MacAppIcon } from "@/src/components/brand/MacAppIcon";
 import { useWindowManager } from "@/src/components/window/window-context";
 import { useSession } from "@/src/lib/session";
 import type { AppId } from "@/src/data/apps";
@@ -204,8 +204,8 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
                       onClick={() => launchApp(app)}
                       className="group flex flex-col items-center rounded-2xl p-2.5 hover:bg-white/10 transition-all outline-none"
                     >
-                      <div className="size-13 rounded-[15px] p-1.5 shadow-sm transition-transform group-hover:scale-105 group-active:scale-95 flex items-center justify-center">
-                        <AppIcon icon={app.icon} className="size-full" />
+                      <div className="size-13 p-1 transition-transform group-hover:scale-105 group-active:scale-95 flex items-center justify-center">
+                        <MacAppIcon icon={app.icon} name={app.name} className="size-full" />
                       </div>
                       <span className="mt-2 text-center text-[12px] font-normal text-white/90 truncate w-full group-hover:text-white">
                         {app.name}
@@ -252,8 +252,8 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
                           : "border-transparent hover:bg-white/8 hover:border-white/10"
                       }`}
                     >
-                      <div className="size-11 shrink-0 rounded-[12px] p-1 shadow-sm transition-transform group-hover:scale-105 group-active:scale-95 flex items-center justify-center">
-                        <AppIcon icon={app.icon} className="size-full" />
+                      <div className="size-11 shrink-0 p-0.5 transition-transform group-hover:scale-105 group-active:scale-95 flex items-center justify-center">
+                        <MacAppIcon icon={app.icon} name={app.name} className="size-full" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[13px] font-medium text-white truncate group-hover:text-white">
@@ -299,38 +299,4 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
       </div>
     </div>
   );
-}
-
-function AppIcon({ icon, className }: { icon: string; className?: string }) {
-  if (icon === "terminal") {
-    const Glyph = DOCK_GLYPHS.terminal;
-    return <Glyph className={className} />;
-  }
-  if (icon === "files") {
-    const Glyph = DOCK_GLYPHS.files;
-    return <Glyph className={className} />;
-  }
-  if (icon === "dashboard" || icon === "monitor") {
-    const Glyph = DOCK_GLYPHS.dashboard;
-    return <Glyph className={className} />;
-  }
-  if (icon === "editor") {
-    const Glyph = DOCK_GLYPHS.editor;
-    return <Glyph className={className} />;
-  }
-  if (icon === "databases") {
-    const Glyph = DOCK_GLYPHS.databases;
-    return <Glyph className={className} />;
-  }
-  if (icon === "domains") {
-    const Glyph = DOCK_GLYPHS.domains;
-    return <Glyph className={className} />;
-  }
-  if (icon === "settings") {
-    const Glyph = DOCK_GLYPHS.settings;
-    return <Glyph className={className} />;
-  }
-
-  const Glyph = DOCK_GLYPHS.terminal;
-  return <Glyph className={className} />;
 }

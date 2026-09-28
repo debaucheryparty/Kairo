@@ -10,7 +10,7 @@ type DockProps = {
 };
 
 const iconClass =
-  "size-11 sm:size-12 overflow-hidden rounded-[13px] shadow-sm transition-all duration-200 ease-out group-hover:-translate-y-2.5 group-hover:scale-115 active:scale-95 group-focus-visible:ring-2 group-focus-visible:ring-white";
+  "size-12 sm:size-[52px] transition-all duration-200 ease-out group-hover:-translate-y-2.5 group-hover:scale-115 active:scale-95 group-focus-visible:ring-2 group-focus-visible:ring-white";
 
 export function Dock({ onComingSoon, onOpenSpotlight }: DockProps) {
   const { windows, focusedId, openWindow, restoreWindow, focusWindow } = useWindowManager();
