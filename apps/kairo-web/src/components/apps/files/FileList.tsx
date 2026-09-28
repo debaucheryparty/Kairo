@@ -10,9 +10,9 @@ import {
   FileImage,
   FileText,
   FileVideo,
-  Folder,
 } from "lucide-react";
 import { useState, type MouseEvent } from "react";
+import { MacFolderIcon } from "@/src/components/brand/MacFolderIcon";
 import { getFileType, getFileKindLabel } from "@/src/lib/files/file-type";
 import { formatModified, formatSize } from "@/src/lib/files/format";
 import type { FileEntry } from "@/src/lib/api/files";
@@ -130,7 +130,7 @@ export function FileList({
               onDoubleClick={onParent}
               onClick={onParent}
             >
-              <Folder aria-hidden className="size-4 text-[#007aff] fill-[#007aff]/20" />
+              <MacFolderIcon name=".." className="size-4.5 shrink-0" />
               <span>..</span>
             </div>
           )}
@@ -213,14 +213,7 @@ export function FileList({
 
 function EntryIcon({ entry, isSelected }: { entry: FileEntry; isSelected: boolean }) {
   if (entry.type === "dir") {
-    return (
-      <Folder
-        aria-hidden
-        className={`size-4 shrink-0 ${
-          isSelected ? "text-white fill-white/20" : "text-[#007aff] fill-[#007aff]/25"
-        }`}
-      />
-    );
+    return <MacFolderIcon name={entry.name} className="size-4.5 shrink-0" />;
   }
 
   const kind = getFileType({ name: entry.name, mime: entry.mime });

@@ -534,7 +534,7 @@ export function SettingsGlyph({ className }: IconProps) {
   );
 }
 
-export function TrashGlyph({ className }: IconProps) {
+export function TrashGlyph({ className, hasItems = false }: IconProps & { hasItems?: boolean }) {
   const bgGrad = useId();
   const rimGrad = useId();
   const shadowFilter = useId();
@@ -576,17 +576,25 @@ export function TrashGlyph({ className }: IconProps) {
       />
 
       <g transform="translate(24, 20)">
-        <rect x="2" y="4" width="48" height="6" rx="3" fill="#94a3b8" />
-        <rect x="18" y="0" width="16" height="5" rx="2.5" fill="#64748b" />
+        {hasItems && (
+          <g>
+            <polygon points="12,14 18,3 28,7 24,15" fill="#ffffff" stroke="#94a3b8" strokeWidth="1" />
+            <polygon points="26,14 34,4 42,9 38,15" fill="#f1f5f9" stroke="#94a3b8" strokeWidth="1" />
+            <polygon points="18,16 26,8 34,16" fill="#e2e8f0" />
+          </g>
+        )}
+        <rect x="2" y="10" width="48" height="6" rx="3" fill="#94a3b8" />
+        <rect x="18" y="6" width="16" height="5" rx="2.5" fill="#64748b" />
         <path
-          d="M 6 10 L 10 52 C 10.5 55 13 57 16 57 H 36 C 39 57 41.5 55 42 52 L 46 10 Z"
+          d="M 6 16 L 10 52 C 10.5 55 13 57 16 57 H 36 C 39 57 41.5 55 42 52 L 46 16 Z"
           fill="#cbd5e1"
+          fillOpacity={hasItems ? "0.85" : "0.5"}
           stroke="#94a3b8"
           strokeWidth="1.5"
         />
-        <line x1="18" y1="18" x2="19" y2="48" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" />
-        <line x1="26" y1="18" x2="26" y2="48" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" />
-        <line x1="34" y1="18" x2="33" y2="48" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="18" y1="22" x2="19" y2="48" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="26" y1="22" x2="26" y2="48" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="34" y1="22" x2="33" y2="48" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" />
       </g>
     </svg>
   );

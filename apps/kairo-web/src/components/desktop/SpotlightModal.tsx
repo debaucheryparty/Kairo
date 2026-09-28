@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import { Search, MoreHorizontal, X } from "lucide-react";
+import { Search, MoreHorizontal, X, Pin } from "lucide-react";
 import { listVpsApplications, type VpsApp, APP_CATEGORIES, type AppCategory } from "@/src/lib/api/applications";
 import { MacAppIcon } from "@/src/components/brand/MacAppIcon";
 import { useWindowManager } from "@/src/components/window/window-context";
 import { useSession } from "@/src/lib/session";
+import { useDockStore } from "@/src/lib/dock/dock-store";
 import type { AppId } from "@/src/data/apps";
 
 interface SpotlightModalProps {
@@ -16,6 +17,7 @@ interface SpotlightModalProps {
 export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
   const { openWindow } = useWindowManager();
   const { selectedServer } = useSession();
+  const { isPinned, pinApp, unpinApp } = useDockStore();
   const [apps, setApps] = useState<VpsApp[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<AppCategory>("All");
@@ -241,6 +243,7 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {filteredApps.map((app, index) => {
                   const selected = index === selectedIndex;
+                  const pinned = isPinned(app.id);
                   return (
                     <button
                       key={app.id}
@@ -256,8 +259,35 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
                         <MacAppIcon icon={app.icon} name={app.name} className="size-full" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-[13px] font-medium text-white truncate group-hover:text-white">
-                          {app.name}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[13px] font-medium text-white truncate group-hover:text-white">
+                            {app.name}
+                          </span>
+                          <button
+                            type="button"
+                            title={pinned ? "Remove from Dock" : "Add to Dock"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (pinned) {
+                                unpinApp(app.id);
+                              } else {
+                                pinApp({
+                                  id: app.id,
+                                  title: app.name,
+                                  icon: app.icon,
+                                  exec: app.exec,
+                                  builtinAppId: app.builtinAppId,
+                                });
+                              }
+                            }}
+                            className={`rounded-md p-1 transition-all ${
+                              pinned
+                                ? "text-sky-400 bg-sky-500/20 opacity-100"
+                                : "text-white/40 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100"
+                            }`}
+                          >
+                            <Pin className="size-3" />
+                          </button>
                         </div>
                         <p className="text-[11px] text-white/50 truncate mt-0.5 leading-snug">
                           {app.description}

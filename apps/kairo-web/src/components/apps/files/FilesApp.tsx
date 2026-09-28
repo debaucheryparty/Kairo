@@ -19,7 +19,6 @@ import { ApiError } from "@/src/lib/api/client";
 import {
   createDirectory,
   createFile,
-  deleteFile,
   downloadUrl,
   joinPath,
   listFiles,
@@ -32,6 +31,8 @@ import { useWindowManager } from "@/src/components/window/window-context";
 import { useServer } from "@/src/lib/api/server-context";
 import { useSelectedServer } from "@/src/lib/session";
 import { formatSize, totalSize } from "@/src/lib/files/format";
+import { moveToTrash, useTrash } from "@/src/lib/files/trash";
+import { MacFolderIcon } from "@/src/components/brand/MacFolderIcon";
 import { FileContextMenu } from "@/src/components/apps/files/FileContextMenu";
 import { FileList } from "@/src/components/apps/files/FileList";
 import { ModalAlert } from "@/src/components/desktop/ModalAlert";
@@ -60,7 +61,6 @@ export function FilesApp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<FileEntry | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sectionOpen, setSectionOpen] = useState(true);
@@ -68,6 +68,7 @@ export function FilesApp() {
 
   const uploadRef = useRef<HTMLInputElement>(null);
   const serverId = selectedServer?.id || "";
+  const { count: trashCount } = useTrash(serverId);
   const homePath =
     selectedServer?.username || server?.username
       ? `/home/${selectedServer?.username || server?.username}`
@@ -201,15 +202,15 @@ export function FilesApp() {
     }
   }
 
-  async function onDelete() {
-    if (!pendingDelete) return;
+  async function handleMoveToTrash(entry: FileEntry | null) {
+    const target = entry || selectedEntry;
+    if (!target) return;
     try {
-      await deleteFile(serverId, pendingDelete.path);
+      await moveToTrash(serverId, target);
       setSelected(null);
-      setPendingDelete(null);
       await load(path);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "filesystem operation failed");
+      setError(err instanceof ApiError ? err.message : "failed to move item to trash");
     }
   }
 
@@ -350,7 +351,7 @@ export function FilesApp() {
                   }`}
                   onClick={() => goTo("/")}
                 >
-                  <Folder aria-hidden className="size-4 shrink-0 text-[#007aff] fill-[#007aff]/30" />
+                  <MacFolderIcon name="root" className="size-4 shrink-0" />
                   <span className="truncate">Root Volume</span>
                 </button>
                 <button
@@ -362,8 +363,23 @@ export function FilesApp() {
                   }`}
                   onClick={() => goTo(homePath)}
                 >
-                  <Folder aria-hidden className="size-4 shrink-0 text-[#007aff] fill-[#007aff]/30" />
+                  <MacFolderIcon name="home" className="size-4 shrink-0" />
                   <span className="truncate">Home Volume</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-[8px] px-2.5 py-1.5 text-left text-[13px] outline-none text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors"
+                  onClick={() => openWindow("trash")}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Trash2 aria-hidden className="size-4 shrink-0 text-neutral-500" />
+                    <span className="truncate">Trash</span>
+                  </div>
+                  {trashCount > 0 && (
+                    <span className="rounded-full bg-black/10 dark:bg-white/10 px-1.5 py-0.2 text-[10px] font-medium text-neutral-500">
+                      {trashCount}
+                    </span>
+                  )}
                 </button>
               </div>
             )}
@@ -433,9 +449,9 @@ export function FilesApp() {
             <button
               type="button"
               disabled={!selectedEntry}
-              onClick={() => selectedEntry && setPendingDelete(selectedEntry)}
+              onClick={() => handleMoveToTrash(selectedEntry)}
               className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
-              title="Delete Item"
+              title="Move to Trash"
             >
               <Trash2 className="size-4" />
             </button>
@@ -607,25 +623,10 @@ export function FilesApp() {
           onCopyPath={() => copyPath(menu.entry?.path || path)}
           onInfo={() => openInfo(menu.entry)}
           onTerminalHere={() => openTerminalHere(menu.entry)}
+          onMoveToTrash={() => handleMoveToTrash(menu.entry || selectedEntry)}
           onClose={() => setMenu(null)}
         />
       )}
-
-      <ModalAlert
-        open={Boolean(pendingDelete)}
-        title="Delete Item?"
-        message={
-          pendingDelete
-            ? `Are you sure you want to delete “${pendingDelete.name}”? This action cannot be undone on the remote host.`
-            : ""
-        }
-        confirmLabel="Delete"
-        confirmDestructive={true}
-        cancelLabel="Cancel"
-        onConfirm={() => void onDelete()}
-        onCancel={() => setPendingDelete(null)}
-        layout="stacked"
-      />
     </div>
   );
 }

@@ -9,7 +9,7 @@ export const APP_IDS = [
 ] as const;
 
 export type DockAppId = (typeof APP_IDS)[number];
-export type AppId = DockAppId | "about" | "viewer" | "surface";
+export type AppId = DockAppId | "about" | "viewer" | "surface" | "trash";
 
 export type WindowChrome = "light" | "dark";
 
@@ -90,6 +90,13 @@ export const APP_META: Record<
     title: "Viewer",
     width: 880,
     height: 620,
+    available: true,
+    chrome: "light",
+  },
+  trash: {
+    title: "Trash",
+    width: 800,
+    height: 520,
     available: true,
     chrome: "light",
   },

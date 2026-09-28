@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Settings,
   Terminal,
+  Trash2,
 } from "lucide-react";
 import type { AppId } from "@/src/data/apps";
 
@@ -26,4 +27,5 @@ export const APP_ICONS: Record<AppId, LucideIcon> = {
   about: Info,
   viewer: Eye,
   surface: AppWindow,
+  trash: Trash2,
 };

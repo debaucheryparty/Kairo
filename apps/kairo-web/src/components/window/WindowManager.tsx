@@ -10,6 +10,7 @@ import { FilesApp } from "@/src/components/apps/FilesApp";
 import { RemoteSurfaceViewer } from "@/src/components/apps/RemoteSurfaceViewer";
 import { SettingsApp } from "@/src/components/apps/SettingsApp";
 import { TerminalApp } from "@/src/components/apps/TerminalApp";
+import { TrashApp } from "@/src/components/apps/TrashApp";
 import { Window } from "@/src/components/window/Window";
 import { useWindowManager, type WindowPayload } from "@/src/components/window/window-context";
 import type { AppId } from "@/src/data/apps";
@@ -71,5 +72,7 @@ function AppBody({
       return <SettingsApp />;
     case "about":
       return <AboutApp />;
+    case "trash":
+      return <TrashApp />;
   }
 }

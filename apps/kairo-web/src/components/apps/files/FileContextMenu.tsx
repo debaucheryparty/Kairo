@@ -11,6 +11,7 @@ type FileContextMenuProps = {
   onCopyPath: () => void;
   onInfo: () => void;
   onTerminalHere: () => void;
+  onMoveToTrash?: () => void;
   onClose: () => void;
 };
 
@@ -23,6 +24,7 @@ export function FileContextMenu({
   onCopyPath,
   onInfo,
   onTerminalHere,
+  onMoveToTrash,
   onClose,
 }: FileContextMenuProps) {
   const isDir = !entry || entry.type === "dir";
@@ -31,7 +33,7 @@ export function FileContextMenu({
     <div
       role="menu"
       aria-label="File actions"
-      className="fixed z-[120] min-w-48 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
+      className="fixed z-[120] min-w-52 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
       style={{
         left: x,
         top: y,
@@ -79,19 +81,41 @@ export function FileContextMenu({
           onClose();
         }}
       />
+      {entry && onMoveToTrash && (
+        <>
+          <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
+          <MenuItem
+            label="Move to Trash"
+            shortcut="⌘⌫"
+            onSelect={() => {
+              onMoveToTrash();
+              onClose();
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }
 
-function MenuItem({ label, onSelect }: { label: string; onSelect: () => void }) {
+function MenuItem({
+  label,
+  shortcut,
+  onSelect,
+}: {
+  label: string;
+  shortcut?: string;
+  onSelect: () => void;
+}) {
   return (
     <button
       type="button"
       role="menuitem"
-      className="flex w-[calc(100%-12px)] items-center mx-1.5 px-3 py-1.5 text-left rounded-[8px] outline-none text-[13px] font-normal transition-colors hover:bg-[#007aff] hover:!text-white focus-visible:bg-[#007aff] focus-visible:!text-white"
+      className="flex w-[calc(100%-12px)] items-center justify-between mx-1.5 px-3 py-1.5 text-left rounded-[8px] outline-none text-[13px] font-normal transition-colors hover:bg-[#007aff] hover:!text-white focus-visible:bg-[#007aff] focus-visible:!text-white group"
       onClick={onSelect}
     >
-      {label}
+      <span>{label}</span>
+      {shortcut && <span className="text-[11px] opacity-50 group-hover:opacity-100">{shortcut}</span>}
     </button>
   );
 }
