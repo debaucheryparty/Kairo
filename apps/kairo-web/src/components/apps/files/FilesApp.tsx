@@ -28,7 +28,7 @@ import {
 } from "@/src/lib/api/files";
 import { useWindowManager } from "@/src/components/window/window-context";
 import { useServer } from "@/src/lib/api/server-context";
-import { useSelectedServer } from "@/src/lib/session";
+import { useRuntimeClient, useSelectedServer } from "@/src/lib/session";
 import { formatSize, totalSize } from "@/src/lib/files/format";
 import { moveToTrash, useTrash } from "@/src/lib/files/trash";
 import { MacFolderIcon } from "@/src/components/brand/MacFolderIcon";
@@ -51,6 +51,7 @@ export function FilesApp() {
   const { openWindow } = useWindowManager();
   const { server } = useServer();
   const selectedServer = useSelectedServer();
+  const runtimeClient = useRuntimeClient();
   const homePath =
     selectedServer?.username || server?.username
       ? `/home/${selectedServer?.username || server?.username}`
@@ -141,6 +142,23 @@ export function FilesApp() {
       cancelled = true;
     };
   }, [serverId]);
+
+  useEffect(() => {
+    if (!runtimeClient?.getSession()) return;
+    let unsubscribe: (() => void) | undefined;
+    void runtimeClient
+      .watchDirectory(path, false)
+      .then(() => {
+        unsubscribe = runtimeClient.onFileEvent(() => {
+          void load(path);
+        });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [runtimeClient, path]);
 
   function goTo(nextPath: string) {
     if (nextPath === path) return;
