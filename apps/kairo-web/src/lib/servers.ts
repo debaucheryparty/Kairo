@@ -12,6 +12,8 @@ export type Server = {
   username?: string;
   authType?: "password" | "private_key" | "token";
   authToken?: string;
+  tunnelMode?: boolean;
+  tunnelUrl?: string;
   error?: string;
 };
 
@@ -25,4 +27,6 @@ export type NewServerInput = {
   password?: string;
   privateKey?: string;
   authToken?: string;
+  tunnelMode?: boolean;
+  tunnelUrl?: string;
 };

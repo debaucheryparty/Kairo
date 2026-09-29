@@ -32,6 +32,8 @@ export function AddServerModal({
   const [password, setPassword] = useState("");
   const [privateKey, setPrivateKey] = useState("");
   const [authToken, setAuthToken] = useState(server?.authToken || "");
+  const [tunnelMode, setTunnelMode] = useState(server?.tunnelMode || false);
+  const [tunnelUrl, setTunnelUrl] = useState(server?.tunnelUrl || "");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -39,6 +41,7 @@ export function AddServerModal({
     setPassword("");
     setPrivateKey("");
     setAuthToken("");
+    setTunnelUrl("");
     onClose();
   };
 
@@ -90,6 +93,8 @@ export function AddServerModal({
         password: password.trim() || undefined,
         privateKey: privateKey.trim() || undefined,
         authToken: authToken.trim() || undefined,
+        tunnelMode,
+        tunnelUrl: tunnelMode && tunnelUrl.trim() ? tunnelUrl.trim() : undefined,
       },
       { connect },
     );
@@ -245,6 +250,32 @@ export function AddServerModal({
               </p>
             </Field>
           )}
+
+          <div className="pt-1">
+            <label className="flex items-center gap-2.5 cursor-pointer text-[13px] text-white/80 select-none">
+              <input
+                type="checkbox"
+                checked={tunnelMode}
+                onChange={(e) => setTunnelMode(e.target.checked)}
+                className="size-4 rounded border-white/20 bg-white/10 text-blue-500 focus:ring-0 focus:ring-offset-0"
+              />
+              <span>Behind NAT / Firewall (Reverse Tunnel)</span>
+            </label>
+            {tunnelMode ? (
+              <div className="mt-2.5 space-y-1">
+                <input
+                  value={tunnelUrl}
+                  onChange={(event) => setTunnelUrl(event.target.value)}
+                  className="sui-server-input font-mono text-[12px]"
+                  placeholder="wss://relay.kairo.dev/tunnel"
+                  autoComplete="off"
+                />
+                <p className="text-[11px] text-white/45">
+                  Relay endpoint for agents operating behind NAT or restrictive firewalls.
+                </p>
+              </div>
+            ) : null}
+          </div>
 
           {localError || error ? (
             <p className="text-[12px] text-red-300" role="alert">

@@ -71,6 +71,8 @@ export function toSessionServer(info: ServerInfo): Server {
     sshPort: info.port,
     username: info.username,
     authType: info.authType,
+    tunnelMode: info.tunnelMode,
+    tunnelUrl: info.tunnelUrl,
     error: info.error,
     lastSeen: info.lastSeen,
   };
@@ -86,6 +88,8 @@ function toWriteInput(input: NewServerInput) {
     password: input.password,
     privateKey: input.privateKey,
     authToken: input.authToken,
+    tunnelMode: input.tunnelMode,
+    tunnelUrl: input.tunnelUrl,
   };
 }
 

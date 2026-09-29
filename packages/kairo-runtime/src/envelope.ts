@@ -42,6 +42,9 @@ export enum Opcode {
   GpuStartStream = 81,
   GpuStopStream = 82,
   GpuStreamStats = 83,
+  TunnelRegister = 90,
+  TunnelFrame = 91,
+  TunnelHeartbeat = 92,
 }
 
 export interface KairoEnvelope {

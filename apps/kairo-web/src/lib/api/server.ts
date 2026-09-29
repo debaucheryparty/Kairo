@@ -13,6 +13,8 @@ export type ServerInfo = {
   username: string;
   authType?: "password" | "private_key" | "token";
   authToken?: string;
+  tunnelMode?: boolean;
+  tunnelUrl?: string;
   cpuUsage: number;
   memoryUsage: number;
   diskUsage: number;
@@ -30,6 +32,8 @@ export type ServerWriteInput = {
   password?: string;
   privateKey?: string;
   authToken?: string;
+  tunnelMode?: boolean;
+  tunnelUrl?: string;
 };
 
 export type ConnectionTestResult = {

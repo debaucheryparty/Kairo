@@ -77,6 +77,7 @@ export interface KairoClientOptions {
   connectionStore: { getState: () => ConnectionStore };
   clientId?: string;
   authToken?: string;
+  tunnelRelayUrl?: string;
   handshakeTimeoutMs?: number;
 }
 
@@ -91,6 +92,7 @@ export class KairoClient {
   private store: { getState: () => ConnectionStore };
   private clientId: string;
   private authToken?: string;
+  private tunnelRelayUrl?: string;
   private handshakeTimeoutMs: number;
   private currentSession: KairoSession | null = null;
   private nextRequestId = 1n;
@@ -102,6 +104,7 @@ export class KairoClient {
     this.store = options.connectionStore;
     this.clientId = options.clientId || 'kairo-web-client';
     this.authToken = options.authToken;
+    this.tunnelRelayUrl = options.tunnelRelayUrl;
     this.handshakeTimeoutMs = options.handshakeTimeoutMs || 10_000;
 
     this.transport.onClose((reason) => {
@@ -128,11 +131,13 @@ export class KairoClient {
     return this.currentSession;
   }
 
-  async connect(url: string, tokenOverride?: string): Promise<KairoSession> {
+  async connect(url: string, tokenOverride?: string, tunnelRelayOverride?: string): Promise<KairoSession> {
     const store = this.store.getState();
     store.transition(ConnectionState.Connecting);
 
-    await this.transport.connect(url);
+    const relay = tunnelRelayOverride ?? this.tunnelRelayUrl;
+    const connectUrl = relay ? `${relay.replace(/\/$/, '')}/tunnel?target=${encodeURIComponent(url)}` : url;
+    await this.transport.connect(connectUrl);
     store.transition(ConnectionState.Authenticating);
 
     const token = tokenOverride ?? this.authToken;

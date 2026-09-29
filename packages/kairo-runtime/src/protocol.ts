@@ -1617,7 +1617,172 @@ export function decodeGpuStreamStats(data: Uint8Array): GpuStreamStatsPayload {
   return { streamId, currentFps, bitrateKbps, rttMs, frameLossPercent };
 }
 
+export interface TunnelRegisterRequestPayload {
+  protocolVersion: number;
+  agentId: string;
+  authToken: string;
+  hostname: string;
+  keepaliveIntervalSecs: number;
+}
 
+export interface TunnelRegisterResponsePayload {
+  success: boolean;
+  tunnelId: string;
+  relayAddress: string;
+  assignedEndpoint: string;
+  errorMessage: string;
+}
 
+export interface TunnelStreamFramePayload {
+  streamId: bigint;
+  flags: number;
+  payload: Uint8Array;
+}
 
+export interface TunnelHeartbeatPayload {
+  timestamp: number;
+  latencyMs: number;
+}
 
+export function encodeTunnelRegisterRequest(payload: TunnelRegisterRequestPayload): Uint8Array {
+  return concat([
+    encodeUintField(1, payload.protocolVersion),
+    encodeStringField(2, payload.agentId),
+    encodeStringField(3, payload.authToken),
+    encodeStringField(4, payload.hostname),
+    encodeUintField(5, payload.keepaliveIntervalSecs),
+  ]);
+}
+
+export function decodeTunnelRegisterResponse(data: Uint8Array): TunnelRegisterResponsePayload {
+  let offset = 0;
+  let success = false;
+  let tunnelId = '';
+  let relayAddress = '';
+  let assignedEndpoint = '';
+  let errorMessage = '';
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 0) {
+      let value = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        value |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) success = value !== 0;
+    } else if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      const bytes = data.subarray(offset, offset + length);
+      offset += length;
+      const str = textDecoder.decode(bytes);
+      if (fieldNumber === 2) tunnelId = str;
+      else if (fieldNumber === 3) relayAddress = str;
+      else if (fieldNumber === 4) assignedEndpoint = str;
+      else if (fieldNumber === 5) errorMessage = str;
+    } else {
+      break;
+    }
+  }
+
+  return { success, tunnelId, relayAddress, assignedEndpoint, errorMessage };
+}
+
+export function encodeTunnelStreamFrame(payload: TunnelStreamFramePayload): Uint8Array {
+  return concat([
+    encodeUintField(1, Number(payload.streamId)),
+    encodeUintField(2, payload.flags),
+    encodeBytesField(3, payload.payload),
+  ]);
+}
+
+export function decodeTunnelStreamFrame(data: Uint8Array): TunnelStreamFramePayload {
+  let offset = 0;
+  let streamId = 0n;
+  let flags = 0;
+  let payload = new Uint8Array(0);
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 0) {
+      let value = 0n;
+      let shift = 0n;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        value |= BigInt(byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7n;
+      }
+      if (fieldNumber === 1) streamId = value;
+      else if (fieldNumber === 2) flags = Number(value);
+    } else if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      const bytes = data.subarray(offset, offset + length);
+      offset += length;
+      if (fieldNumber === 3) payload = bytes.slice();
+    } else {
+      break;
+    }
+  }
+
+  return { streamId, flags, payload };
+}
+
+export function encodeTunnelHeartbeat(payload: TunnelHeartbeatPayload): Uint8Array {
+  return concat([
+    encodeUintField(1, payload.timestamp),
+    encodeUintField(2, payload.latencyMs),
+  ]);
+}
+
+export function decodeTunnelHeartbeat(data: Uint8Array): TunnelHeartbeatPayload {
+  let offset = 0;
+  let timestamp = 0;
+  let latencyMs = 0;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 0) {
+      let value = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        value |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) timestamp = value;
+      else if (fieldNumber === 2) latencyMs = value;
+    } else {
+      break;
+    }
+  }
+
+  return { timestamp, latencyMs };
+}
