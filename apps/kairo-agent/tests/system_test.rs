@@ -31,6 +31,7 @@ async fn test_system_and_docker_e2e_over_websocket() {
         bind_address: addr.to_string(),
         data_dir: temp.path().to_string_lossy().to_string(),
         agent_id: KairoId::new(),
+        ..Default::default()
     });
 
     let server_handle = tokio::spawn(async move {
@@ -48,6 +49,7 @@ async fn test_system_and_docker_e2e_over_websocket() {
     let init = HandshakeInit {
         protocol_version: 1,
         client_id: "test-system-client".to_string(),
+        ..Default::default()
     };
     let mut payload = Vec::new();
     init.encode(&mut payload).expect("encode init");

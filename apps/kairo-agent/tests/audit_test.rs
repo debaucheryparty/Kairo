@@ -33,6 +33,7 @@ async fn setup_test_session() -> (
         bind_address: addr.to_string(),
         data_dir: temp_dir.path().to_str().expect("utf8").to_string(),
         agent_id: KairoId::new(),
+        ..Default::default()
     });
 
     let server_handle = tokio::spawn(async move {
@@ -55,6 +56,7 @@ async fn complete_handshake(
     let init = HandshakeInit {
         protocol_version: 1,
         client_id: "audit-client".to_string(),
+        ..Default::default()
     };
     let mut payload = Vec::new();
     init.encode(&mut payload).expect("encode init");

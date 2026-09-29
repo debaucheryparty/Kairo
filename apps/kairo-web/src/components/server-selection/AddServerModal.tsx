@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } fr
 import { X } from "lucide-react";
 import type { NewServerInput, Server } from "@/src/lib/servers";
 
-type AuthMethod = "password" | "private_key";
+type AuthMethod = "password" | "private_key" | "token";
 
 export function AddServerModal({
   server,
@@ -31,12 +31,21 @@ export function AddServerModal({
   const [auth, setAuth] = useState<AuthMethod>(server?.authType || "password");
   const [password, setPassword] = useState("");
   const [privateKey, setPrivateKey] = useState("");
+  const [authToken, setAuthToken] = useState(server?.authToken || "");
+  const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const handleClose = () => {
+    setPassword("");
+    setPrivateKey("");
+    setAuthToken("");
+    onClose();
+  };
 
   useEffect(() => {
     firstField.current?.focus();
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") handleClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -61,7 +70,11 @@ export function AddServerModal({
       setLocalError("Private key is required.");
       return;
     }
-    if (editing && auth !== server?.authType && !password.trim() && !privateKey.trim()) {
+    if (!editing && auth === "token" && !authToken.trim()) {
+      setLocalError("Auth token is required.");
+      return;
+    }
+    if (editing && auth !== server?.authType && !password.trim() && !privateKey.trim() && !authToken.trim()) {
       setLocalError("Enter new credentials when changing the authentication method.");
       return;
     }
@@ -76,6 +89,7 @@ export function AddServerModal({
         authType: auth,
         password: password.trim() || undefined,
         privateKey: privateKey.trim() || undefined,
+        authToken: authToken.trim() || undefined,
       },
       { connect },
     );
@@ -85,7 +99,7 @@ export function AddServerModal({
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm animate-overlay-in"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) handleClose();
       }}
     >
       <div
@@ -101,7 +115,7 @@ export function AddServerModal({
           <button
             type="button"
             aria-label="Close"
-            onClick={onClose}
+            onClick={handleClose}
             className="flex size-7 items-center justify-center rounded-full text-white/60 transition hover:bg-white/10 hover:text-white"
           >
             <X className="size-4" />
@@ -111,8 +125,7 @@ export function AddServerModal({
         <form onSubmit={(event) => void submit(event, false)} className="space-y-3.5 px-5 py-4">
           {!editing ? (
             <p className="text-[13px] leading-5 text-white/62">
-              Add an SSH host. Kairo stores encrypted credentials and connects through the Go
-              backend — the browser never opens SSH directly.
+              Add a remote server or agent. Credentials are kept private and transmitted securely over encrypted channels.
             </p>
           ) : null}
           <Field label="Server Name">
@@ -165,7 +178,12 @@ export function AddServerModal({
               <AuthChoice
                 selected={auth === "private_key"}
                 onSelect={() => setAuth("private_key")}
-                label="SSH Private Key"
+                label="SSH Key"
+              />
+              <AuthChoice
+                selected={auth === "token"}
+                onSelect={() => setAuth("token")}
+                label="Token"
               />
             </div>
           </fieldset>
@@ -181,23 +199,49 @@ export function AddServerModal({
                 autoComplete="new-password"
               />
             </Field>
-          ) : (
+          ) : auth === "private_key" ? (
             <Field label="Private Key">
-              <textarea
-                value={privateKey}
-                onChange={(event) => setPrivateKey(event.target.value)}
-                className="sui-server-input min-h-[140px] resize-y font-mono text-[12px] leading-5"
-                placeholder={
-                  editing
-                    ? "Leave unchanged"
-                    : "-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----"
-                }
+              <div className="relative">
+                <textarea
+                  value={privateKey}
+                  onChange={(event) => setPrivateKey(event.target.value)}
+                  style={{
+                    WebkitTextSecurity: showPrivateKey ? "none" : "disc",
+                  } as React.CSSProperties}
+                  className="sui-server-input min-h-[140px] resize-y font-mono text-[12px] leading-5 pr-14"
+                  placeholder={
+                    editing
+                      ? "Leave unchanged"
+                      : "-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----"
+                  }
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPrivateKey(!showPrivateKey)}
+                  className="absolute right-2 top-2 rounded px-2 py-1 text-[11px] font-medium text-white/60 bg-white/5 hover:bg-white/10 hover:text-white"
+                >
+                  {showPrivateKey ? "Hide" : "Show"}
+                </button>
+              </div>
+              <p className="mt-2 text-[12px] leading-5 text-white/52">
+                Your private key is protected in memory and masked to prevent unauthorized viewing.
+              </p>
+            </Field>
+          ) : (
+            <Field label="Agent Auth Token">
+              <input
+                type="password"
+                value={authToken}
+                onChange={(event) => setAuthToken(event.target.value)}
+                className="sui-server-input font-mono"
+                placeholder={editing ? "Leave unchanged" : "kairo_token_••••••••"}
+                autoComplete="new-password"
                 spellCheck={false}
-                autoComplete="off"
               />
               <p className="mt-2 text-[12px] leading-5 text-white/52">
-                Your private key is encrypted before being stored. Passphrase-protected keys are not
-                supported yet.
+                Shared secret token configured in the Kairo Agent.
               </p>
             </Field>
           )}

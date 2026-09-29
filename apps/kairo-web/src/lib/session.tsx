@@ -85,6 +85,7 @@ function toWriteInput(input: NewServerInput) {
     authType: input.authType,
     password: input.password,
     privateKey: input.privateKey,
+    authToken: input.authToken,
   };
 }
 

@@ -32,6 +32,7 @@ async fn test_terminal_pty_e2e_over_websocket() {
         bind_address: addr.to_string(),
         data_dir: temp.path().to_string_lossy().to_string(),
         agent_id: KairoId::new(),
+        ..Default::default()
     });
 
     let server_handle = tokio::spawn(async move {
@@ -49,6 +50,7 @@ async fn test_terminal_pty_e2e_over_websocket() {
     let init = HandshakeInit {
         protocol_version: 1,
         client_id: "test-term-client".to_string(),
+        ..Default::default()
     };
     let mut payload = Vec::new();
     init.encode(&mut payload).expect("encode init");
@@ -193,6 +195,7 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
         bind_address: addr.to_string(),
         data_dir: temp.path().to_string_lossy().to_string(),
         agent_id: KairoId::new(),
+        ..Default::default()
     });
 
     let shared_pty = Arc::new(PtyManager::new());
@@ -217,6 +220,7 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
     let init1 = HandshakeInit {
         protocol_version: 1,
         client_id: "client-1".to_string(),
+        ..Default::default()
     };
     let mut payload = Vec::new();
     init1.encode(&mut payload).expect("encode init1");
@@ -307,6 +311,7 @@ async fn test_terminal_reattach_and_backlog_replay_across_connection_loss() {
     let init2 = HandshakeInit {
         protocol_version: 1,
         client_id: "client-2".to_string(),
+        ..Default::default()
     };
     let mut payload2 = Vec::new();
     init2.encode(&mut payload2).expect("encode init2");

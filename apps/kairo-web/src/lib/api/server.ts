@@ -11,7 +11,8 @@ export type ServerInfo = {
   host: string;
   port?: number;
   username: string;
-  authType?: "password" | "private_key";
+  authType?: "password" | "private_key" | "token";
+  authToken?: string;
   cpuUsage: number;
   memoryUsage: number;
   diskUsage: number;
@@ -25,9 +26,10 @@ export type ServerWriteInput = {
   host: string;
   port: number;
   username: string;
-  authType: "password" | "private_key";
+  authType: "password" | "private_key" | "token";
   password?: string;
   privateKey?: string;
+  authToken?: string;
 };
 
 export type ConnectionTestResult = {
@@ -85,7 +87,11 @@ function getStoredServers(): ServerInfo[] {
 
 function saveStoredServers(servers: ServerInfo[]) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(servers));
+    const sanitized = servers.map((s) => {
+      const { authToken: _, ...safe } = s;
+      return safe;
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
   } catch {}
 }
 

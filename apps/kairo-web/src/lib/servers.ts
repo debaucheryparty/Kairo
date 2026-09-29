@@ -10,7 +10,8 @@ export type Server = {
   lastSeen?: string;
   sshPort?: number;
   username?: string;
-  authType?: "password" | "private_key";
+  authType?: "password" | "private_key" | "token";
+  authToken?: string;
   error?: string;
 };
 
@@ -20,7 +21,8 @@ export type NewServerInput = {
   hostname?: string;
   sshPort: number;
   username: string;
-  authType: "password" | "private_key";
+  authType: "password" | "private_key" | "token";
   password?: string;
   privateKey?: string;
+  authToken?: string;
 };

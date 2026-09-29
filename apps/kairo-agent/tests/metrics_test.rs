@@ -27,6 +27,7 @@ async fn test_metrics_e2e_over_websocket() {
         bind_address: addr.to_string(),
         data_dir: std::env::temp_dir().to_string_lossy().to_string(),
         agent_id: agent_id.clone(),
+        ..Default::default()
     });
 
     let _server_handle = tokio::spawn(async move {
@@ -44,6 +45,7 @@ async fn test_metrics_e2e_over_websocket() {
     let init = HandshakeInit {
         protocol_version: 1,
         client_id: "test-metrics-client".to_string(),
+        ..Default::default()
     };
     let mut payload = Vec::new();
     init.encode(&mut payload).expect("encode init");

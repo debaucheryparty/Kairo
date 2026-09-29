@@ -76,6 +76,7 @@ export interface KairoClientOptions {
   transport: TransportAdapter;
   connectionStore: { getState: () => ConnectionStore };
   clientId?: string;
+  authToken?: string;
   handshakeTimeoutMs?: number;
 }
 
@@ -89,6 +90,7 @@ export class KairoClient {
   private transport: TransportAdapter;
   private store: { getState: () => ConnectionStore };
   private clientId: string;
+  private authToken?: string;
   private handshakeTimeoutMs: number;
   private currentSession: KairoSession | null = null;
   private nextRequestId = 1n;
@@ -99,6 +101,7 @@ export class KairoClient {
     this.transport = options.transport;
     this.store = options.connectionStore;
     this.clientId = options.clientId || 'kairo-web-client';
+    this.authToken = options.authToken;
     this.handshakeTimeoutMs = options.handshakeTimeoutMs || 10_000;
 
     this.transport.onClose((reason) => {
@@ -125,16 +128,19 @@ export class KairoClient {
     return this.currentSession;
   }
 
-  async connect(url: string): Promise<KairoSession> {
+  async connect(url: string, tokenOverride?: string): Promise<KairoSession> {
     const store = this.store.getState();
     store.transition(ConnectionState.Connecting);
 
     await this.transport.connect(url);
     store.transition(ConnectionState.Authenticating);
 
+    const token = tokenOverride ?? this.authToken;
     const initBytes = encodeHandshakeInit({
       protocolVersion: 1,
       clientId: this.clientId,
+      authToken: token,
+      timestamp: Date.now(),
     });
 
     const requestId = this.nextRequestId++;
@@ -161,6 +167,14 @@ export class KairoClient {
 
     await this.transport.send(frame.buffer as ArrayBuffer);
     const ack = await handshakeAckPromise;
+
+    if (ack.authenticated === false) {
+      const err = new Error(ack.errorMessage || 'Authentication failed: invalid token');
+      store.setError(err.message);
+      store.transition(ConnectionState.Disconnected);
+      await this.transport.close();
+      throw err;
+    }
 
     this.currentSession = {
       sessionId: ack.sessionId,

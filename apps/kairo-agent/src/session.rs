@@ -35,12 +35,26 @@ use crate::process::ProcessManager;
 use crate::pty::{PtyError, PtyManager};
 use crate::system::{SystemError, SystemManager};
 
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Error)]
 pub enum SessionError {
     #[error("handshake timed out")]
     HandshakeTimeout,
+
+    #[error("authentication failed")]
+    AuthenticationFailed,
 
     #[error("connection closed: {0}")]
     ConnectionClosed(String),
@@ -259,6 +273,30 @@ impl Session {
             "received valid HandshakeInit"
         );
 
+        if let Some(expected_token) = self.config.auth_token.as_deref().filter(|t| !t.trim().is_empty()) {
+            let client_token = init.auth_token.trim();
+            if client_token.is_empty() || !constant_time_eq(client_token.as_bytes(), expected_token.as_bytes()) {
+                warn!("client handshake authentication failed: invalid token");
+                let ack = HandshakeAck {
+                    protocol_version: 1,
+                    agent_id: self.config.agent_id.to_string(),
+                    session_id: self.session_id.to_string(),
+                    capabilities: Vec::new(),
+                    authenticated: false,
+                    error_message: "authentication failed: invalid or missing auth token".to_string(),
+                };
+                let mut payload_buf = Vec::new();
+                let _ = ack.encode(&mut payload_buf);
+                let ack_message = KairoMessage::new(
+                    MessageKind::HandshakeAck,
+                    message.request_id,
+                    Bytes::from(payload_buf),
+                );
+                let _ = stream.send(WsMessage::Binary(ack_message.encode()?)).await;
+                return Err(SessionError::AuthenticationFailed);
+            }
+        }
+
         let ack = HandshakeAck {
             protocol_version: 1,
             agent_id: self.config.agent_id.to_string(),
@@ -273,6 +311,8 @@ impl Session {
                 "app.v1".to_string(),
                 "gpu.v1".to_string(),
             ],
+            authenticated: true,
+            error_message: String::new(),
         };
 
         let mut payload_buf = Vec::new();

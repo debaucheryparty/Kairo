@@ -1,6 +1,8 @@
 export interface HandshakeInitPayload {
   protocolVersion: number;
   clientId: string;
+  authToken?: string;
+  timestamp?: number;
 }
 
 export interface HandshakeAckPayload {
@@ -8,6 +10,8 @@ export interface HandshakeAckPayload {
   agentId: string;
   sessionId: string;
   capabilities: string[];
+  authenticated?: boolean;
+  errorMessage?: string;
 }
 
 export interface FileEntry {
@@ -67,10 +71,17 @@ function encodeUintField(fieldNumber: number, val: number): Uint8Array {
 }
 
 export function encodeHandshakeInit(payload: HandshakeInitPayload): Uint8Array {
-  return concat([
+  const parts = [
     encodeUintField(1, payload.protocolVersion),
     encodeStringField(2, payload.clientId),
-  ]);
+  ];
+  if (payload.authToken) {
+    parts.push(encodeStringField(3, payload.authToken));
+  }
+  if (payload.timestamp !== undefined) {
+    parts.push(encodeUintField(4, payload.timestamp));
+  }
+  return concat(parts);
 }
 
 export function decodeHandshakeAck(data: Uint8Array): HandshakeAckPayload {
@@ -79,6 +90,8 @@ export function decodeHandshakeAck(data: Uint8Array): HandshakeAckPayload {
   let agentId = '';
   let sessionId = '';
   const capabilities: string[] = [];
+  let authenticated = true;
+  let errorMessage: string | undefined = undefined;
   const textDecoder = new TextDecoder();
 
   while (offset < data.byteLength) {
@@ -96,6 +109,7 @@ export function decodeHandshakeAck(data: Uint8Array): HandshakeAckPayload {
         shift += 7;
       }
       if (fieldNumber === 1) protocolVersion = value;
+      else if (fieldNumber === 5) authenticated = value !== 0;
     } else if (wireType === 2) {
       let length = 0;
       let shift = 0;
@@ -112,12 +126,13 @@ export function decodeHandshakeAck(data: Uint8Array): HandshakeAckPayload {
       if (fieldNumber === 2) agentId = str;
       else if (fieldNumber === 3) sessionId = str;
       else if (fieldNumber === 4) capabilities.push(str);
+      else if (fieldNumber === 6) errorMessage = str;
     } else {
       break;
     }
   }
 
-  return { protocolVersion, agentId, sessionId, capabilities };
+  return { protocolVersion, agentId, sessionId, capabilities, authenticated, errorMessage };
 }
 
 export function encodeListDirectoryRequest(path: string): Uint8Array {
