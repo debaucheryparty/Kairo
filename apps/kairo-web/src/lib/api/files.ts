@@ -1,5 +1,16 @@
 import { apiRequest } from "@/src/lib/api/client";
 import { authenticatedApiUrl } from "@/src/lib/runtime";
+import type { KairoClient } from "@kairo/runtime";
+
+let activeRuntimeClient: KairoClient | null = null;
+
+export function setActiveRuntimeClient(client: KairoClient | null) {
+  activeRuntimeClient = client;
+}
+
+export function getActiveRuntimeClient(): KairoClient | null {
+  return activeRuntimeClient;
+}
 
 export type FileEntry = {
   name: string;
@@ -63,7 +74,23 @@ const VIRTUAL_FS: Record<string, { content?: string; url?: string; isDir: boolea
   "/home/root/notes.md": { isDir: false, content: "# Server Administration Notes\n\n- Kairo Desktop integrated successfully.\n- Traffic lights and window manager running.\n- Telemetry polling active.\n", size: 148, modified: new Date().toISOString(), mime: "text/markdown" },
 };
 
-export async function listFiles(serverId: string, path: string): Promise<FileList> {
+export async function listFiles(serverId: string, path: string, client?: KairoClient | null): Promise<FileList> {
+  const activeClient = client ?? activeRuntimeClient;
+  if (activeClient?.getSession()) {
+    try {
+      const entries = await activeClient.listDirectory(path);
+      const mapped: FileEntry[] = entries.map((e) => ({
+        name: baseName(e.path),
+        path: e.path,
+        type: e.fileType === 1 ? "dir" : "file",
+        size: e.size,
+        mode: e.fileType === 1 ? "0755" : "0644",
+        modified: e.modifiedAt ? new Date(e.modifiedAt * 1000).toISOString() : new Date().toISOString(),
+      }));
+      return { path: path || "/", entries: mapped };
+    } catch {}
+  }
+
   try {
     return await apiRequest<FileList>(`/api/files?${fileQuery(serverId, { path })}`);
   } catch {
@@ -88,7 +115,22 @@ export async function listFiles(serverId: string, path: string): Promise<FileLis
   }
 }
 
-export async function readFile(serverId: string, path: string): Promise<FileContent> {
+export async function readFile(serverId: string, path: string, client?: KairoClient | null): Promise<FileContent> {
+  const activeClient = client ?? activeRuntimeClient;
+  if (activeClient?.getSession()) {
+    try {
+      const resp = await activeClient.readFile(path);
+      const text = new TextDecoder().decode(resp.content);
+      return {
+        path,
+        content: text,
+        size: resp.content.byteLength,
+        mime: "text/plain",
+        truncated: false,
+      };
+    } catch {}
+  }
+
   try {
     return await apiRequest<FileContent>(`/api/files/read?${fileQuery(serverId, { path })}`);
   } catch {
@@ -106,7 +148,16 @@ export async function readFile(serverId: string, path: string): Promise<FileCont
   }
 }
 
-export async function writeFile(serverId: string, path: string, content: string): Promise<{ status: string }> {
+export async function writeFile(serverId: string, path: string, content: string, client?: KairoClient | null): Promise<{ status: string }> {
+  const activeClient = client ?? activeRuntimeClient;
+  if (activeClient?.getSession()) {
+    try {
+      const bytes = new TextEncoder().encode(content);
+      await activeClient.writeFile(path, bytes);
+      return { status: "ok" };
+    } catch {}
+  }
+
   try {
     return await apiRequest<{ status: string }>("/api/files/write", {
       method: "POST",
@@ -124,7 +175,15 @@ export async function writeFile(serverId: string, path: string, content: string)
   }
 }
 
-export async function createFile(serverId: string, path: string): Promise<{ status: string }> {
+export async function createFile(serverId: string, path: string, client?: KairoClient | null): Promise<{ status: string }> {
+  const activeClient = client ?? activeRuntimeClient;
+  if (activeClient?.getSession()) {
+    try {
+      await activeClient.writeFile(path, new Uint8Array(0));
+      return { status: "ok" };
+    } catch {}
+  }
+
   try {
     return await apiRequest<{ status: string }>("/api/files/create", {
       method: "POST",

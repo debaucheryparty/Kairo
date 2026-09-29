@@ -22,6 +22,9 @@ import {
   type ServerInfo,
 } from "@/src/lib/api/server";
 
+import { KairoClient, createConnectionStore, WebSocketTransportAdapter } from "@kairo/runtime";
+import { setActiveRuntimeClient } from "@/src/lib/api/files";
+
 export type AppScreen = "server-selection" | "booting" | "logging-off" | "desktop";
 
 type SessionContextValue = {
@@ -30,6 +33,8 @@ type SessionContextValue = {
   selectedServer: Server | null;
   loadingServers: boolean;
   serversError: string | null;
+  runtimeClient: KairoClient | null;
+  runtimeConnected: boolean;
   refreshServers: () => Promise<Server[]>;
   selectServer: (server: Server) => boolean;
   addServer: (input: NewServerInput) => Promise<Server>;
@@ -110,6 +115,72 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [selectedServer, setSelectedServer] = useState<Server | null>(DEFAULT_PRIMARY);
   const [loadingServers, setLoadingServers] = useState(false);
   const [serversError, setServersError] = useState<string | null>(null);
+  const [runtimeClient, setRuntimeClient] = useState<KairoClient | null>(null);
+  const [runtimeConnected, setRuntimeConnected] = useState(false);
+
+  useEffect(() => {
+    if (!selectedServer || screen !== "desktop") {
+      if (runtimeClient) {
+        void runtimeClient.disconnect().catch(() => undefined);
+        setRuntimeClient(null);
+        setRuntimeConnected(false);
+        setActiveRuntimeClient(null);
+      }
+      return;
+    }
+
+    let active = true;
+    const store = createConnectionStore();
+    const transport = new WebSocketTransportAdapter();
+    const client = new KairoClient({
+      transport,
+      connectionStore: store,
+      clientId: "kairo-web",
+      authToken: selectedServer.authToken,
+      tunnelRelayUrl: selectedServer.tunnelMode ? selectedServer.tunnelUrl : undefined,
+    });
+
+    const protocol = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss" : "ws";
+    const port = selectedServer.sshPort || 9600;
+    const host = selectedServer.address.includes(":") ? selectedServer.address : `${selectedServer.address}:${port}`;
+    const url = selectedServer.address.startsWith("ws://") || selectedServer.address.startsWith("wss://")
+      ? selectedServer.address
+      : `${protocol}://${host}`;
+
+    void client
+      .connect(url, selectedServer.authToken, selectedServer.tunnelMode ? selectedServer.tunnelUrl : undefined)
+      .then(() => {
+        if (!active) {
+          void client.disconnect().catch(() => undefined);
+          return;
+        }
+        setRuntimeClient(client);
+        setRuntimeConnected(true);
+        setActiveRuntimeClient(client);
+      })
+      .catch(() => {
+        if (!active) return;
+        setRuntimeClient(null);
+        setRuntimeConnected(false);
+        setActiveRuntimeClient(null);
+      });
+
+    return () => {
+      active = false;
+      void client.disconnect().catch(() => undefined);
+      setRuntimeClient(null);
+      setRuntimeConnected(false);
+      setActiveRuntimeClient(null);
+    };
+  }, [
+    selectedServer?.id,
+    selectedServer?.address,
+    selectedServer?.sshPort,
+    selectedServer?.authToken,
+    selectedServer?.tunnelMode,
+    selectedServer?.tunnelUrl,
+    screen,
+  ]);
 
   const refreshServers = useCallback(async () => {
     try {
@@ -258,6 +329,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       selectedServer,
       loadingServers,
       serversError,
+      runtimeClient,
+      runtimeConnected,
       refreshServers,
       selectServer,
       addServer,
@@ -277,6 +350,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       selectedServer,
       loadingServers,
       serversError,
+      runtimeClient,
+      runtimeConnected,
       refreshServers,
       selectServer,
       addServer,
@@ -306,6 +381,11 @@ export function useSession() {
 export function useSelectedServer() {
   const context = useContext(SessionContext);
   return context?.selectedServer ?? null;
+}
+
+export function useRuntimeClient() {
+  const context = useContext(SessionContext);
+  return context?.runtimeClient ?? null;
 }
 
 export function formatApiError(err: unknown, fallback = "request failed") {
