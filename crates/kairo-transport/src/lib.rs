@@ -7,5 +7,5 @@ mod websocket;
 pub use error::TransportError;
 pub use fallback::FallbackTransport;
 pub use traits::Transport;
-pub use tunnel::{ReverseTunnelClient, TunnelConfig, VirtualStream};
+pub use tunnel::{ReverseTunnelClient, TunnelConfig, VirtualStream, VirtualStreamSender};
 pub use websocket::WebSocketTransport;

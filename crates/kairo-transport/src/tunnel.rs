@@ -24,6 +24,38 @@ pub struct TunnelConfig {
     pub keepalive_interval: Duration,
 }
 
+#[derive(Clone)]
+pub struct VirtualStreamSender {
+    pub stream_id: u64,
+    outbound_tx: mpsc::Sender<TunnelStreamFrame>,
+}
+
+impl VirtualStreamSender {
+    pub async fn send(&self, payload: Bytes) -> Result<(), TransportError> {
+        let frame = TunnelStreamFrame {
+            stream_id: self.stream_id,
+            flags: 2,
+            payload: payload.to_vec(),
+        };
+        self.outbound_tx
+            .send(frame)
+            .await
+            .map_err(|e| TransportError::SendFailed(e.to_string()))
+    }
+
+    pub async fn close(&self) -> Result<(), TransportError> {
+        let frame = TunnelStreamFrame {
+            stream_id: self.stream_id,
+            flags: 4,
+            payload: Vec::new(),
+        };
+        self.outbound_tx
+            .send(frame)
+            .await
+            .map_err(|e| TransportError::SendFailed(e.to_string()))
+    }
+}
+
 pub struct VirtualStream {
     pub stream_id: u64,
     pub incoming_rx: mpsc::Receiver<Bytes>,
@@ -41,6 +73,16 @@ impl VirtualStream {
             incoming_rx,
             outbound_tx,
         }
+    }
+
+    pub fn split(self) -> (VirtualStreamSender, mpsc::Receiver<Bytes>) {
+        (
+            VirtualStreamSender {
+                stream_id: self.stream_id,
+                outbound_tx: self.outbound_tx,
+            },
+            self.incoming_rx,
+        )
     }
 
     pub async fn send(&self, payload: Bytes) -> Result<(), TransportError> {
