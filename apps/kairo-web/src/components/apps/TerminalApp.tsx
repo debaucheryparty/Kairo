@@ -5,7 +5,7 @@ import "@xterm/xterm/css/xterm.css";
 import type { WindowPayload } from "@/src/components/window/window-context";
 import { wsUrl } from "@/src/lib/api/origin";
 import { getInjectedDesktopConfig, localAuthWSProtocols } from "@/src/lib/runtime/config";
-import { useSelectedServer } from "@/src/lib/session";
+import { useRuntimeClient, useSelectedServer } from "@/src/lib/session";
 
 function quotePath(value: string) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
@@ -15,6 +15,7 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
   const host = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const selected = useSelectedServer();
+  const runtimeClient = useRuntimeClient();
   const serverId = selected?.id || "";
   const serverName = selected?.name || "server";
   const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
@@ -27,6 +28,7 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
     if (!container) return;
 
     let disposed = false;
+    let cleanupPty: (() => void) | undefined;
     let socket: WebSocket | null = null;
     let terminal: import("@xterm/xterm").Terminal | null = null;
     let fitAddon: import("@xterm/addon-fit").FitAddon | null = null;
@@ -54,6 +56,40 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
         terminal.loadAddon(fitAddon);
         terminal.open(host.current);
         fitAddon.fit();
+
+        if (runtimeClient?.getSession()) {
+          try {
+            const ptyId = await runtimeClient.createPty("", terminal.cols, terminal.rows, cwd || "");
+            if (disposed) {
+              void runtimeClient.closePty(ptyId).catch(() => undefined);
+              return;
+            }
+            setStatus("connected");
+            setError(null);
+            const unsubscribe = runtimeClient.onTerminalOutput(({ ptyId: id, data }) => {
+              if (id === ptyId && terminal) {
+                terminal.write(data);
+              }
+            });
+
+            terminal.onData((data) => {
+              void runtimeClient.writePty(ptyId, data).catch(() => undefined);
+            });
+
+            observer = new ResizeObserver(() => {
+              if (!terminal || !fitAddon) return;
+              fitAddon.fit();
+              void runtimeClient.resizePty(ptyId, terminal.cols, terminal.rows).catch(() => undefined);
+            });
+            observer.observe(host.current);
+
+            cleanupPty = () => {
+              unsubscribe();
+              void runtimeClient.closePty(ptyId).catch(() => undefined);
+            };
+            return;
+          } catch {}
+        }
 
         if (!serverId) {
           setError("No server selected");
@@ -212,12 +248,13 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
 
     return () => {
       disposed = true;
+      cleanupPty?.();
       observer?.disconnect();
       socket?.close();
       socketRef.current = null;
       terminal?.dispose();
     };
-  }, [nonce, serverId]);
+  }, [nonce, serverId, runtimeClient]);
 
   useEffect(() => {
     if (status !== "connected" || !cwd || !socketRef.current) return;
