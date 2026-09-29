@@ -49,11 +49,11 @@ export function WindowHeader({
       className={`relative flex h-10 shrink-0 cursor-grab items-center px-3.5 select-none active:cursor-grabbing border-b ${
         light
           ? focused
-            ? "border-black/[0.06] bg-[var(--window-header)]/85 backdrop-blur-xl"
-            : "border-black/[0.04] bg-[var(--window-header-inactive)]/85 backdrop-blur-xl"
+            ? "border-black/[0.08] bg-[#f0f0f3] text-neutral-800"
+            : "border-black/[0.05] bg-[#f8f8fa] text-neutral-500"
           : focused
-            ? "border-white/[0.08] bg-[#222226]/90 backdrop-blur-xl"
-            : "border-white/[0.05] bg-[#1c1c20]/90 backdrop-blur-xl"
+            ? "border-white/[0.08] bg-[#1f1f23] text-neutral-200"
+            : "border-white/[0.05] bg-[#1a1a1d] text-neutral-400"
       }`}
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}

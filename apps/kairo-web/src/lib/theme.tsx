@@ -24,10 +24,15 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function readTheme(): Theme {
   if (typeof document === "undefined") return "dark";
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved === "light" || saved === "dark") return saved;
+  } catch {}
+  return document.documentElement.classList.contains("light") ? "light" : "dark";
 }
 
 function applyTheme(theme: Theme) {
+  if (typeof document === "undefined") return;
   document.documentElement.dataset.theme = theme;
   document.documentElement.classList.toggle("dark", theme === "dark");
   document.documentElement.classList.toggle("light", theme === "light");

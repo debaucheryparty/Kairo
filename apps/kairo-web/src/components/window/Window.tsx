@@ -190,10 +190,10 @@ export function Window({ window: win, children }: { window: WindowState; childre
               isDragging ? "" : "transition-[left,top,width,height] duration-200 ease-out"
             } ${
               light
-                ? "border border-black/[0.08] bg-[var(--window-bg)]/95 shadow-[0_22px_70px_rgba(0,0,0,0.22),0_0_0_1px_rgba(255,255,255,0.7)_inset]"
-                : "border border-white/[0.14] bg-[#1a1a1e]/95 shadow-[0_26px_80px_rgba(0,0,0,0.48),0_0_0_1px_rgba(255,255,255,0.08)_inset]"
+                ? "border border-black/[0.1] bg-[#ffffff] shadow-[0_22px_70px_rgba(0,0,0,0.2),0_0_0_1px_rgba(255,255,255,0.7)_inset]"
+                : "border border-white/[0.12] bg-[#1a1a1d] shadow-[0_26px_80px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.08)_inset]"
             } ${focused ? "ring-1 ring-black/[0.08] dark:ring-white/[0.18]" : "opacity-95"}`
-      } ${win.maximized ? (light ? "bg-[var(--window-bg)]" : "bg-[#161616]") : ""}`}
+      } ${win.maximized ? (light ? "bg-[#ffffff]" : "bg-[#1a1a1d]") : ""}`}
       style={
         win.maximized
           ? { zIndex: win.zIndex }

@@ -280,14 +280,14 @@ export function FilesApp() {
 
   return (
     <div
-      className="relative flex h-full min-h-0 overflow-hidden bg-white/80 dark:bg-[#1a1a1e]/85 text-neutral-800 dark:text-neutral-200 select-none backdrop-blur-3xl"
+      className="relative flex h-full min-h-0 overflow-hidden bg-white dark:bg-[#161619] text-neutral-900 dark:text-neutral-100 select-none"
       onClick={() => setMenu(null)}
       onKeyDown={(event) => {
         if (event.key === "Enter") openSelected();
       }}
     >
       {sidebarOpen && (
-        <aside className="flex w-[210px] shrink-0 flex-col overflow-y-auto border-r border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-black/20 p-2.5 text-[13px]">
+        <aside className="flex w-[210px] shrink-0 flex-col overflow-y-auto border-r border-black/[0.08] dark:border-white/[0.08] bg-[#f5f5f7] dark:bg-[#1a1a1d] p-2.5 text-[13px]">
           <div className="flex items-center justify-between px-2 py-1.5 mb-1">
             <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 dark:text-neutral-500">
               Favorites
@@ -384,8 +384,8 @@ export function FilesApp() {
         </aside>
       )}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex h-11 shrink-0 items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] px-3.5 bg-black/[0.01] dark:bg-white/[0.02]">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white dark:bg-[#161619]">
+        <header className="flex h-11 shrink-0 items-center justify-between border-b border-black/[0.08] dark:border-white/[0.08] px-3.5 bg-[#fafafa] dark:bg-[#1f1f23]">
           <div className="flex items-center gap-2 min-w-0">
             {!sidebarOpen && (
               <button
@@ -540,7 +540,7 @@ export function FilesApp() {
           />
         )}
 
-        <footer className="flex h-7 shrink-0 items-center justify-between border-t border-black/[0.06] dark:border-white/[0.08] px-4 text-[11px] text-neutral-500 dark:text-neutral-400 bg-black/[0.01] dark:bg-white/[0.02]">
+        <footer className="flex h-7 shrink-0 items-center justify-between border-t border-black/[0.08] dark:border-white/[0.08] px-4 text-[11px] text-neutral-500 dark:text-neutral-400 bg-[#fafafa] dark:bg-[#1f1f23]">
           <span>
             {visible.length} {visible.length === 1 ? "item" : "items"}
           </span>

@@ -80,7 +80,7 @@ export function FileList({
       }}
     >
       <div className="w-full min-w-[540px]">
-        <div className="sticky top-0 z-10 grid grid-cols-12 gap-2 border-b border-black/[0.06] dark:border-white/[0.08] bg-white/70 dark:bg-[#1f1f23]/75 px-4 py-1.5 text-[11px] font-medium text-neutral-500 dark:text-neutral-400 backdrop-blur-md">
+        <div className="sticky top-0 z-10 grid grid-cols-12 gap-2 border-b border-black/[0.08] dark:border-white/[0.08] bg-[#f2f2f4] dark:bg-[#202024] px-4 py-1.5 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
           <button
             type="button"
             onClick={() => handleSort("name")}

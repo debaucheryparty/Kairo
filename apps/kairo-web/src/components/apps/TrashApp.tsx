@@ -64,8 +64,8 @@ export function TrashApp() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col bg-white dark:bg-[#1a1b1e] text-neutral-900 dark:text-neutral-100 select-none">
-      <header className="flex h-11 shrink-0 items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] px-4 bg-black/[0.02] dark:bg-white/[0.03]">
+    <div className="flex h-full w-full flex-col bg-white dark:bg-[#161619] text-neutral-900 dark:text-neutral-100 select-none">
+      <header className="flex h-11 shrink-0 items-center justify-between border-b border-black/[0.08] dark:border-white/[0.08] px-4 bg-[#fafafa] dark:bg-[#1f1f23]">
         <div className="flex items-center gap-3">
           <span className="text-[13px] font-medium text-neutral-700 dark:text-neutral-300">
             {items.length} {items.length === 1 ? "item" : "items"}
@@ -124,7 +124,7 @@ export function TrashApp() {
       ) : (
         <div className="flex-1 overflow-y-auto">
           <div className="min-w-[600px]">
-            <div className="sticky top-0 z-10 grid grid-cols-12 gap-2 border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#1a1b1e]/85 px-4 py-1.5 text-[11px] font-medium text-neutral-500 dark:text-neutral-400 backdrop-blur-md">
+            <div className="sticky top-0 z-10 grid grid-cols-12 gap-2 border-b border-black/[0.08] dark:border-white/[0.08] bg-[#f2f2f4] dark:bg-[#202024] px-4 py-1.5 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
               <span className="col-span-5">Name</span>
               <span className="col-span-3">Original Location</span>
               <span className="col-span-2">Date Deleted</span>
