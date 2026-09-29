@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { Check, Copy, RefreshCw, X } from "lucide-react";
 import type { NewServerInput, Server } from "@/src/lib/servers";
 
 type AuthMethod = "password" | "private_key" | "token";
@@ -35,6 +35,7 @@ export function AddServerModal({
   const [tunnelMode, setTunnelMode] = useState(server?.tunnelMode || false);
   const [tunnelUrl, setTunnelUrl] = useState(server?.tunnelUrl || "");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const handleClose = () => {
@@ -42,6 +43,7 @@ export function AddServerModal({
     setPrivateKey("");
     setAuthToken("");
     setTunnelUrl("");
+    setCopied(false);
     onClose();
   };
 
@@ -236,18 +238,74 @@ export function AddServerModal({
             </Field>
           ) : (
             <Field label="Agent Auth Token">
-              <input
-                type="password"
-                value={authToken}
-                onChange={(event) => setAuthToken(event.target.value)}
-                className="sui-server-input font-mono"
-                placeholder={editing ? "Leave unchanged" : "kairo_token_••••••••"}
-                autoComplete="new-password"
-                spellCheck={false}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={authToken}
+                  onChange={(event) => setAuthToken(event.target.value)}
+                  className="sui-server-input font-mono flex-1"
+                  placeholder={editing ? "Leave unchanged" : "kro_••••••••"}
+                  autoComplete="new-password"
+                  spellCheck={false}
+                />
+                {!editing ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const arr = new Uint8Array(18);
+                      crypto.getRandomValues(arr);
+                      const generated = "kro_" + Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
+                      setAuthToken(generated);
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <RefreshCw className="size-3.5" />
+                    <span>Generate</span>
+                  </button>
+                ) : null}
+              </div>
               <p className="mt-2 text-[12px] leading-5 text-white/52">
                 Shared secret token configured in the Kairo Agent.
               </p>
+
+              {authToken && !editing ? (
+                <div className="mt-3 rounded-xl border border-white/10 bg-black/40 p-3">
+                  <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.16em] text-white/48">
+                    <span>One-Click Pairing Command</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cmd = `curl -fsSL https://kairo.dev/install.sh | sudo sh -s -- --token ${authToken}${
+                          tunnelMode && tunnelUrl ? ` --tunnel ${tunnelUrl.trim()}` : ""
+                        }`;
+                        void navigator.clipboard.writeText(cmd);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="flex items-center gap-1 text-[11px] font-medium text-blue-400 hover:text-blue-300 transition"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="size-3 text-emerald-400" />
+                          <span className="text-emerald-400 normal-case">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="size-3" />
+                          <span className="normal-case">Copy Command</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <pre className="mt-2 overflow-x-auto rounded-lg bg-black/60 p-2.5 font-mono text-[11px] leading-5 text-emerald-400 whitespace-pre">
+                    curl -fsSL https://kairo.dev/install.sh | sudo sh -s -- --token {authToken}
+                    {tunnelMode && tunnelUrl ? ` --tunnel ${tunnelUrl.trim()}` : ""}
+                  </pre>
+                  <p className="mt-2 text-[11px] text-white/45">
+                    Run this on your remote server to automatically install and pair the agent.
+                  </p>
+                </div>
+              ) : null}
             </Field>
           )}
 
