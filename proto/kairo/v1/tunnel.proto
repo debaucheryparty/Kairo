@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package kairo.v1;
+
+message TunnelRegisterRequest {
+  uint32 protocol_version = 1;
+  string agent_id = 2;
+  string auth_token = 3;
+  string hostname = 4;
+  uint32 keepalive_interval_secs = 5;
+}
+
+message TunnelRegisterResponse {
+  bool success = 1;
+  string tunnel_id = 2;
+  string relay_address = 3;
+  string assigned_endpoint = 4;
+  string error_message = 5;
+}
+
+message TunnelStreamFrame {
+  uint64 stream_id = 1;
+  uint32 flags = 2;
+  bytes payload = 3;
+}
+
+message TunnelHeartbeat {
+  int64 timestamp = 1;
+  uint32 latency_ms = 2;
+}

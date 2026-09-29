@@ -8,6 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=../../proto/kairo/v1/system.proto");
     println!("cargo:rerun-if-changed=../../proto/kairo/v1/app.proto");
     println!("cargo:rerun-if-changed=../../proto/kairo/v1/gpu.proto");
+    println!("cargo:rerun-if-changed=../../proto/kairo/v1/tunnel.proto");
 
     prost_build::compile_protos(
         &[
@@ -20,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "../../proto/kairo/v1/system.proto",
             "../../proto/kairo/v1/app.proto",
             "../../proto/kairo/v1/gpu.proto",
+            "../../proto/kairo/v1/tunnel.proto",
         ],
         &["../../proto"],
     )?;

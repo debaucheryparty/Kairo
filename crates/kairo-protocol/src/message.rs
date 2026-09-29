@@ -70,6 +70,9 @@ pub enum Opcode {
     GpuStartStream = 81,
     GpuStopStream = 82,
     GpuStreamStats = 83,
+    TunnelRegister = 90,
+    TunnelFrame = 91,
+    TunnelHeartbeat = 92,
 }
 
 impl Opcode {
@@ -105,6 +108,9 @@ impl Opcode {
             81 => Some(Self::GpuStartStream),
             82 => Some(Self::GpuStopStream),
             83 => Some(Self::GpuStreamStats),
+            90 => Some(Self::TunnelRegister),
+            91 => Some(Self::TunnelFrame),
+            92 => Some(Self::TunnelHeartbeat),
             _ => None,
         }
     }
