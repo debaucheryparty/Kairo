@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Download,
   FilePlus,
-  Folder,
   FolderPlus,
   Info,
   PanelLeft,
@@ -52,8 +51,12 @@ export function FilesApp() {
   const { openWindow } = useWindowManager();
   const { server } = useServer();
   const selectedServer = useSelectedServer();
-  const [path, setPath] = useState("/");
-  const [history, setHistory] = useState<string[]>(["/"]);
+  const homePath =
+    selectedServer?.username || server?.username
+      ? `/home/${selectedServer?.username || server?.username}`
+      : "/home/root";
+  const [path, setPath] = useState(homePath);
+  const [history, setHistory] = useState<string[]>([homePath]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -69,10 +72,6 @@ export function FilesApp() {
   const uploadRef = useRef<HTMLInputElement>(null);
   const serverId = selectedServer?.id || "";
   const { count: trashCount } = useTrash(serverId);
-  const homePath =
-    selectedServer?.username || server?.username
-      ? `/home/${selectedServer?.username || server?.username}`
-      : "/home";
 
   async function load(nextPath: string) {
     if (!serverId) return;
@@ -97,7 +96,7 @@ export function FilesApp() {
   useEffect(() => {
     if (!serverId) return;
     let cancelled = false;
-    listFiles(serverId, "/")
+    listFiles(serverId, homePath)
       .then((result) => {
         if (cancelled) return;
         const sorted = [...result.entries].sort((a, b) => {
@@ -105,7 +104,7 @@ export function FilesApp() {
           return a.name.localeCompare(b.name);
         });
         setEntries(sorted);
-        setPath(result.path || "/");
+        setPath(result.path || homePath);
         setError(null);
       })
       .catch((err) => {
@@ -261,18 +260,23 @@ export function FilesApp() {
     openWindow("terminal", { cwd });
   }
 
-  const places = [
-    { label: "Root", path: "/" },
-    { label: "Home", path: homePath },
-    { label: "var", path: "/var" },
-    { label: "etc", path: "/etc" },
-    { label: "tmp", path: "/tmp" },
+  const favorites = [
+    { label: "Desktop", path: `${homePath}/Desktop`, type: "desktop" as const },
+    { label: "Documents", path: `${homePath}/Documents`, type: "documents" as const },
+    { label: "Downloads", path: `${homePath}/Downloads`, type: "downloads" as const },
+    { label: "Movies", path: `${homePath}/Movies`, type: "movies" as const },
+    { label: "Music", path: `${homePath}/Music`, type: "music" as const },
+    { label: "Pictures", path: `${homePath}/Pictures`, type: "pictures" as const },
+    { label: "Public", path: `${homePath}/Public`, type: "public" as const },
+    { label: "Code", path: `${homePath}/Code`, type: "code" as const },
   ];
 
   const currentFolderTitle =
     path === "/"
-      ? "Root"
-      : path.split("/").filter(Boolean).pop() || "Root";
+      ? "Root Volume"
+      : path === homePath
+        ? "Home"
+        : path.split("/").filter(Boolean).pop() || "Files";
 
   return (
     <div
@@ -299,28 +303,21 @@ export function FilesApp() {
           </div>
 
           <div className="space-y-0.5">
-            {places.map((place) => {
-              const active = path === place.path;
+            {favorites.map((fav) => {
+              const active = path === fav.path;
               return (
                 <button
-                  key={place.path}
+                  key={fav.path}
                   type="button"
                   className={`flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-[13px] outline-none transition-colors ${
                     active
                       ? "bg-black/[0.08] dark:bg-white/[0.12] font-medium text-neutral-900 dark:text-white shadow-sm"
                       : "text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
                   }`}
-                  onClick={() => goTo(place.path)}
+                  onClick={() => goTo(fav.path)}
                 >
-                  <Folder
-                    aria-hidden
-                    className={`size-4 shrink-0 ${
-                      active
-                        ? "text-[#007aff] fill-[#007aff]/30"
-                        : "text-[#007aff]/80 fill-[#007aff]/20"
-                    }`}
-                  />
-                  <span className="truncate">{place.label}</span>
+                  <MacFolderIcon name={fav.label} type={fav.type} className="size-4.5 shrink-0" />
+                  <span className="truncate">{fav.label}</span>
                 </button>
               );
             })}
@@ -526,7 +523,7 @@ export function FilesApp() {
           </div>
         ) : visible.length === 0 ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-[13px] text-neutral-400">
-            <Folder className="size-10 text-neutral-300 dark:text-neutral-600 mb-2" />
+            <MacFolderIcon className="size-12 mb-2 opacity-50" />
             <span>This folder is empty</span>
           </div>
         ) : (

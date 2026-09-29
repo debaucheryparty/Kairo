@@ -4,35 +4,39 @@ import { useId } from "react";
 
 interface MacFolderIconProps {
   name?: string;
+  type?: "downloads" | "movies" | "music" | "pictures" | "public" | "documents" | "desktop" | "code";
   className?: string;
 }
 
-export function MacFolderIcon({ name = "", className = "size-4" }: MacFolderIconProps) {
+export function MacFolderIcon({ name = "", type, className = "size-4" }: MacFolderIconProps) {
   const backGrad = useId();
   const frontGrad = useId();
   const rimGrad = useId();
   const shadowFilter = useId();
 
-  const lower = name.toLowerCase().trim();
+  const clean = (name || "").replace(/\/+$/, "").split("/").pop() || "";
+  const lower = clean.toLowerCase().trim();
 
-  let emblem: "downloads" | "movies" | "music" | "pictures" | "public" | "documents" | "desktop" | "code" | null = null;
+  let emblem = type || null;
 
-  if (lower === "downloads" || lower === "download") {
-    emblem = "downloads";
-  } else if (lower === "movies" || lower === "videos" || lower === "video" || lower === "movie") {
-    emblem = "movies";
-  } else if (lower === "music" || lower === "audio" || lower === "songs") {
-    emblem = "music";
-  } else if (lower === "pictures" || lower === "images" || lower === "photos" || lower === "pics") {
-    emblem = "pictures";
-  } else if (lower === "public") {
-    emblem = "public";
-  } else if (lower === "documents" || lower === "docs") {
-    emblem = "documents";
-  } else if (lower === "desktop") {
-    emblem = "desktop";
-  } else if (lower === "developer" || lower === "code" || lower === "dev" || lower === "projects" || lower === "src") {
-    emblem = "code";
+  if (!emblem) {
+    if (lower === "downloads" || lower === "download") {
+      emblem = "downloads";
+    } else if (lower === "movies" || lower === "videos" || lower === "video" || lower === "movie") {
+      emblem = "movies";
+    } else if (lower === "music" || lower === "audio" || lower === "songs") {
+      emblem = "music";
+    } else if (lower === "pictures" || lower === "images" || lower === "photos" || lower === "pics") {
+      emblem = "pictures";
+    } else if (lower === "public") {
+      emblem = "public";
+    } else if (lower === "documents" || lower === "docs" || lower === "document") {
+      emblem = "documents";
+    } else if (lower === "desktop") {
+      emblem = "desktop";
+    } else if (lower === "code" || lower === "developer" || lower === "dev" || lower === "projects" || lower === "src") {
+      emblem = "code";
+    }
   }
 
   return (
@@ -78,73 +82,74 @@ export function MacFolderIcon({ name = "", className = "size-4" }: MacFolderIcon
       />
 
       {emblem === "downloads" && (
-        <g transform="translate(50, 48)">
-          <circle cx="0" cy="0" r="16" fill="none" stroke="#ffffff" strokeWidth="2.4" opacity="0.4" />
-          <path d="M 0 -8 V 6 M -5 1 L 0 6 L 5 1" fill="none" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.45" />
+        <g opacity="0.85">
+          <circle cx="50" cy="50" r="14.5" fill="none" stroke="#ffffff" strokeWidth="2.8" />
+          <path d="M 50 41 V 58 M 44 52 L 50 58 L 56 52" fill="none" stroke="#ffffff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
         </g>
       )}
 
       {emblem === "movies" && (
-        <g transform="translate(34, 34)" opacity="0.45">
-          <rect x="0" y="0" width="32" height="26" rx="3" fill="none" stroke="#ffffff" strokeWidth="2.2" />
-          <line x1="0" y1="6" x2="32" y2="6" stroke="#ffffff" strokeWidth="1.8" />
-          <line x1="0" y1="20" x2="32" y2="20" stroke="#ffffff" strokeWidth="1.8" />
-          <line x1="8" y1="0" x2="8" y2="6" stroke="#ffffff" strokeWidth="1.8" />
-          <line x1="16" y1="0" x2="16" y2="6" stroke="#ffffff" strokeWidth="1.8" />
-          <line x1="24" y1="0" x2="24" y2="6" stroke="#ffffff" strokeWidth="1.8" />
-          <line x1="8" y1="20" x2="8" y2="26" stroke="#ffffff" strokeWidth="1.8" />
-          <line x1="16" y1="20" x2="16" y2="26" stroke="#ffffff" strokeWidth="1.8" />
-          <line x1="24" y1="20" x2="24" y2="26" stroke="#ffffff" strokeWidth="1.8" />
+        <g opacity="0.85">
+          <rect x="34" y="38" width="32" height="24" rx="3" fill="none" stroke="#ffffff" strokeWidth="2.6" />
+          <line x1="34" y1="44" x2="66" y2="44" stroke="#ffffff" strokeWidth="2" />
+          <line x1="34" y1="56" x2="66" y2="56" stroke="#ffffff" strokeWidth="2" />
+          <line x1="42" y1="38" x2="42" y2="44" stroke="#ffffff" strokeWidth="2" />
+          <line x1="50" y1="38" x2="50" y2="44" stroke="#ffffff" strokeWidth="2" />
+          <line x1="58" y1="38" x2="58" y2="44" stroke="#ffffff" strokeWidth="2" />
+          <line x1="42" y1="56" x2="42" y2="62" stroke="#ffffff" strokeWidth="2" />
+          <line x1="50" y1="56" x2="50" y2="62" stroke="#ffffff" strokeWidth="2" />
+          <line x1="58" y1="56" x2="58" y2="62" stroke="#ffffff" strokeWidth="2" />
         </g>
       )}
 
       {emblem === "music" && (
-        <g transform="translate(50, 48)" opacity="0.45">
-          <path
-            d="M -5 6 C -5 4 -7 2 -10 2 C -13 2 -15 4 -15 6 C -15 8 -13 10 -10 10 C -7 10 -5 8 -5 6 V -10 L 10 -14 V 2 C 10 0 8 -2 5 -2 C 2 -2 0 0 0 2 C 0 4 2 6 5 6 C 8 6 10 4 10 2 V -8 L -5 -4 Z"
-            fill="#ffffff"
-          />
+        <g opacity="0.85">
+          <ellipse cx="42" cy="57" rx="5" ry="3.8" transform="rotate(-25 42 57)" fill="#ffffff" />
+          <ellipse cx="56" cy="53" rx="5" ry="3.8" transform="rotate(-25 56 53)" fill="#ffffff" />
+          <line x1="46" y1="56" x2="46" y2="39" stroke="#ffffff" strokeWidth="2.6" />
+          <line x1="60" y1="52" x2="60" y2="35" stroke="#ffffff" strokeWidth="2.6" />
+          <path d="M 45 42 L 61 38 V 43 L 45 47 Z" fill="#ffffff" />
         </g>
       )}
 
       {emblem === "pictures" && (
-        <g transform="translate(34, 34)" opacity="0.45">
-          <rect x="0" y="0" width="32" height="26" rx="3" fill="none" stroke="#ffffff" strokeWidth="2.2" />
-          <circle cx="9" cy="8" r="3" fill="#ffffff" />
-          <path d="M 3 22 L 13 11 L 22 20 L 25 17 L 29 22 Z" fill="#ffffff" />
+        <g opacity="0.85">
+          <rect x="34" y="38" width="32" height="24" rx="3.5" fill="none" stroke="#ffffff" strokeWidth="2.6" />
+          <circle cx="43" cy="45" r="3" fill="#ffffff" />
+          <path d="M 36 58 L 46 48 L 53 55 L 56 52 L 62 58 Z" fill="#ffffff" />
         </g>
       )}
 
       {emblem === "public" && (
-        <g transform="translate(50, 48)" opacity="0.45">
-          <rect x="-14" y="-14" width="28" height="28" rx="4" fill="none" stroke="#ffffff" strokeWidth="2.2" transform="rotate(45)" />
-          <circle cx="0" cy="-6" r="2.5" fill="#ffffff" />
-          <path d="M 0 -2 V 5 L 3 10 M 0 5 L -3 10 M -4 0 L 0 -1 L 4 0" fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <g opacity="0.85">
+          <rect x="37" y="37" width="26" height="26" rx="4" fill="none" stroke="#ffffff" strokeWidth="2.6" transform="rotate(45 50 50)" />
+          <circle cx="50" cy="43" r="2.8" fill="#ffffff" />
+          <path d="M 50 46 V 53 L 46 60 M 50 53 L 54 60 M 46 49 L 54 51" fill="none" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
         </g>
       )}
 
       {emblem === "documents" && (
-        <g transform="translate(36, 33)" opacity="0.45">
-          <path d="M 2 0 H 20 L 26 6 V 26 H 2 Z" fill="none" stroke="#ffffff" strokeWidth="2.2" strokeLinejoin="round" />
-          <path d="M 20 0 V 6 H 26" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinejoin="round" />
-          <line x1="7" y1="12" x2="21" y2="12" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
-          <line x1="7" y1="17" x2="21" y2="17" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
-          <line x1="7" y1="21" x2="16" y2="21" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
+        <g opacity="0.85">
+          <path d="M 38 36 H 54 L 62 44 V 64 H 38 Z" fill="none" stroke="#ffffff" strokeWidth="2.6" strokeLinejoin="round" />
+          <path d="M 54 36 V 44 H 62" fill="none" stroke="#ffffff" strokeWidth="2.4" strokeLinejoin="round" />
+          <line x1="43" y1="49" x2="57" y2="49" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
+          <line x1="43" y1="54" x2="57" y2="54" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
+          <line x1="43" y1="59" x2="52" y2="59" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
         </g>
       )}
 
       {emblem === "desktop" && (
-        <g transform="translate(34, 34)" opacity="0.45">
-          <rect x="0" y="0" width="32" height="20" rx="2.5" fill="none" stroke="#ffffff" strokeWidth="2.2" />
-          <path d="M 12 25 H 20 M 16 20 V 25" fill="none" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
+        <g opacity="0.85">
+          <rect x="34" y="37" width="32" height="21" rx="2.5" fill="none" stroke="#ffffff" strokeWidth="2.6" />
+          <path d="M 46 58 V 63 M 42 63 H 58" fill="none" stroke="#ffffff" strokeWidth="2.6" strokeLinecap="round" />
         </g>
       )}
 
       {emblem === "code" && (
-        <g transform="translate(50, 48)" opacity="0.45">
-          <path d="M -8 -6 L -14 0 L -8 6" fill="none" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M 8 -6 L 14 0 L 8 6" fill="none" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          <line x1="3" y1="-8" x2="-3" y2="8" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
+        <g opacity="0.85">
+          <path d="M 43 43 L 37 49 L 43 55" fill="none" stroke="#ffffff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M 57 43 L 63 49 L 57 55" fill="none" stroke="#ffffff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+          <line x1="52" y1="41" x2="48" y2="57" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" />
         </g>
       )}
     </svg>
