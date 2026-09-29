@@ -29,7 +29,7 @@ function fileQuery(serverId: string, extra: Record<string, string>) {
   return new URLSearchParams({ serverId, ...extra }).toString();
 }
 
-const VIRTUAL_FS: Record<string, { content?: string; isDir: boolean; size: number; modified: string; mime?: string }> = {
+const VIRTUAL_FS: Record<string, { content?: string; url?: string; isDir: boolean; size: number; modified: string; mime?: string }> = {
   "/": { isDir: true, size: 4096, modified: new Date().toISOString() },
   "/var": { isDir: true, size: 4096, modified: new Date().toISOString() },
   "/var/log": { isDir: true, size: 4096, modified: new Date().toISOString() },
@@ -52,7 +52,7 @@ const VIRTUAL_FS: Record<string, { content?: string; isDir: boolean; size: numbe
   "/home/root/Music": { isDir: true, size: 4096, modified: new Date().toISOString() },
   "/home/root/Music/ambient.mp3": { isDir: false, content: "", size: 3145728, modified: new Date().toISOString(), mime: "audio/mpeg" },
   "/home/root/Pictures": { isDir: true, size: 4096, modified: new Date().toISOString() },
-  "/home/root/Pictures/wallpaper.jpg": { isDir: false, content: "", size: 2097152, modified: new Date().toISOString(), mime: "image/jpeg" },
+  "/home/root/Pictures/wallpaper.jpg": { isDir: false, content: "/wallpaper.jpg", url: "/wallpaper.jpg", size: 215903, modified: new Date().toISOString(), mime: "image/jpeg" },
   "/home/root/Public": { isDir: true, size: 4096, modified: new Date().toISOString() },
   "/home/root/Public/shared.txt": { isDir: false, content: "Public share\n", size: 13, modified: new Date().toISOString(), mime: "text/plain" },
   "/home/root/Code": { isDir: true, size: 4096, modified: new Date().toISOString() },
@@ -210,10 +210,32 @@ export async function uploadFile(serverId: string, directory: string, file: File
 }
 
 export function downloadUrl(serverId: string, path: string) {
+  const item = VIRTUAL_FS[path];
+  if (item?.url) {
+    return item.url;
+  }
+  if (item?.content && (item.content.startsWith("/") || item.content.startsWith("data:") || item.content.startsWith("blob:"))) {
+    return item.content;
+  }
+  const name = baseName(path).toLowerCase();
+  if (name === "wallpaper.jpg" || name === "wallpaper.png" || name === "wallpaper.jpeg") {
+    return "/wallpaper.jpg";
+  }
   return authenticatedApiUrl(`/api/files/download?${fileQuery(serverId, { path, download: "1" })}`);
 }
 
 export function mediaUrl(serverId: string, path: string) {
+  const item = VIRTUAL_FS[path];
+  if (item?.url) {
+    return item.url;
+  }
+  if (item?.content && (item.content.startsWith("/") || item.content.startsWith("data:") || item.content.startsWith("blob:"))) {
+    return item.content;
+  }
+  const name = baseName(path).toLowerCase();
+  if (name === "wallpaper.jpg" || name === "wallpaper.png" || name === "wallpaper.jpeg") {
+    return "/wallpaper.jpg";
+  }
   return authenticatedApiUrl(`/api/files/download?${fileQuery(serverId, { path })}`);
 }
 

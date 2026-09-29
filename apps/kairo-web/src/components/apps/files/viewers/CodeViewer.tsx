@@ -48,15 +48,15 @@ export function CodeViewer({ file, onClose }: { file: ViewerFile; onClose: () =>
   const width = String(Math.max(lines.length, 1)).length;
 
   return (
-    <div className="flex h-full flex-col bg-[#161616] text-[#d7d7d7]">
+    <div className="flex h-full flex-col bg-white dark:bg-[#161619] text-neutral-900 dark:text-neutral-100">
       <PreviewToolbar
         truncated={preview.truncated}
         content={preview.content}
         path={file.path}
         serverId={serverId}
       />
-      <div className="min-h-0 flex-1 overflow-auto">
-        <pre className="min-w-full p-3 font-mono text-[12.5px] leading-6">
+      <div className="min-h-0 flex-1 overflow-auto bg-neutral-50 dark:bg-[#121214]">
+        <pre className="min-w-full p-3 font-mono text-[12.5px] leading-6 text-neutral-800 dark:text-[#d7d7d7]">
           {lines.map((line, index) => (
             <div key={index} className="flex">
               <span className="w-12 shrink-0 select-none pr-3 text-right text-white/30">
