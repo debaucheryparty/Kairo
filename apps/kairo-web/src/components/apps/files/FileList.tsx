@@ -11,7 +11,7 @@ import {
   FileText,
   FileVideo,
 } from "lucide-react";
-import { useState, type MouseEvent } from "react";
+import { Fragment, useState, type MouseEvent, type ReactNode } from "react";
 import { MacFolderIcon } from "@/src/components/brand/MacFolderIcon";
 import { getFileType, getFileKindLabel } from "@/src/lib/files/file-type";
 import { formatModified, formatSize } from "@/src/lib/files/format";
@@ -30,6 +30,8 @@ export function FileList({
   onContextMenu,
   expandedPaths,
   onToggleExpand,
+  expandedEntries = {},
+  loadingPaths = new Set(),
 }: {
   path: string;
   entries: FileEntry[];
@@ -40,6 +42,8 @@ export function FileList({
   onContextMenu: (event: MouseEvent, entry: FileEntry | null) => void;
   expandedPaths?: Set<string>;
   onToggleExpand?: (path: string) => void;
+  expandedEntries?: Record<string, FileEntry[]>;
+  loadingPaths?: Set<string>;
 }) {
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
@@ -53,22 +57,125 @@ export function FileList({
     }
   }
 
-  const sortedEntries = [...entries].sort((a, b) => {
-    if (a.type !== b.type) {
-      return a.type === "dir" ? -1 : 1;
-    }
-    let cmp = 0;
-    if (sortField === "name") {
-      cmp = a.name.localeCompare(b.name);
-    } else if (sortField === "modified") {
-      cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime();
-    } else if (sortField === "size") {
-      cmp = a.size - b.size;
-    } else if (sortField === "kind") {
-      cmp = getFileKindLabel(a.name, a.type).localeCompare(getFileKindLabel(b.name, b.type));
-    }
-    return sortOrder === "asc" ? cmp : -cmp;
-  });
+  function sortEntries(items: FileEntry[]): FileEntry[] {
+    return [...items].sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === "dir" ? -1 : 1;
+      }
+      let cmp = 0;
+      if (sortField === "name") {
+        cmp = a.name.localeCompare(b.name);
+      } else if (sortField === "modified") {
+        cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime();
+      } else if (sortField === "size") {
+        cmp = a.size - b.size;
+      } else if (sortField === "kind") {
+        cmp = getFileKindLabel(a.name, a.type).localeCompare(getFileKindLabel(b.name, b.type));
+      }
+      return sortOrder === "asc" ? cmp : -cmp;
+    });
+  }
+
+  const sortedEntries = sortEntries(entries);
+
+  function renderEntry(entry: FileEntry, depth = 0): ReactNode {
+    const isSelected = selected === entry.path;
+    const isDir = entry.type === "dir";
+    const isExpanded = Boolean(expandedPaths?.has(entry.path));
+    const rawChildren = isDir && isExpanded ? expandedEntries[entry.path] : null;
+    const children = rawChildren ? sortEntries(rawChildren) : null;
+    const isLoading = isDir && isExpanded && loadingPaths.has(entry.path);
+
+    return (
+      <Fragment key={entry.path}>
+        <div
+          onClick={() => onSelect(entry.path)}
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            onOpen(entry);
+          }}
+          onContextMenu={(event) => onContextMenu(event, entry)}
+          className={`grid grid-cols-12 gap-2 items-center rounded-[8px] px-3 py-1.5 text-[12px] cursor-default transition-colors ${
+            isSelected
+              ? "bg-[#007aff] text-white shadow-sm font-medium"
+              : "text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+          }`}
+        >
+          <div
+            className="col-span-5 flex items-center gap-1.5 min-w-0"
+            style={{ paddingLeft: `${depth * 18}px` }}
+          >
+            {isDir ? (
+              <button
+                type="button"
+                aria-label={isExpanded ? "Collapse folder" : "Expand folder"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onToggleExpand) onToggleExpand(entry.path);
+                  else onOpen(entry);
+                }}
+                className="rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+              >
+                {isExpanded ? (
+                  <ChevronDown className={`size-3.5 ${isSelected ? "text-white" : "opacity-60"}`} />
+                ) : (
+                  <ChevronRight className={`size-3.5 ${isSelected ? "text-white" : "opacity-60"}`} />
+                )}
+              </button>
+            ) : (
+              <span className="w-4 shrink-0" />
+            )}
+            <EntryIcon entry={entry} isSelected={isSelected} />
+            <span className="truncate">{entry.name}</span>
+          </div>
+
+          <div
+            className={`col-span-3 truncate text-[11px] ${
+              isSelected ? "text-white/90" : "opacity-60"
+            }`}
+          >
+            {formatModified(entry.modified)}
+          </div>
+
+          <div
+            className={`col-span-2 truncate text-[11px] ${
+              isSelected ? "text-white/90" : "opacity-60"
+            }`}
+          >
+            {isDir ? "—" : formatSize(entry.size)}
+          </div>
+
+          <div
+            className={`col-span-2 truncate text-[11px] ${
+              isSelected ? "text-white/90" : "opacity-60"
+            }`}
+          >
+            {getFileKindLabel(entry.name, entry.type)}
+          </div>
+        </div>
+
+        {isDir && isExpanded && (
+          isLoading ? (
+            <div
+              className="py-1 text-[11px] text-neutral-400 opacity-60"
+              style={{ paddingLeft: `${(depth + 1) * 18 + 24}px` }}
+            >
+              Loading…
+            </div>
+          ) : children && children.length > 0 ? (
+            children.map((child) => renderEntry(child, depth + 1))
+          ) : children && children.length === 0 ? (
+            <div
+              className="py-1 text-[11px] text-neutral-400 opacity-50 italic"
+              style={{ paddingLeft: `${(depth + 1) * 18 + 24}px` }}
+            >
+              Folder is empty
+            </div>
+          ) : null
+        )}
+      </Fragment>
+    );
+  }
 
   return (
     <div
@@ -135,76 +242,7 @@ export function FileList({
             </div>
           )}
 
-          {sortedEntries.map((entry) => {
-            const isSelected = selected === entry.path;
-            const isDir = entry.type === "dir";
-            const isExpanded = Boolean(expandedPaths?.has(entry.path));
-
-            return (
-              <div
-                key={entry.path}
-                onClick={() => onSelect(entry.path)}
-                onDoubleClick={(e) => {
-                  e.preventDefault();
-                  onOpen(entry);
-                }}
-                onContextMenu={(event) => onContextMenu(event, entry)}
-                className={`grid grid-cols-12 gap-2 items-center rounded-[8px] px-3 py-1.5 text-[12px] cursor-default transition-colors ${
-                  isSelected
-                    ? "bg-[#007aff] text-white shadow-sm font-medium"
-                    : "text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
-                }`}
-              >
-                <div className="col-span-5 flex items-center gap-1.5 min-w-0">
-                  {isDir ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onToggleExpand) onToggleExpand(entry.path);
-                        else onOpen(entry);
-                      }}
-                      className="rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className={`size-3.5 ${isSelected ? "text-white" : "opacity-60"}`} />
-                      ) : (
-                        <ChevronRight className={`size-3.5 ${isSelected ? "text-white" : "opacity-60"}`} />
-                      )}
-                    </button>
-                  ) : (
-                    <span className="w-4 shrink-0" />
-                  )}
-                  <EntryIcon entry={entry} isSelected={isSelected} />
-                  <span className="truncate">{entry.name}</span>
-                </div>
-
-                <div
-                  className={`col-span-3 truncate text-[11px] ${
-                    isSelected ? "text-white/90" : "opacity-60"
-                  }`}
-                >
-                  {formatModified(entry.modified)}
-                </div>
-
-                <div
-                  className={`col-span-2 truncate text-[11px] ${
-                    isSelected ? "text-white/90" : "opacity-60"
-                  }`}
-                >
-                  {isDir ? "—" : formatSize(entry.size)}
-                </div>
-
-                <div
-                  className={`col-span-2 truncate text-[11px] ${
-                    isSelected ? "text-white/90" : "opacity-60"
-                  }`}
-                >
-                  {getFileKindLabel(entry.name, entry.type)}
-                </div>
-              </div>
-            );
-          })}
+          {sortedEntries.map((entry) => renderEntry(entry, 0))}
         </div>
       </div>
     </div>

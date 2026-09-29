@@ -68,6 +68,8 @@ export function FilesApp() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sectionOpen, setSectionOpen] = useState(true);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [expandedEntries, setExpandedEntries] = useState<Record<string, FileEntry[]>>({});
+  const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
 
   const uploadRef = useRef<HTMLInputElement>(null);
   const serverId = selectedServer?.id || "";
@@ -85,6 +87,26 @@ export function FilesApp() {
       });
       setEntries(sorted);
       setPath(result.path || nextPath);
+
+      if (nextPath !== path) {
+        setExpandedPaths(new Set());
+        setExpandedEntries({});
+      } else if (expandedPaths.size > 0) {
+        const updates: Record<string, FileEntry[]> = {};
+        await Promise.all(
+          Array.from(expandedPaths).map(async (dir) => {
+            try {
+              const res = await listFiles(serverId, dir);
+              const s = [...res.entries].sort((a, b) => {
+                if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+                return a.name.localeCompare(b.name);
+              });
+              updates[dir] = s;
+            } catch {}
+          })
+        );
+        setExpandedEntries((prev) => ({ ...prev, ...updates }));
+      }
     } catch (err) {
       setEntries([]);
       setError(err instanceof ApiError ? err.message : "unable to list files");
@@ -161,13 +183,37 @@ export function FilesApp() {
     });
   }
 
-  function toggleExpandPath(itemPath: string) {
-    setExpandedPaths((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemPath)) next.delete(itemPath);
-      else next.add(itemPath);
-      return next;
-    });
+  async function toggleExpandPath(itemPath: string) {
+    if (expandedPaths.has(itemPath)) {
+      setExpandedPaths((prev) => {
+        const next = new Set(prev);
+        next.delete(itemPath);
+        return next;
+      });
+      return;
+    }
+
+    setExpandedPaths((prev) => new Set(prev).add(itemPath));
+
+    if (!expandedEntries[itemPath] && serverId) {
+      setLoadingPaths((prev) => new Set(prev).add(itemPath));
+      try {
+        const result = await listFiles(serverId, itemPath);
+        const sorted = [...result.entries].sort((a, b) => {
+          if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+        setExpandedEntries((prev) => ({ ...prev, [itemPath]: sorted }));
+      } catch {
+        setExpandedEntries((prev) => ({ ...prev, [itemPath]: [] }));
+      } finally {
+        setLoadingPaths((prev) => {
+          const next = new Set(prev);
+          next.delete(itemPath);
+          return next;
+        });
+      }
+    }
   }
 
   function openSelected() {
@@ -176,7 +222,16 @@ export function FilesApp() {
     openEntry(entry);
   }
 
-  const selectedEntry = entries.find((entry) => entry.path === selected) || null;
+  const selectedEntry = useMemo(() => {
+    if (!selected) return null;
+    const direct = entries.find((entry) => entry.path === selected);
+    if (direct) return direct;
+    for (const list of Object.values(expandedEntries)) {
+      const nested = list.find((entry) => entry.path === selected);
+      if (nested) return nested;
+    }
+    return null;
+  }, [entries, expandedEntries, selected]);
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return entries;
@@ -537,6 +592,8 @@ export function FilesApp() {
             onContextMenu={openContextMenu}
             expandedPaths={expandedPaths}
             onToggleExpand={toggleExpandPath}
+            expandedEntries={expandedEntries}
+            loadingPaths={loadingPaths}
           />
         )}
 
