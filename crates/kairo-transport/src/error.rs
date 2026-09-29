@@ -19,4 +19,10 @@ pub enum TransportError {
 
     #[error("timeout after {0:?}")]
     Timeout(std::time::Duration),
+
+    #[error("tunnel registration failed: {0}")]
+    TunnelRegistrationFailed(String),
+
+    #[error("tunnel disconnected")]
+    TunnelDisconnected,
 }

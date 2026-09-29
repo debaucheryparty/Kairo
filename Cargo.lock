@@ -539,6 +539,7 @@ dependencies = [
  "futures-util",
  "kairo-common",
  "kairo-protocol",
+ "prost",
  "thiserror 2.0.21",
  "tokio",
  "tokio-tungstenite",
