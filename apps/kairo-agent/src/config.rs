@@ -12,6 +12,8 @@ pub struct AgentConfig {
     pub auth_token: Option<String>,
     pub tls_cert: Option<String>,
     pub tls_key: Option<String>,
+    pub tunnel_url: Option<String>,
+    pub tunnel_token: Option<String>,
 }
 
 impl AgentConfig {
@@ -75,6 +77,8 @@ impl fmt::Debug for AgentConfig {
             .field("auth_token", &self.auth_token.as_ref().map(|_| "[REDACTED]"))
             .field("tls_cert", &self.tls_cert)
             .field("tls_key", &self.tls_key.as_ref().map(|_| "[REDACTED]"))
+            .field("tunnel_url", &self.tunnel_url)
+            .field("tunnel_token", &self.tunnel_token.as_ref().map(|_| "[REDACTED]"))
             .finish()
     }
 }
@@ -88,6 +92,8 @@ impl Default for AgentConfig {
             auth_token: None,
             tls_cert: None,
             tls_key: None,
+            tunnel_url: None,
+            tunnel_token: None,
         }
     }
 }

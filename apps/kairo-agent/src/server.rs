@@ -11,6 +11,7 @@ use crate::config::AgentConfig;
 use crate::gpu::GpuManager;
 use crate::pty::PtyManager;
 use crate::session::{Session, SessionError};
+use kairo_transport::tunnel::{ReverseTunnelClient, TunnelConfig, VirtualStream};
 
 struct RateLimiter {
     attempts: Mutex<HashMap<IpAddr, (u32, Instant)>>,
@@ -101,6 +102,36 @@ impl Server {
             "kairo-agent listener started"
         );
 
+        let (tunnel_stream_tx, mut tunnel_stream_rx) = tokio::sync::mpsc::channel::<VirtualStream>(32);
+
+        if let Some(tunnel_url) = &self.config.tunnel_url {
+            let token = self
+                .config
+                .tunnel_token
+                .clone()
+                .or_else(|| self.config.auth_token.clone())
+                .unwrap_or_default();
+            let hostname = sysinfo::System::host_name().unwrap_or_else(|| "kairo-agent".to_string());
+            let tunnel_cfg = TunnelConfig {
+                relay_url: tunnel_url.clone(),
+                agent_id: self.config.agent_id.to_string(),
+                auth_token: token,
+                hostname,
+                keepalive_interval: Duration::from_secs(15),
+            };
+            let stream_sender = tunnel_stream_tx.clone();
+            tokio::spawn(async move {
+                let client = ReverseTunnelClient::new(tunnel_cfg);
+                loop {
+                    info!("starting reverse tunnel to relay");
+                    if let Err(e) = client.run(stream_sender.clone()).await {
+                        warn!("reverse tunnel connection ended: {e}, reconnecting in 5s");
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                    }
+                }
+            });
+        }
+
         loop {
             tokio::select! {
                 accept_res = listener.accept() => {
@@ -153,6 +184,60 @@ impl Server {
                                 );
                             }
                         }
+                    });
+                }
+                Some(vstream) = tunnel_stream_rx.recv() => {
+                    info!(stream_id = vstream.stream_id, "accepted virtual tunnel stream");
+                    let config = Arc::clone(&self.config);
+                    let pty = Arc::clone(&self.pty);
+                    let app = Arc::clone(&self.app);
+                    let gpu = Arc::clone(&self.gpu);
+
+                    tokio::spawn(async move {
+                        let (v_sender, mut v_rx) = vstream.split();
+                        let (client_duplex, server_duplex) = tokio::io::duplex(64 * 1024);
+                        let (mut duplex_read, mut duplex_write) = tokio::io::split(client_duplex);
+
+                        let pipe_to_vstream = tokio::spawn(async move {
+                            use tokio::io::AsyncReadExt;
+                            let mut buf = vec![0u8; 16384];
+                            loop {
+                                match duplex_read.read(&mut buf).await {
+                                    Ok(0) => break,
+                                    Ok(n) => {
+                                        if v_sender.send(bytes::Bytes::copy_from_slice(&buf[..n])).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                    Err(_) => break,
+                                }
+                            }
+                            let _ = v_sender.close().await;
+                        });
+
+                        let pipe_from_vstream = tokio::spawn(async move {
+                            use tokio::io::AsyncWriteExt;
+                            while let Some(chunk) = v_rx.recv().await {
+                                if duplex_write.write_all(&chunk).await.is_err() {
+                                    break;
+                                }
+                            }
+                        });
+
+                        let ws_stream = match accept_async(server_duplex).await {
+                            Ok(ws) => ws,
+                            Err(e) => {
+                                warn!(error = %e, "tunnel virtual stream websocket handshake failed");
+                                pipe_to_vstream.abort();
+                                pipe_from_vstream.abort();
+                                return;
+                            }
+                        };
+
+                        let mut session = Session::with_components(config, pty, app, gpu);
+                        let _ = session.run(ws_stream).await;
+                        pipe_to_vstream.abort();
+                        pipe_from_vstream.abort();
                     });
                 }
                 _ = tokio::signal::ctrl_c() => {

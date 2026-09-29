@@ -19,7 +19,6 @@ use kairo_protocol::v1::{
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
 use thiserror::Error;
-use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 use tokio_tungstenite::WebSocketStream;
@@ -171,10 +170,13 @@ impl Session {
         self.state
     }
 
-    pub async fn run(
+    pub async fn run<S>(
         &mut self,
-        mut stream: WebSocketStream<TcpStream>,
-    ) -> Result<(), SessionError> {
+        mut stream: WebSocketStream<S>,
+    ) -> Result<(), SessionError>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
         let handshake_res = timeout(HANDSHAKE_TIMEOUT, self.handle_handshake(&mut stream)).await;
         match handshake_res {
             Ok(Ok(())) => {
@@ -232,10 +234,13 @@ impl Session {
         Ok(())
     }
 
-    async fn handle_handshake(
+    async fn handle_handshake<S>(
         &mut self,
-        stream: &mut WebSocketStream<TcpStream>,
-    ) -> Result<(), SessionError> {
+        stream: &mut WebSocketStream<S>,
+    ) -> Result<(), SessionError>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
         let ws_msg = stream
             .next()
             .await

@@ -28,8 +28,7 @@ async fn test_successful_handshake() {
         data_dir: "/tmp".to_string(),
         agent_id: agent_id.clone(),
         auth_token: None,
-        tls_cert: None,
-        tls_key: None,
+        ..Default::default()
     });
 
     let server_handle = tokio::spawn(async move {
@@ -102,8 +101,7 @@ async fn test_version_mismatch_handshake_rejected() {
         data_dir: "/tmp".to_string(),
         agent_id: KairoId::new(),
         auth_token: None,
-        tls_cert: None,
-        tls_key: None,
+        ..Default::default()
     });
 
     let server_handle = tokio::spawn(async move {
@@ -152,8 +150,7 @@ async fn test_token_authentication_success_and_failure() {
         data_dir: "/tmp".to_string(),
         agent_id: KairoId::new(),
         auth_token: Some(expected_token.clone()),
-        tls_cert: None,
-        tls_key: None,
+        ..Default::default()
     });
 
     let config_clone = Arc::clone(&config);
