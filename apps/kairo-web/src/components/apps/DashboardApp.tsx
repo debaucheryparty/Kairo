@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { BrandMark } from "@/src/components/brand/BrandMark";
 import { useServer } from "@/src/lib/api/server-context";
-import { useSelectedServer } from "@/src/lib/session";
+import { useRuntimeClient, useSelectedServer } from "@/src/lib/session";
+import type { SystemMetrics } from "@kairo/runtime";
 
 function formatUptime(seconds: number) {
   if (!seconds) return "—";
@@ -14,7 +16,8 @@ function formatUptime(seconds: number) {
   return `${minutes}m`;
 }
 
-function statusCopy(status: string | undefined, error: string | null, name: string) {
+function statusCopy(status: string | undefined, error: string | null, name: string, isLive: boolean) {
+  if (isLive) return "Connected to live Kairo Agent.";
   if (status === "online") return "Connected over SSH.";
   if (status === "connecting") return `Connecting to ${name}…`;
   if (status === "authentication_failed")
@@ -24,17 +27,48 @@ function statusCopy(status: string | undefined, error: string | null, name: stri
 
 export function DashboardApp() {
   const selected = useSelectedServer();
+  const runtimeClient = useRuntimeClient();
   const { server, loading, error, refresh, lastUpdatedAt } = useServer();
-  const online = server?.status === "online";
+  const [liveMetrics, setLiveMetrics] = useState<SystemMetrics | null>(null);
+
+  useEffect(() => {
+    if (!runtimeClient?.getSession()) {
+      setLiveMetrics(null);
+      return;
+    }
+
+    let active = true;
+    const fetchMetrics = async () => {
+      try {
+        const metrics = await runtimeClient.getMetrics();
+        if (active) setLiveMetrics(metrics);
+      } catch {}
+    };
+
+    void fetchMetrics();
+    const interval = setInterval(() => {
+      void fetchMetrics();
+    }, 2000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [runtimeClient]);
+
+  const isLive = Boolean(runtimeClient?.getSession());
+  const online = isLive || server?.status === "online";
   const name = selected?.name || server?.name || "Server";
   const host = selected?.address || server?.host;
   const hostname = selected?.hostname || server?.hostname;
   const username = selected?.username || server?.username;
-  const lastUpdated = lastUpdatedAt
-    ? formatClock(lastUpdatedAt)
-    : server?.lastSeen
-      ? formatLastSeen(server.lastSeen)
-      : null;
+  const lastUpdated = isLive
+    ? "just now"
+    : lastUpdatedAt
+      ? formatClock(lastUpdatedAt)
+      : server?.lastSeen
+        ? formatLastSeen(server.lastSeen)
+        : null;
 
   return (
     <div className="h-full overflow-auto sui-app p-6">
@@ -62,7 +96,7 @@ export function DashboardApp() {
         </button>
       </div>
       <p className="mt-2 text-sm sui-muted">
-        {loading && !server ? "Loading live metrics…" : statusCopy(server?.status, error, name)}
+        {loading && !server && !isLive ? "Loading live metrics…" : statusCopy(server?.status, error, name, isLive)}
       </p>
       {username && host ? (
         <p className="mt-1 text-xs sui-muted">
@@ -71,7 +105,7 @@ export function DashboardApp() {
         </p>
       ) : null}
       <p className="mt-1 text-xs sui-muted">
-        {loading && !server
+        {loading && !server && !isLive
           ? "Last updated: —"
           : lastUpdated
             ? `Last updated: ${lastUpdated}`
@@ -83,26 +117,26 @@ export function DashboardApp() {
       <div className="mt-6 grid grid-cols-2 gap-3">
         <MetricCard
           label="CPU"
-          value={online ? `${Math.round(server?.cpuUsage || 0)}%` : "—"}
-          loading={loading && !server}
+          value={online ? (liveMetrics ? `${Math.round(liveMetrics.cpuUsagePercent)}%` : `${Math.round(server?.cpuUsage || 0)}%`) : "—"}
+          loading={loading && !server && !isLive}
           unavailable={!online && !loading}
         />
         <MetricCard
           label="RAM"
-          value={online ? `${Math.round(server?.memoryUsage || 0)}%` : "—"}
-          loading={loading && !server}
+          value={online ? (liveMetrics && liveMetrics.memoryTotalBytes > 0 ? `${Math.round((liveMetrics.memoryUsedBytes / liveMetrics.memoryTotalBytes) * 100)}%` : `${Math.round(server?.memoryUsage || 0)}%`) : "—"}
+          loading={loading && !server && !isLive}
           unavailable={!online && !loading}
         />
         <MetricCard
           label="Disk"
-          value={online ? `${Math.round(server?.diskUsage || 0)}%` : "—"}
-          loading={loading && !server}
+          value={online ? (liveMetrics && liveMetrics.diskTotalBytes > 0 ? `${Math.round((liveMetrics.diskUsedBytes / liveMetrics.diskTotalBytes) * 100)}%` : `${Math.round(server?.diskUsage || 0)}%`) : "—"}
+          loading={loading && !server && !isLive}
           unavailable={!online && !loading}
         />
         <MetricCard
           label="Uptime"
-          value={online ? formatUptime(server?.uptimeSeconds || 0) : "—"}
-          loading={loading && !server}
+          value={online ? (liveMetrics ? formatUptime(liveMetrics.uptimeSeconds) : formatUptime(server?.uptimeSeconds || 0)) : "—"}
+          loading={loading && !server && !isLive}
           unavailable={!online && !loading}
         />
       </div>
