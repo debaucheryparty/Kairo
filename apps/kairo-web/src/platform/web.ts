@@ -23,11 +23,7 @@ export const platform: Platform = {
     return null;
   },
 
-  async setLocalAuthToken(token: string): Promise<void> {
-    // No-op for web
-  },
+  async setLocalAuthToken(_token: string): Promise<void> {},
 
-  async initialize(): Promise<void> {
-    // No-op for web
-  }
+  async initialize(): Promise<void> {},
 };

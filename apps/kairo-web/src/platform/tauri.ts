@@ -1,7 +1,8 @@
-import type { Platform } from "./types";
-import { open } from "@tauri-apps/plugin-shell";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-shell";
 import { LazyStore } from "@tauri-apps/plugin-store";
+
+import type { Platform } from "./types";
 
 const store = new LazyStore("kairo-settings.json");
 let cachedBackendPort: number | null = null;
@@ -9,22 +10,15 @@ let cachedBackendPort: number | null = null;
 export const platform: Platform = {
   name: "tauri",
 
-  getApiOrigin(fallback: string): string {
-    // In Tauri, we ignore the fallback and rely on the local Go sidecar
-    // For now, we'll return a placeholder port or default.
-    // In Phase 3, we'll read the dynamic port assigned to the sidecar.
+  getApiOrigin(_fallback: string): string {
     return cachedBackendPort ? `http://127.0.0.1:${cachedBackendPort}` : "http://127.0.0.1:8080";
   },
 
-  getWsOrigin(fallback: string): string {
+  getWsOrigin(_fallback: string): string {
     return cachedBackendPort ? `ws://127.0.0.1:${cachedBackendPort}` : "ws://127.0.0.1:8080";
   },
 
-  async downloadFile(serverId: string, path: string, url: string): Promise<void> {
-    // We cannot navigate away. We'll use tauri-plugin-fs in combination with standard fetch 
-    // to download the file directly, or use shell open if it's a media URL that can be opened externally.
-    // For now, we'll just open the URL externally so the OS handles it, instead of breaking the app.
-    // In a complete implementation we might prompt to save using @tauri-apps/plugin-dialog.
+  async downloadFile(_serverId: string, _path: string, url: string): Promise<void> {
     await open(url);
   },
 

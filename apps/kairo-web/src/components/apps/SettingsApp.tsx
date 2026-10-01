@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-
-import { isDesktopRuntime, currentRuntime } from "@/src/lib/runtime";
-import { useSelectedServer } from "@/src/lib/session";
-import { BrandMark } from "@/src/components/brand/BrandMark";
-import { platform } from "@platform";
-import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
+
+import { BrandMark } from "@/src/components/brand/BrandMark";
+import { currentRuntime, isDesktopRuntime } from "@/src/lib/runtime";
+import { useSelectedServer } from "@/src/lib/session";
+import { platform } from "@platform";
 
 type UpdatePhase = "idle" | "checking" | "up-to-date" | "available" | "downloading" | "error";
 
@@ -63,7 +63,7 @@ export function SettingsApp() {
     reader.readAsDataURL(file);
   };
 
-  const updaterRef = useRef<any>(null);
+  const updaterRef = useRef<Update | null>(null);
 
   const checkForUpdates = useCallback(async () => {
     if (!isDesktopRuntime()) return;
@@ -78,8 +78,8 @@ export function SettingsApp() {
       } else {
         setPhase("up-to-date");
       }
-    } catch (err: any) {
-      setError(err?.message || String(err));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
       setPhase("error");
     }
   }, []);
@@ -91,9 +91,9 @@ export function SettingsApp() {
     try {
       let downloaded = 0;
       let contentLength = 0;
-      await updaterRef.current.downloadAndInstall((event: any) => {
+      await updaterRef.current.downloadAndInstall((event: DownloadEvent) => {
         if (event.event === "Started") {
-          contentLength = event.data.contentLength;
+          contentLength = event.data.contentLength ?? 0;
         } else if (event.event === "Progress") {
           downloaded += event.data.chunkLength;
           if (contentLength) {
@@ -102,8 +102,8 @@ export function SettingsApp() {
         }
       });
       await relaunch();
-    } catch (err: any) {
-      setError(err?.message || String(err));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
       setPhase("error");
     }
   }, []);
