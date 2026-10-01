@@ -1,5 +1,6 @@
 import { currentRuntime, type RuntimeMode } from "@/src/lib/runtime/mode";
 import { getInjectedDesktopConfig, withLocalAuthQuery } from "@/src/lib/runtime/config";
+import { platform } from "@platform";
 
 export type BrowserLocation = {
   hostname: string;
@@ -53,12 +54,13 @@ export function apiOrigin(
   if (typeof window === "undefined") return "";
   const injected = getInjectedDesktopConfig();
   const { hostname, port, protocol } = window.location;
-  return resolveApiOrigin({
+  const resolved = resolveApiOrigin({
     runtime: currentRuntime(env),
     explicitBase: readExplicitBase(env),
     location: { hostname, port, protocol },
     desktopBackendOrigin: injected?.apiOrigin,
   });
+  return platform.getApiOrigin(resolved);
 }
 
 export function apiUrl(
@@ -74,11 +76,14 @@ export function wsUrl(
   env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},
 ): string {
   const origin = apiOrigin(env);
+  let resolvedWsUrl = "";
   if (!origin) {
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    return `${protocol}://${window.location.host}${path}`;
+    resolvedWsUrl = `${protocol}://${window.location.host}${path}`;
+  } else {
+    resolvedWsUrl = `${origin.replace(/^http/, "ws")}${path}`;
   }
-  return `${origin.replace(/^http/, "ws")}${path}`;
+  return platform.getWsOrigin(resolvedWsUrl);
 }
 
 export function resolveWsUrl(

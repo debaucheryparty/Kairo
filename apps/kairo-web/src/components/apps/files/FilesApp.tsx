@@ -28,6 +28,7 @@ import {
 } from "@/src/lib/api/files";
 import { useWindowManager } from "@/src/components/window/window-context";
 import { useServer } from "@/src/lib/api/server-context";
+import { platform } from "@platform";
 import { useRuntimeClient, useSelectedServer } from "@/src/lib/session";
 import { formatSize, totalSize } from "@/src/lib/files/format";
 import { moveToTrash, useTrash } from "@/src/lib/files/trash";
@@ -531,7 +532,7 @@ export function FilesApp() {
               disabled={!selectedEntry || selectedEntry.type !== "file"}
               onClick={() => {
                 if (selectedEntry?.type === "file") {
-                  window.location.href = downloadUrl(serverId, selectedEntry.path);
+                  platform.downloadFile(serverId, selectedEntry.path, downloadUrl(serverId, selectedEntry.path));
                 }
               }}
               className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
@@ -689,7 +690,7 @@ export function FilesApp() {
           }}
           onDownload={() => {
             if (menu.entry?.type === "file") {
-              window.location.href = downloadUrl(serverId, menu.entry.path);
+              platform.downloadFile(serverId, menu.entry.path, downloadUrl(serverId, menu.entry.path));
             }
           }}
           onCopyPath={() => copyPath(menu.entry?.path || path)}

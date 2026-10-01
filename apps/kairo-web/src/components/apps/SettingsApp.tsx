@@ -5,6 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isDesktopRuntime, currentRuntime } from "@/src/lib/runtime";
 import { useSelectedServer } from "@/src/lib/session";
 import { BrandMark } from "@/src/components/brand/BrandMark";
+import { platform } from "@platform";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 
 type UpdatePhase = "idle" | "checking" | "up-to-date" | "available" | "downloading" | "error";
 
@@ -60,12 +63,49 @@ export function SettingsApp() {
     reader.readAsDataURL(file);
   };
 
+  const updaterRef = useRef<any>(null);
+
   const checkForUpdates = useCallback(async () => {
+    if (!isDesktopRuntime()) return;
     setPhase("checking");
-    setTimeout(() => setPhase("up-to-date"), 600);
+    setError(null);
+    try {
+      const update = await check();
+      if (update) {
+        setAvailable({ version: update.version, body: update.body });
+        setPhase("available");
+        updaterRef.current = update;
+      } else {
+        setPhase("up-to-date");
+      }
+    } catch (err: any) {
+      setError(err?.message || String(err));
+      setPhase("error");
+    }
   }, []);
 
   const installUpdate = useCallback(async () => {
+    if (!updaterRef.current) return;
+    setPhase("downloading");
+    setError(null);
+    try {
+      let downloaded = 0;
+      let contentLength = 0;
+      await updaterRef.current.downloadAndInstall((event: any) => {
+        if (event.event === "Started") {
+          contentLength = event.data.contentLength;
+        } else if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          if (contentLength) {
+            setProgress(Math.round((downloaded / contentLength) * 100));
+          }
+        }
+      });
+      await relaunch();
+    } catch (err: any) {
+      setError(err?.message || String(err));
+      setPhase("error");
+    }
   }, []);
 
   return (
@@ -105,14 +145,16 @@ export function SettingsApp() {
         </dl>
         <p className="text-sm leading-6 sui-muted">
           Documentation:{" "}
-          <a
-            className="underline underline-offset-2"
-            href="https://github.com/debaucheryparty/Kairo"
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
+            className="underline underline-offset-2 cursor-pointer"
+            onClick={(e) => {
+              e.preventDefault();
+              platform.openExternalLink("https://github.com/debaucheryparty/Kairo");
+            }}
           >
             GitHub repository
-          </a>
+          </button>
         </p>
       </section>
 
