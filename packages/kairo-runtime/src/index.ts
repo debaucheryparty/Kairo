@@ -69,6 +69,8 @@ export {
   type LinuxApp,
   type LaunchAppResponsePayload,
   type RemoteSurfaceInfo,
+  encodeSurfaceInputEvent,
+  type SurfaceInputEventPayload,
   encodeGetGpuInfoRequest,
   decodeGetGpuInfoResponse,
   encodeStartGpuStreamRequest,

@@ -46,10 +46,16 @@ impl AppManager {
 
     pub async fn list_applications(&self) -> Vec<LinuxApp> {
         let mut apps = Vec::new();
-        let app_dirs = [
+        let mut app_dirs = vec![
             PathBuf::from("/usr/share/applications"),
             PathBuf::from("/usr/local/share/applications"),
+            PathBuf::from("/var/lib/flatpak/exports/share/applications"),
+            PathBuf::from("/var/lib/snapd/desktop/applications"),
         ];
+
+        if let Ok(home) = std::env::var("HOME") {
+            app_dirs.push(PathBuf::from(home).join(".local/share/applications"));
+        }
 
         for dir in &app_dirs {
             if let Ok(mut entries) = tokio::fs::read_dir(dir).await {
@@ -59,14 +65,12 @@ impl AppManager {
                         continue;
                     }
                     if let Some(app) = Self::parse_desktop_file(&path).await {
-                        apps.push(app);
+                        if !apps.iter().any(|existing: &LinuxApp| existing.app_id == app.app_id || existing.exec == app.exec) {
+                            apps.push(app);
+                        }
                     }
                 }
             }
-        }
-
-        if apps.is_empty() {
-            apps = Self::default_applications();
         }
 
         apps.sort_by(|a, b| a.name.cmp(&b.name));
@@ -105,7 +109,14 @@ impl AppManager {
                     "GenericName" => generic_name = Some(val.to_string()),
                     "Comment" => comment = Some(val.to_string()),
                     "Icon" => icon = Some(val.to_string()),
-                    "Exec" => exec = Some(val.to_string()),
+                    "Exec" => {
+                        let cleaned = val
+                            .split_whitespace()
+                            .filter(|part| !part.starts_with('%'))
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        exec = Some(cleaned);
+                    }
                     "NoDisplay" => no_display = val.eq_ignore_ascii_case("true"),
                     "Terminal" => is_terminal = val.eq_ignore_ascii_case("true"),
                     "Categories" => {
@@ -141,61 +152,6 @@ impl AppManager {
             categories,
             is_terminal,
         })
-    }
-
-    fn default_applications() -> Vec<LinuxApp> {
-        vec![
-            LinuxApp {
-                app_id: "terminal".to_string(),
-                name: "Terminal Shell".to_string(),
-                generic_name: "Command Line Shell".to_string(),
-                comment: "Interactive Linux PTY shell".to_string(),
-                icon: "utilities-terminal".to_string(),
-                exec: "bash".to_string(),
-                categories: vec!["System".to_string(), "TerminalEmulator".to_string()],
-                is_terminal: true,
-            },
-            LinuxApp {
-                app_id: "htop".to_string(),
-                name: "Htop Process Viewer".to_string(),
-                generic_name: "Process Monitor".to_string(),
-                comment: "Interactive process viewer and system telemetry".to_string(),
-                icon: "htop".to_string(),
-                exec: "htop".to_string(),
-                categories: vec!["System".to_string(), "Monitor".to_string()],
-                is_terminal: true,
-            },
-            LinuxApp {
-                app_id: "python".to_string(),
-                name: "Python Interpreter".to_string(),
-                generic_name: "Programming Language".to_string(),
-                comment: "Interactive Python REPL environment".to_string(),
-                icon: "python".to_string(),
-                exec: "python3".to_string(),
-                categories: vec!["Development".to_string()],
-                is_terminal: true,
-            },
-            LinuxApp {
-                app_id: "vim".to_string(),
-                name: "Vim Editor".to_string(),
-                generic_name: "Text Editor".to_string(),
-                comment: "Vi IMproved text editor".to_string(),
-                icon: "vim".to_string(),
-                exec: "vim".to_string(),
-                categories: vec!["Development".to_string(), "TextEditor".to_string()],
-                is_terminal: true,
-            },
-            LinuxApp {
-                app_id: "git".to_string(),
-                name: "Git VCS".to_string(),
-                generic_name: "Version Control".to_string(),
-                comment: "Distributed version control system".to_string(),
-                icon: "git".to_string(),
-                exec: "git".to_string(),
-                categories: vec!["Development".to_string()],
-                is_terminal: true,
-            },
-        ]
     }
 
     pub async fn launch_app(&self, req: LaunchAppRequest) -> Result<LaunchAppResponse, AppError> {
@@ -282,14 +238,22 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_list_applications_fallback() {
-        let manager = AppManager::new();
-        let apps = manager.list_applications().await;
-        assert!(!apps.is_empty());
-        assert!(
-            apps.iter()
-                .any(|a| a.app_id == "terminal" || a.app_id == "htop")
-        );
+    async fn test_parse_desktop_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let desktop_path = temp.path().join("test-app.desktop");
+        tokio::fs::write(
+            &desktop_path,
+            "[Desktop Entry]\nType=Application\nName=Test GUI App\nExec=test-gui %u\nCategories=Development;IDE;\n",
+        )
+        .await
+        .unwrap();
+
+        let parsed = AppManager::parse_desktop_file(&desktop_path).await;
+        assert!(parsed.is_some());
+        let app = parsed.unwrap();
+        assert_eq!(app.name, "Test GUI App");
+        assert_eq!(app.exec, "test-gui");
+        assert_eq!(app.categories, vec!["Development", "IDE"]);
     }
 
     #[tokio::test]

@@ -64,6 +64,8 @@ import {
   ServiceAction,
   type LinuxApp,
   type LaunchAppResponsePayload,
+  encodeSurfaceInputEvent,
+  type SurfaceInputEventPayload,
   type GetGpuInfoResponsePayload,
   type StartGpuStreamRequestPayload,
   type StartGpuStreamResponsePayload,
@@ -420,6 +422,11 @@ export class KairoClient {
     return decodeCloseSurfaceResponse(respBytes);
   }
 
+  async sendSurfaceInput(event: SurfaceInputEventPayload): Promise<void> {
+    const payload = encodeSurfaceInputEvent(event);
+    await this.sendNotification(Opcode.SurfaceInput, payload);
+  }
+
   async getGpuInfo(): Promise<GetGpuInfoResponsePayload> {
     const payload = encodeGetGpuInfoRequest();
     const respBytes = await this.sendRequest(Opcode.GpuGetInfo, payload);
@@ -476,8 +483,7 @@ export class KairoClient {
         const err = decodeKairoError(envelope.payload);
         pending.reject(new Error(`Agent error [code ${err.code}]: ${err.message}`));
       }
-    } catch (e) {
-      // Ignored malformed messages
+    } catch {
     }
   }
 }

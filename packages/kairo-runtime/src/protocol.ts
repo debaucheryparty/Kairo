@@ -70,6 +70,24 @@ function encodeUintField(fieldNumber: number, val: number): Uint8Array {
   return concat([new Uint8Array([tag]), encodeVarint(val)]);
 }
 
+function encodeIntField(fieldNumber: number, val: number): Uint8Array {
+  const tag = (fieldNumber << 3) | 0;
+  if (val >= 0) {
+    return concat([new Uint8Array([tag]), encodeVarint(val)]);
+  }
+  const bytes: number[] = [];
+  let low = val >>> 0;
+  let high = 0xffffffff;
+  for (let i = 0; i < 10; i++) {
+    const byte = (low & 0x7f) | (i < 9 ? 0x80 : 0);
+    bytes.push(byte);
+    low = (low >>> 7) | ((high & 0x7f) << 25);
+    high >>>= 7;
+    if (low === 0 && high === 0 && (byte & 0x80) === 0) break;
+  }
+  return concat([new Uint8Array([tag]), new Uint8Array(bytes)]);
+}
+
 export function encodeHandshakeInit(payload: HandshakeInitPayload): Uint8Array {
   const parts = [
     encodeUintField(1, payload.protocolVersion),
@@ -1340,6 +1358,31 @@ export function decodeCloseSurfaceResponse(data: Uint8Array): boolean {
     }
   }
   return success;
+}
+
+export interface SurfaceInputEventPayload {
+  surfaceId: string;
+  eventType: string;
+  x?: number;
+  y?: number;
+  button?: number;
+  key?: string;
+  deltaX?: number;
+  deltaY?: number;
+}
+
+export function encodeSurfaceInputEvent(event: SurfaceInputEventPayload): Uint8Array {
+  const parts: Uint8Array[] = [
+    encodeStringField(1, event.surfaceId),
+    encodeStringField(2, event.eventType),
+  ];
+  if (event.x !== undefined) parts.push(encodeIntField(3, event.x));
+  if (event.y !== undefined) parts.push(encodeIntField(4, event.y));
+  if (event.button !== undefined) parts.push(encodeUintField(5, event.button));
+  if (event.key) parts.push(encodeStringField(6, event.key));
+  if (event.deltaX !== undefined) parts.push(encodeIntField(7, event.deltaX));
+  if (event.deltaY !== undefined) parts.push(encodeIntField(8, event.deltaY));
+  return concat(parts);
 }
 
 export interface GpuDevicePayload {
