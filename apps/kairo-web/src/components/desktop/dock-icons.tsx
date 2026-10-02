@@ -608,8 +608,98 @@ export function FilesGlyph(props: IconProps) {
   return <FinderGlyph {...props} />;
 }
 
+export function RemoteAppsGlyph({ className }: IconProps) {
+  const bgGrad = useId();
+  const rimGrad = useId();
+  const shadowFilter = useId();
+  const clipId = useId();
+
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={bgGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#4f46e5" />
+          <stop offset="50%" stopColor="#3730a3" />
+          <stop offset="100%" stopColor="#1e1b4b" />
+        </linearGradient>
+        <linearGradient id={rimGrad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#000000" stopOpacity="0.25" />
+        </linearGradient>
+        <filter id={shadowFilter} x="-10%" y="-10%" width="120%" height="125%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.28" />
+        </filter>
+        <clipPath id={clipId}>
+          <rect x="2" y="2" width="96" height="96" rx="22" />
+        </clipPath>
+      </defs>
+
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="96"
+        rx="22"
+        fill={`url(#${bgGrad})`}
+        filter={`url(#${shadowFilter})`}
+      />
+
+      <g clipPath={`url(#${clipId})`}>
+        <line x1="20" y1="2" x2="20" y2="98" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+        <line x1="50" y1="2" x2="50" y2="98" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+        <line x1="80" y1="2" x2="80" y2="98" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+        <line x1="2" y1="32" x2="98" y2="32" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+        <line x1="2" y1="50" x2="98" y2="50" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+        <line x1="2" y1="68" x2="98" y2="68" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+
+        <rect x="18" y="18" width="28" height="26" rx="6" fill="#0284c7" />
+        <rect x="18" y="18" width="28" height="7" rx="3" fill="#0369a1" />
+        <circle cx="22" cy="21.5" r="1.2" fill="#f87171" />
+        <circle cx="26" cy="21.5" r="1.2" fill="#fbbf24" />
+        <circle cx="30" cy="21.5" r="1.2" fill="#34d399" />
+        <rect x="22" y="28" width="20" height="3" rx="1.5" fill="#bae6fd" />
+        <rect x="22" y="34" width="14" height="2.5" rx="1.2" fill="#7dd3fc" />
+
+        <rect x="54" y="18" width="28" height="26" rx="6" fill="#0f172a" />
+        <rect x="54" y="18" width="28" height="7" rx="3" fill="#1e293b" />
+        <circle cx="58" cy="21.5" r="1.2" fill="#f87171" />
+        <circle cx="62" cy="21.5" r="1.2" fill="#fbbf24" />
+        <circle cx="66" cy="21.5" r="1.2" fill="#34d399" />
+        <path d="M 59 29 L 63 32 L 59 35" stroke="#38bdf8" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        <line x1="66" y1="35" x2="74" y2="35" stroke="#34d399" strokeWidth="1.5" strokeLinecap="round" />
+
+        <rect x="18" y="54" width="28" height="26" rx="6" fill="#7c3aed" />
+        <rect x="18" y="54" width="28" height="7" rx="3" fill="#6d28d9" />
+        <circle cx="22" cy="57.5" r="1.2" fill="#f87171" />
+        <circle cx="26" cy="57.5" r="1.2" fill="#fbbf24" />
+        <circle cx="30" cy="57.5" r="1.2" fill="#34d399" />
+        <circle cx="27" cy="67" r="4" fill="#f43f5e" />
+        <circle cx="37" cy="69" r="5" fill="#f59e0b" opacity="0.9" />
+
+        <rect x="54" y="54" width="28" height="26" rx="6" fill="#059669" />
+        <rect x="54" y="54" width="28" height="7" rx="3" fill="#047857" />
+        <circle cx="58" cy="57.5" r="1.2" fill="#f87171" />
+        <circle cx="62" cy="57.5" r="1.2" fill="#fbbf24" />
+        <circle cx="66" cy="57.5" r="1.2" fill="#34d399" />
+        <polygon points="65,64 65,72 73,68" fill="#ecfdf5" />
+
+        <rect
+          x="2"
+          y="2"
+          width="96"
+          height="96"
+          rx="22"
+          fill="none"
+          stroke={`url(#${rimGrad})`}
+          strokeWidth="1.5"
+        />
+      </g>
+    </svg>
+  );
+}
+
 export const DOCK_GLYPHS: Record<
-  DockAppId | "trash" | "finder" | "monitor" | "files" | "launchpad",
+  DockAppId | "trash" | "finder" | "monitor" | "files" | "launchpad" | "editor" | "databases" | "domains",
   ComponentType<IconProps>
 > = {
   dashboard: ActivityMonitorGlyph,
@@ -617,6 +707,7 @@ export const DOCK_GLYPHS: Record<
   files: FinderGlyph,
   finder: FinderGlyph,
   terminal: TerminalGlyph,
+  "remote-apps": RemoteAppsGlyph,
   editor: EditorGlyph,
   databases: DatabasesGlyph,
   domains: DomainsGlyph,

@@ -11,7 +11,7 @@ export interface VpsApp {
   description: string;
   icon: string;
   exec: string;
-  builtinAppId?: "terminal" | "files" | "dashboard" | "settings" | "editor" | "databases" | "domains" | "about";
+  builtinAppId?: "terminal" | "files" | "dashboard" | "settings" | "remote-apps" | "about";
   isTerminal?: boolean;
 }
 
@@ -56,34 +56,14 @@ const DEFAULT_VPS_APPS: VpsApp[] = [
     builtinAppId: "dashboard",
   },
   {
-    id: "editor",
-    name: "Code Editor",
-    genericName: "Text Editor",
-    category: "Developer Tools",
-    description: "Lightweight code editor for scripts, configs, and server files",
-    icon: "editor",
-    exec: "nano",
-    builtinAppId: "editor",
-  },
-  {
-    id: "databases",
-    name: "Databases & Docker",
-    genericName: "Container & DB Manager",
-    category: "Services",
-    description: "Manage Docker containers, PostgreSQL, MySQL, and Redis services",
-    icon: "databases",
-    exec: "docker",
-    builtinAppId: "databases",
-  },
-  {
-    id: "domains",
-    name: "Domains & Reverse Proxy",
-    genericName: "Web Server & Routing",
-    category: "Services",
-    description: "Configure domain routing, SSL certificates, Nginx, and Caddy reverse proxies",
-    icon: "domains",
-    exec: "nginx",
-    builtinAppId: "domains",
+    id: "remote-apps",
+    name: "Linux Applications",
+    genericName: "App Launcher & GUI Streaming",
+    category: "System",
+    description: "Launch and stream interactive Linux GUI desktop applications with GPU acceleration",
+    icon: "remote-apps",
+    exec: "remote-apps",
+    builtinAppId: "remote-apps",
   },
   {
     id: "settings",
@@ -112,7 +92,7 @@ const DEFAULT_VPS_APPS: VpsApp[] = [
     genericName: "Python Interpreter",
     category: "Developer Tools",
     description: "Interactive Python 3 REPL and script runtime",
-    icon: "editor",
+    icon: "terminal",
     exec: "python3",
     builtinAppId: "terminal",
     isTerminal: true,

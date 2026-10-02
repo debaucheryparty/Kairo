@@ -62,6 +62,14 @@ export function DesktopContextMenu({
           onClose();
         }}
       />
+      <MenuItem
+        label="Open Linux Apps"
+        shortcut="⌘A"
+        onSelect={() => {
+          openWindow("remote-apps");
+          onClose();
+        }}
+      />
       <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
       <MenuItem
         label="About Kairo"

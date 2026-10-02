@@ -2,9 +2,7 @@ export const APP_IDS = [
   "dashboard",
   "files",
   "terminal",
-  "editor",
-  "domains",
-  "databases",
+  "remote-apps",
   "settings",
 ] as const;
 
@@ -44,11 +42,11 @@ export const APP_META: Record<
     available: true,
     chrome: "dark",
   },
-  editor: {
-    title: "Editor",
-    width: 720,
-    height: 480,
-    available: false,
+  "remote-apps": {
+    title: "Linux Apps",
+    width: 960,
+    height: 620,
+    available: true,
     chrome: "light",
   },
   surface: {
@@ -57,20 +55,6 @@ export const APP_META: Record<
     height: 640,
     available: true,
     chrome: "dark",
-  },
-  domains: {
-    title: "Domains",
-    width: 850,
-    height: 550,
-    available: false,
-    chrome: "light",
-  },
-  databases: {
-    title: "Databases",
-    width: 950,
-    height: 600,
-    available: false,
-    chrome: "light",
   },
   settings: {
     title: "Settings",

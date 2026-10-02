@@ -269,6 +269,14 @@ export function TopBar() {
                   closeMenus();
                 }}
               />
+              <MenuItem
+                label="Linux Applications"
+                shortcut="⌘A"
+                onSelect={() => {
+                  openWindow("remote-apps");
+                  closeMenus();
+                }}
+              />
               <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
               <MenuItem
                 label="Close Window"
