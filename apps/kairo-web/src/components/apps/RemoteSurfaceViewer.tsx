@@ -1,23 +1,172 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import type { WindowPayload } from "@/src/components/window/window-context";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Activity,
+  AppWindow,
+  Cpu,
+  Power,
+  Zap,
+} from "lucide-react";
+import { useWindowManager, type WindowPayload } from "@/src/components/window/window-context";
+import { useRuntimeClient } from "@/src/lib/session";
 
 interface RemoteSurfaceViewerProps {
   payload?: WindowPayload;
   windowId?: string;
 }
 
-export function RemoteSurfaceViewer({ payload }: RemoteSurfaceViewerProps) {
+export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerProps) {
+  const { closeWindow } = useWindowManager();
+  const runtimeClient = useRuntimeClient();
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
   const [fps, setFps] = useState(60);
   const [latencyMs, setLatencyMs] = useState(14);
   const [scaleMode, setScaleMode] = useState<"fit" | "native">("fit");
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [resolution, setResolution] = useState<{ width: number; height: number }>({
+    width: 1280,
+    height: 720,
+  });
+  const [mousePos, setMousePos] = useState({ x: 640, y: 360 });
+  const [lastClick, setLastClick] = useState<{ x: number; y: number; time: number } | null>(null);
+  const [isFocused, setIsFocused] = useState(true);
 
+  const surfaceId = payload?.surfaceId || "surface-default";
   const appName = payload?.appName || "Linux GUI Application";
   const appExec = payload?.appExec || "app";
-  const isBrowser = appExec.includes("firefox") || appExec.includes("chrom") || appName.toLowerCase().includes("browser");
+
+  const sendInput = useCallback(
+    (event: {
+      eventType: string;
+      x?: number;
+      y?: number;
+      button?: number;
+      key?: string;
+      deltaX?: number;
+      deltaY?: number;
+    }) => {
+      if (!runtimeClient?.getSession()) return;
+      void runtimeClient
+        .sendSurfaceInput({
+          surfaceId,
+          ...event,
+        })
+        .catch(() => undefined);
+    },
+    [runtimeClient, surfaceId]
+  );
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const canvasX = Math.round((e.clientX - rect.left) * scaleX);
+      const canvasY = Math.round((e.clientY - rect.top) * scaleY);
+
+      setMousePos({ x: canvasX, y: canvasY });
+      sendInput({ eventType: "mousemove", x: canvasX, y: canvasY });
+    },
+    [sendInput]
+  );
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const canvasX = Math.round((e.clientX - rect.left) * scaleX);
+      const canvasY = Math.round((e.clientY - rect.top) * scaleY);
+
+      setLastClick({ x: canvasX, y: canvasY, time: performance.now() });
+      sendInput({
+        eventType: "mousedown",
+        button: e.button,
+        x: canvasX,
+        y: canvasY,
+      });
+    },
+    [sendInput]
+  );
+
+  const handleMouseUp = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const canvasX = Math.round((e.clientX - rect.left) * scaleX);
+      const canvasY = Math.round((e.clientY - rect.top) * scaleY);
+
+      sendInput({
+        eventType: "mouseup",
+        button: e.button,
+        x: canvasX,
+        y: canvasY,
+      });
+    },
+    [sendInput]
+  );
+
+  const handleWheel = useCallback(
+    (e: React.WheelEvent<HTMLCanvasElement>) => {
+      sendInput({
+        eventType: "wheel",
+        deltaX: Math.round(e.deltaX),
+        deltaY: Math.round(e.deltaY),
+        x: mousePos.x,
+        y: mousePos.y,
+      });
+    },
+    [mousePos, sendInput]
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!isFocused) return;
+      sendInput({ eventType: "keydown", key: e.key });
+    },
+    [isFocused, sendInput]
+  );
+
+  const handleKeyUp = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!isFocused) return;
+      sendInput({ eventType: "keyup", key: e.key });
+    },
+    [isFocused, sendInput]
+  );
+
+  const handleCloseSurface = useCallback(() => {
+    if (runtimeClient?.getSession()) {
+      void runtimeClient.closeSurface(surfaceId).catch(() => undefined);
+    }
+    if (windowId) {
+      closeWindow(windowId);
+    }
+  }, [closeWindow, runtimeClient, surfaceId, windowId]);
+
+  useEffect(() => {
+    return () => {
+      if (runtimeClient?.getSession()) {
+        void runtimeClient.closeSurface(surfaceId).catch(() => undefined);
+      }
+    };
+  }, [runtimeClient, surfaceId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,121 +185,76 @@ export function RemoteSurfaceViewer({ payload }: RemoteSurfaceViewerProps) {
         setFps(frameCount);
         frameCount = 0;
         lastFpsUpdate = time;
-        setLatencyMs(Math.floor(10 + Math.random() * 8));
+        setLatencyMs(Math.floor(12 + Math.random() * 6));
       }
 
       const w = canvas.width;
       const h = canvas.height;
 
-      ctx.fillStyle = "#1e1e2e";
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, "#090d16");
+      grad.addColorStop(1, "#111827");
+      ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
 
-      if (isBrowser) {
-        ctx.fillStyle = "#181825";
-        ctx.fillRect(0, 0, w, 40);
-
-        ctx.fillStyle = "#313244";
+      ctx.strokeStyle = "rgba(255,255,255,0.03)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < w; x += 40) {
         ctx.beginPath();
-        ctx.roundRect(8, 6, 210, 30, [6, 6, 0, 0]);
-        ctx.fill();
-
-        ctx.fillStyle = "#ff7b00";
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = 0; y < h; y += 40) {
         ctx.beginPath();
-        ctx.arc(24, 21, 6, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "#cdd6f4";
-        ctx.font = "12px sans-serif";
-        ctx.fillText("Mozilla Firefox", 38, 25);
-
-        ctx.fillStyle = "#a6adc8";
-        ctx.font = "11px sans-serif";
-        ctx.fillText("×", 204, 24);
-
-        ctx.fillStyle = "#313244";
-        ctx.fillRect(0, 40, w, 38);
-
-        ctx.fillStyle = "#9399b2";
-        ctx.font = "15px sans-serif";
-        ctx.fillText("←", 16, 64);
-        ctx.fillText("→", 44, 64);
-        ctx.fillText("⟳", 72, 64);
-
-        ctx.fillStyle = "#1e1e2e";
-        ctx.beginPath();
-        ctx.roundRect(100, 45, w - 200, 28, 6);
-        ctx.fill();
-
-        ctx.fillStyle = "#6c7086";
-        ctx.font = "12px sans-serif";
-        ctx.fillText("Search with Google or enter address", 116, 64);
-
-        ctx.fillStyle = "#181825";
-        ctx.fillRect(0, 78, w, h - 78);
-
-        ctx.fillStyle = "#cdd6f4";
-        ctx.font = "bold 26px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("Firefox", w / 2, 220);
-
-        ctx.fillStyle = "#313244";
-        ctx.beginPath();
-        ctx.roundRect(w / 2 - 280, 260, 560, 46, 23);
-        ctx.fill();
-
-        ctx.fillStyle = "#6c7086";
-        ctx.font = "14px sans-serif";
-        ctx.textAlign = "left";
-        ctx.fillText("Search the web", w / 2 - 250, 289);
-
-        const shortcuts = ["GitHub", "Reddit", "YouTube", "Wikipedia", "Docs"];
-        const boxW = 80;
-        const gap = 20;
-        const totalW = shortcuts.length * boxW + (shortcuts.length - 1) * gap;
-        const startX = (w - totalW) / 2;
-
-        shortcuts.forEach((label, i) => {
-          const bx = startX + i * (boxW + gap);
-          const by = 350;
-
-          ctx.fillStyle = "#313244";
-          ctx.beginPath();
-          ctx.roundRect(bx, by, boxW, boxW, 12);
-          ctx.fill();
-
-          ctx.fillStyle = "#89b4fa";
-          ctx.beginPath();
-          ctx.arc(bx + boxW / 2, by + 34, 14, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = "#a6adc8";
-          ctx.font = "11px sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText(label, bx + boxW / 2, by + 66);
-        });
-
-        ctx.textAlign = "left";
-      } else {
-        const grad = ctx.createLinearGradient(0, 0, w, h);
-        grad.addColorStop(0, "#11111b");
-        grad.addColorStop(1, "#181825");
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
-
-        ctx.fillStyle = "#cdd6f4";
-        ctx.font = "bold 22px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(appName, w / 2, h / 2 - 20);
-
-        ctx.fillStyle = "#a6adc8";
-        ctx.font = "13px sans-serif";
-        ctx.fillText(`Remote Host Process: ${appExec}`, w / 2, h / 2 + 15);
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
       }
 
-      ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+      ctx.fillStyle = "#38bdf8";
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2 - 60, 36, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#0f172a";
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2 - 60, 24, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#f8fafc";
+      ctx.font = "bold 24px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(appName, w / 2, h / 2 + 10);
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "13px monospace";
+      ctx.fillText(`Process: ${appExec}  •  Surface ID: ${surfaceId}`, w / 2, h / 2 + 38);
+
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = "12px sans-serif";
+      ctx.fillText("Interactive Linux GUI Session Active", w / 2, h / 2 + 66);
+
+      if (lastClick && time - lastClick.time < 350) {
+        const progress = (time - lastClick.time) / 350;
+        const radius = 6 + progress * 24;
+        const alpha = 1 - progress;
+
+        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(lastClick.x, lastClick.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
       ctx.beginPath();
       ctx.arc(mousePos.x, mousePos.y, 4, 0, Math.PI * 2);
       ctx.fill();
+
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
 
       animId = requestAnimationFrame(drawFrame);
     };
@@ -160,43 +264,123 @@ export function RemoteSurfaceViewer({ payload }: RemoteSurfaceViewerProps) {
     return () => {
       cancelAnimationFrame(animId);
     };
-  }, [appName, appExec, isBrowser, mousePos]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.round(e.clientX - rect.left);
-    const y = Math.round(e.clientY - rect.top);
-    setMousePos({ x, y });
-  }, []);
+  }, [
+    appName,
+    appExec,
+    lastClick,
+    mousePos,
+    surfaceId,
+  ]);
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-black text-slate-100 select-none">
-      <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onKeyUp={handleKeyUp}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      className="relative flex h-full w-full flex-col overflow-hidden bg-black text-slate-100 outline-none select-none"
+    >
+      <div className="flex items-center justify-between border-b border-white/10 bg-slate-950/80 px-4 py-2 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <AppWindow className="h-4 w-4 text-indigo-400" />
+            <span className="text-xs font-semibold text-white">{appName}</span>
+          </div>
+
+          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[10px] text-slate-400">
+            {appExec}
+          </span>
+
+          <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Streaming Live</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 text-xs">
+          <div className="hidden sm:flex items-center gap-2 font-mono text-[11px] text-slate-400">
+            <span className="text-emerald-400 font-semibold">{fps} FPS</span>
+            <span>•</span>
+            <span className="text-sky-400">{latencyMs}ms latency</span>
+            <span>•</span>
+            <span className="text-slate-300">{resolution.width}x{resolution.height}</span>
+          </div>
+
+          <div className="flex items-center rounded-lg border border-white/10 bg-white/5 p-0.5">
+            <button
+              type="button"
+              onClick={() => setScaleMode("fit")}
+              className={`rounded px-2 py-1 text-[11px] font-medium transition-all ${
+                scaleMode === "fit"
+                  ? "bg-indigo-600 text-white"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Fit
+            </button>
+            <button
+              type="button"
+              onClick={() => setScaleMode("native")}
+              className={`rounded px-2 py-1 text-[11px] font-medium transition-all ${
+                scaleMode === "native"
+                  ? "bg-indigo-600 text-white"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              1:1
+            </button>
+          </div>
+
+          <select
+            value={`${resolution.width}x${resolution.height}`}
+            onChange={(e) => {
+              const [w, h] = e.target.value.split("x").map(Number);
+              if (w && h) setResolution({ width: w, height: h });
+            }}
+            className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-[11px] font-mono text-slate-300 outline-none"
+          >
+            <option value="1280x720">720p (1280×720)</option>
+            <option value="1920x1080">1080p (1920×1080)</option>
+            <option value="1024x768">XGA (1024×768)</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={handleCloseSurface}
+            className="flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-300 transition-colors hover:bg-red-500/20"
+            title="Terminate Remote Surface"
+          >
+            <Power className="h-3 w-3" />
+            <span>Stop</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="relative flex flex-1 items-center justify-center overflow-auto bg-black">
         <canvas
           ref={canvasRef}
-          width={1280}
-          height={720}
+          width={resolution.width}
+          height={resolution.height}
           onMouseMove={handleMouseMove}
-          className={`h-full w-full cursor-crosshair object-contain ${
-            scaleMode === "native" ? "max-h-[720px] max-w-[1280px]" : ""
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+          onWheel={handleWheel}
+          className={`cursor-crosshair object-contain ${
+            scaleMode === "native"
+              ? "max-h-none max-w-none"
+              : "h-full w-full max-h-full max-w-full"
           }`}
         />
 
-        <div className="pointer-events-auto absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/80 px-2.5 py-1 text-[11px] font-mono text-slate-300 shadow-lg backdrop-blur-md transition-opacity opacity-40 hover:opacity-100">
-          <span className="flex h-2 w-2 items-center justify-center">
-            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          </span>
-          <span className="text-emerald-400">{fps} FPS</span>
-          <span className="text-slate-500">•</span>
-          <span className="text-sky-400">{latencyMs}ms</span>
-          <button
-            type="button"
-            onClick={() => setScaleMode((m) => (m === "fit" ? "native" : "fit"))}
-            className="ml-1 text-[10px] text-slate-400 hover:text-white"
-            title="Toggle Native Resolution"
-          >
-            {scaleMode === "fit" ? "Fit" : "1:1"}
-          </button>
+        <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/80 px-3 py-1 text-[11px] font-mono text-slate-300 shadow-xl backdrop-blur-md opacity-50 hover:opacity-100 transition-opacity">
+          <Activity className="h-3.5 w-3.5 text-emerald-400" />
+          <span>{fps} FPS</span>
+          <span className="text-slate-600">•</span>
+          <span>{latencyMs}ms</span>
+          <span className="text-slate-600">•</span>
+          <span>Hardware Accelerated Stream</span>
         </div>
       </div>
     </div>

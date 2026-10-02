@@ -2,11 +2,9 @@
 
 import { AboutApp } from "@/src/components/apps/AboutApp";
 import { DashboardApp } from "@/src/components/apps/DashboardApp";
-import { DatabasesApp } from "@/src/components/apps/DatabasesApp";
-import { DomainsApp } from "@/src/components/apps/DomainsApp";
-import { EditorApp } from "@/src/components/apps/EditorApp";
 import { FileViewer } from "@/src/components/apps/files/viewers/FileViewer";
 import { FilesApp } from "@/src/components/apps/FilesApp";
+import { RemoteAppsApp } from "@/src/components/apps/RemoteAppsApp";
 import { RemoteSurfaceViewer } from "@/src/components/apps/RemoteSurfaceViewer";
 import { SettingsApp } from "@/src/components/apps/SettingsApp";
 import { TerminalApp } from "@/src/components/apps/TerminalApp";
@@ -58,16 +56,12 @@ function AppBody({
       return <FilesApp />;
     case "terminal":
       return <TerminalApp payload={payload} />;
-    case "editor":
-      return <EditorApp />;
-      case "viewer":
-        return <FileViewer payload={payload} windowId={windowId} />;
-      case "surface":
-        return <RemoteSurfaceViewer payload={payload} windowId={windowId} />;
-    case "domains":
-      return <DomainsApp />;
-    case "databases":
-      return <DatabasesApp />;
+    case "remote-apps":
+      return <RemoteAppsApp />;
+    case "viewer":
+      return <FileViewer payload={payload} windowId={windowId} />;
+    case "surface":
+      return <RemoteSurfaceViewer payload={payload} windowId={windowId} />;
     case "settings":
       return <SettingsApp />;
     case "about":
