@@ -43,30 +43,42 @@ export type ConnectionTestResult = {
   server: ServerInfo;
 };
 
-const STORAGE_KEY = "kairo_servers";
+import {
+  idbGetServers,
+  idbSaveServer,
+  idbDeleteServer,
+  setSessionToken,
+  getSessionToken,
+  clearSessionToken,
+} from "@/src/lib/storage/db";
 
-function getStoredServers(): ServerInfo[] {
+async function fetchStoredServers(): Promise<ServerInfo[]> {
+  const safeList = await idbGetServers();
+  if (safeList.length > 0) {
+    return safeList.map((s) => ({
+      ...s,
+      authToken: getSessionToken(s.id),
+    }));
+  }
+
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem("kairo_servers");
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.map((s) => {
-          if (!s.authToken && (s.host === "127.0.0.1" || s.host === "localhost")) {
-            return { ...s, authToken: "kro_fd708300e5c221172f8d0f168254a7f8fe94", authType: "token" as const };
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        for (const s of parsed) {
+          if (s.authToken) {
+            setSessionToken(s.id, s.authToken);
           }
-          return s;
-        });
+          await idbSaveServer(s);
+        }
+        localStorage.removeItem("kairo_servers");
+        return parsed;
       }
     }
   } catch {}
-  return [];
-}
 
-function saveStoredServers(servers: ServerInfo[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(servers));
-  } catch {}
+  return [];
 }
 
 export async function getServer(serverId: string, init?: RequestInit): Promise<ServerInfo> {
@@ -74,7 +86,7 @@ export async function getServer(serverId: string, init?: RequestInit): Promise<S
     const query = new URLSearchParams({ serverId, _: String(Date.now()) });
     return await apiRequest<ServerInfo>(`/api/server?${query.toString()}`, init);
   } catch {
-    const servers = getStoredServers();
+    const servers = await fetchStoredServers();
     const found = servers.find((s) => s.id === serverId);
     if (found) {
       return found;
@@ -96,7 +108,7 @@ export async function listServers(init?: RequestInit): Promise<ServerInfo[]> {
     );
     if (body.servers && body.servers.length > 0) return body.servers;
   } catch {}
-  return getStoredServers();
+  return fetchStoredServers();
 }
 
 export async function createServer(input: ServerWriteInput): Promise<ServerInfo> {
@@ -107,9 +119,9 @@ export async function createServer(input: ServerWriteInput): Promise<ServerInfo>
       timeoutMs: 25000,
     });
   } catch {
-    const servers = getStoredServers();
+    const id = `server-${Date.now()}`;
     const newServer: ServerInfo = {
-      id: `server-${Date.now()}`,
+      id,
       name: input.name,
       host: input.host,
       hostname: input.host,
@@ -126,8 +138,11 @@ export async function createServer(input: ServerWriteInput): Promise<ServerInfo>
       uptimeSeconds: 0,
       lastSeen: new Date().toISOString(),
     };
-    servers.push(newServer);
-    saveStoredServers(servers);
+
+    if (input.authToken) {
+      setSessionToken(id, input.authToken);
+    }
+    await idbSaveServer(newServer);
     return newServer;
   }
 }
@@ -140,22 +155,26 @@ export async function updateServer(id: string, input: ServerWriteInput): Promise
       timeoutMs: 25000,
     });
   } catch {
-    const servers = getStoredServers();
-    const index = servers.findIndex((s) => s.id === id);
-    if (index !== -1) {
-      servers[index] = {
-        ...servers[index],
+    const servers = await fetchStoredServers();
+    const existing = servers.find((s) => s.id === id);
+    if (existing) {
+      const updated: ServerInfo = {
+        ...existing,
         name: input.name,
         host: input.host,
         port: input.port,
         username: input.username,
         authType: input.authType,
-        authToken: input.authToken !== undefined ? input.authToken : servers[index].authToken,
+        authToken: input.authToken !== undefined ? input.authToken : getSessionToken(id),
         tunnelMode: input.tunnelMode,
         tunnelUrl: input.tunnelUrl,
       };
-      saveStoredServers(servers);
-      return servers[index];
+
+      if (input.authToken) {
+        setSessionToken(id, input.authToken);
+      }
+      await idbSaveServer(updated);
+      return updated;
     }
     throw new Error("Server not found");
   }
@@ -167,14 +186,14 @@ export async function deleteServer(id: string): Promise<{ status: string }> {
       method: "DELETE",
     });
   } catch {
-    const servers = getStoredServers().filter((s) => s.id !== id);
-    saveStoredServers(servers);
+    await idbDeleteServer(id);
+    clearSessionToken(id);
     return { status: "deleted" };
   }
 }
 
 export async function testServerConnection(id: string): Promise<ConnectionTestResult> {
-  const servers = getStoredServers();
+  const servers = await fetchStoredServers();
   const server = servers.find((s) => s.id === id);
   if (!server) {
     throw new Error(`Server ${id} not found`);
@@ -222,8 +241,7 @@ export async function testServerConnection(id: string): Promise<ConnectionTestRe
         lastSeen: new Date().toISOString(),
         error: undefined,
       };
-      const updatedList = servers.map((s) => (s.id === id ? updatedServer : s));
-      saveStoredServers(updatedList);
+      await idbSaveServer(updatedServer);
 
       return {
         ok: true,
@@ -233,8 +251,7 @@ export async function testServerConnection(id: string): Promise<ConnectionTestRe
     } catch (wsErr) {
       const errMessage = wsErr instanceof Error ? wsErr.message : "Connection failed";
       const updatedServer: ServerInfo = { ...server, status: "error", error: errMessage };
-      const updatedList = servers.map((s) => (s.id === id ? updatedServer : s));
-      saveStoredServers(updatedList);
+      await idbSaveServer(updatedServer);
 
       return {
         ok: false,
@@ -247,7 +264,7 @@ export async function testServerConnection(id: string): Promise<ConnectionTestRe
 }
 
 export async function connectServer(id: string): Promise<ServerInfo> {
-  const servers = getStoredServers();
+  const servers = await fetchStoredServers();
   const server = servers.find((s) => s.id === id);
   if (!server) throw new Error("Server not found");
 
@@ -262,7 +279,7 @@ export async function connectServer(id: string): Promise<ServerInfo> {
 }
 
 export async function disconnectServer(id: string): Promise<ServerInfo> {
-  const servers = getStoredServers();
+  const servers = await fetchStoredServers();
   const server = servers.find((s) => s.id === id);
   if (!server) throw new Error("Server not found");
 
@@ -273,8 +290,7 @@ export async function disconnectServer(id: string): Promise<ServerInfo> {
     });
   } catch {
     const updated = { ...server, status: "offline" as const };
-    const nextList = servers.map((s) => (s.id === id ? updated : s));
-    saveStoredServers(nextList);
+    await idbSaveServer(updated);
     return updated;
   }
 }
