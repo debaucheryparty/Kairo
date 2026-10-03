@@ -23,8 +23,8 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const [fps, setFps] = useState(60);
-  const [latencyMs, setLatencyMs] = useState(14);
+  const [fps, setFps] = useState(0);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [scaleMode, setScaleMode] = useState<"fit" | "native">("fit");
   const [resolution, setResolution] = useState<{ width: number; height: number }>({
     width: 1280,
@@ -220,24 +220,19 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
         }
       }
 
+      const renderStart = performance.now();
       const blob = new Blob([new Uint8Array(frame.data)], { type: "image/jpeg" });
       createImageBitmap(blob)
         .then((bitmap) => {
           ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
           bitmap.close();
+          setLatencyMs(Math.max(1, Math.round(performance.now() - renderStart)));
         })
         .catch(() => undefined);
     });
 
-    const latencyInterval = setInterval(() => {
-      if (hasReceivedFrame) {
-        setLatencyMs(Math.floor(10 + Math.random() * 8));
-      }
-    }, 2000);
-
     return () => {
       unsubscribe();
-      clearInterval(latencyInterval);
     };
   }, [runtimeClient, surfaceId]);
 
@@ -271,8 +266,12 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
         <div className="flex items-center gap-3 text-xs">
           <div className="hidden sm:flex items-center gap-2 font-mono text-[11px] text-slate-400">
             <span className="text-emerald-400 font-semibold">{fps} FPS</span>
-            <span>•</span>
-            <span className="text-sky-400">{latencyMs}ms latency</span>
+            {latencyMs !== null ? (
+              <>
+                <span>•</span>
+                <span className="text-sky-400">{latencyMs}ms render</span>
+              </>
+            ) : null}
             <span>•</span>
             <span className="text-slate-300">{resolution.width}x{resolution.height}</span>
           </div>

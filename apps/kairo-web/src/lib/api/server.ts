@@ -45,48 +45,15 @@ export type ConnectionTestResult = {
 
 const STORAGE_KEY = "kairo_servers";
 
-const DEFAULT_SERVERS: ServerInfo[] = [
-  {
-    id: "primary",
-    name: "Primary Dev VPS",
-    hostname: "kairo-agent.local",
-    status: "online",
-    host: "127.0.0.1",
-    port: 9600,
-    username: "root",
-    authType: "password",
-    cpuUsage: 18,
-    memoryUsage: 44,
-    diskUsage: 31,
-    uptimeSeconds: 345600,
-    lastSeen: new Date().toISOString(),
-  },
-  {
-    id: "worker-node-1",
-    name: "Edge Compute Worker",
-    hostname: "edge-01.us-east",
-    status: "online",
-    host: "192.168.1.120",
-    port: 22,
-    username: "ubuntu",
-    authType: "private_key",
-    cpuUsage: 8,
-    memoryUsage: 26,
-    diskUsage: 19,
-    uptimeSeconds: 864000,
-    lastSeen: new Date().toISOString(),
-  },
-];
-
 function getStoredServers(): ServerInfo[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {}
-  return DEFAULT_SERVERS;
+  return [];
 }
 
 function saveStoredServers(servers: ServerInfo[]) {
@@ -105,16 +72,11 @@ export async function getServer(serverId: string, init?: RequestInit): Promise<S
     return await apiRequest<ServerInfo>(`/api/server?${query.toString()}`, init);
   } catch {
     const servers = getStoredServers();
-    const found = servers.find((s) => s.id === serverId) || servers[0];
-    const jitter = Math.sin(Date.now() / 3000) * 3;
-    return {
-      ...found,
-      status: "online",
-      cpuUsage: Math.max(5, Math.min(95, Math.round(found.cpuUsage + jitter))),
-      memoryUsage: Math.max(10, Math.min(95, Math.round(found.memoryUsage + jitter * 0.5))),
-      diskUsage: found.diskUsage,
-      lastSeen: new Date().toISOString(),
-    };
+    const found = servers.find((s) => s.id === serverId);
+    if (found) {
+      return found;
+    }
+    throw new Error(`Server ${serverId} not found`);
   }
 }
 
@@ -151,11 +113,14 @@ export async function createServer(input: ServerWriteInput): Promise<ServerInfo>
       port: input.port,
       username: input.username,
       authType: input.authType,
-      status: "online",
-      cpuUsage: 12,
-      memoryUsage: 35,
-      diskUsage: 22,
-      uptimeSeconds: 7200,
+      authToken: input.authToken,
+      tunnelMode: input.tunnelMode,
+      tunnelUrl: input.tunnelUrl,
+      status: "offline",
+      cpuUsage: 0,
+      memoryUsage: 0,
+      diskUsage: 0,
+      uptimeSeconds: 0,
       lastSeen: new Date().toISOString(),
     };
     servers.push(newServer);
@@ -182,6 +147,9 @@ export async function updateServer(id: string, input: ServerWriteInput): Promise
         port: input.port,
         username: input.username,
         authType: input.authType,
+        authToken: input.authToken,
+        tunnelMode: input.tunnelMode,
+        tunnelUrl: input.tunnelUrl,
       };
       saveStoredServers(servers);
       return servers[index];
@@ -203,44 +171,107 @@ export async function deleteServer(id: string): Promise<{ status: string }> {
 }
 
 export async function testServerConnection(id: string): Promise<ConnectionTestResult> {
+  const servers = getStoredServers();
+  const server = servers.find((s) => s.id === id);
+  if (!server) {
+    throw new Error(`Server ${id} not found`);
+  }
+
   try {
     return await apiRequest<ConnectionTestResult>(`/api/servers/${id}/test-connection`, {
       method: "POST",
-      timeoutMs: 25000,
+      timeoutMs: 10000,
     });
   } catch {
-    const servers = getStoredServers();
-    const server = servers.find((s) => s.id === id) || servers[0];
-    return {
-      ok: true,
-      latencyMs: 14 + Math.round(Math.random() * 8),
-      server,
-    };
+    const protocol = server.tunnelMode
+      ? "wss"
+      : typeof window !== "undefined" && window.location.protocol === "https:"
+        ? "wss"
+        : "ws";
+    const port = server.port || 9600;
+    const host = server.host.includes(":") ? server.host : `${server.host}:${port}`;
+    const wsUrl = server.tunnelMode && server.tunnelUrl ? server.tunnelUrl : `${protocol}://${host}`;
+
+    const start = performance.now();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          ws.close();
+          reject(new Error("Connection timed out after 5s"));
+        }, 5000);
+
+        const ws = new WebSocket(wsUrl);
+        ws.onopen = () => {
+          clearTimeout(timeout);
+          ws.close();
+          resolve();
+        };
+        ws.onerror = () => {
+          clearTimeout(timeout);
+          reject(new Error(`Failed to reach Kairo agent at ${wsUrl}`));
+        };
+      });
+
+      const latencyMs = Math.max(1, Math.round(performance.now() - start));
+      const updatedServer: ServerInfo = {
+        ...server,
+        status: "online",
+        lastSeen: new Date().toISOString(),
+        error: undefined,
+      };
+      const updatedList = servers.map((s) => (s.id === id ? updatedServer : s));
+      saveStoredServers(updatedList);
+
+      return {
+        ok: true,
+        latencyMs,
+        server: updatedServer,
+      };
+    } catch (wsErr) {
+      const errMessage = wsErr instanceof Error ? wsErr.message : "Connection failed";
+      const updatedServer: ServerInfo = { ...server, status: "error", error: errMessage };
+      const updatedList = servers.map((s) => (s.id === id ? updatedServer : s));
+      saveStoredServers(updatedList);
+
+      return {
+        ok: false,
+        latencyMs: 0,
+        error: errMessage,
+        server: updatedServer,
+      };
+    }
   }
 }
 
 export async function connectServer(id: string): Promise<ServerInfo> {
+  const servers = getStoredServers();
+  const server = servers.find((s) => s.id === id);
+  if (!server) throw new Error("Server not found");
+
   try {
     return await apiRequest<ServerInfo>(`/api/servers/${id}/connect`, {
       method: "POST",
       timeoutMs: 25000,
     });
   } catch {
-    const servers = getStoredServers();
-    const server = servers.find((s) => s.id === id) || servers[0];
-    return { ...server, status: "online" };
+    return server;
   }
 }
 
 export async function disconnectServer(id: string): Promise<ServerInfo> {
+  const servers = getStoredServers();
+  const server = servers.find((s) => s.id === id);
+  if (!server) throw new Error("Server not found");
+
   try {
     return await apiRequest<ServerInfo>(`/api/servers/${id}/disconnect`, {
       method: "POST",
       timeoutMs: 15000,
     });
   } catch {
-    const servers = getStoredServers();
-    const server = servers.find((s) => s.id === id) || servers[0];
-    return { ...server, status: "offline" };
+    const updated = { ...server, status: "offline" as const };
+    const nextList = servers.map((s) => (s.id === id ? updated : s));
+    saveStoredServers(nextList);
+    return updated;
   }
 }

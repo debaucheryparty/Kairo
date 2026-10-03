@@ -23,7 +23,7 @@ export const APP_CATEGORIES: AppCategory[] = [
   "Services",
 ];
 
-const DEFAULT_VPS_APPS: VpsApp[] = [
+export const BUILTIN_VPS_APPS: VpsApp[] = [
   {
     id: "terminal",
     name: "Terminal",
@@ -76,50 +76,6 @@ const DEFAULT_VPS_APPS: VpsApp[] = [
     builtinAppId: "settings",
   },
   {
-    id: "htop",
-    name: "Htop Process Viewer",
-    genericName: "Interactive Process Viewer",
-    category: "System",
-    description: "Real-time process tree, memory consumption, and thread monitor",
-    icon: "dashboard",
-    exec: "htop",
-    builtinAppId: "terminal",
-    isTerminal: true,
-  },
-  {
-    id: "python",
-    name: "Python 3",
-    genericName: "Python Interpreter",
-    category: "Developer Tools",
-    description: "Interactive Python 3 REPL and script runtime",
-    icon: "terminal",
-    exec: "python3",
-    builtinAppId: "terminal",
-    isTerminal: true,
-  },
-  {
-    id: "git",
-    name: "Git VCS",
-    genericName: "Version Control",
-    category: "Developer Tools",
-    description: "Distributed version control system for repositories on the host",
-    icon: "terminal",
-    exec: "git",
-    builtinAppId: "terminal",
-    isTerminal: true,
-  },
-  {
-    id: "systemd",
-    name: "Systemd Services",
-    genericName: "Service Manager",
-    category: "Services",
-    description: "Inspect and manage active system daemons and background units",
-    icon: "settings",
-    exec: "systemctl status",
-    builtinAppId: "terminal",
-    isTerminal: true,
-  },
-  {
     id: "about",
     name: "About Kairo VPS",
     genericName: "System Information",
@@ -160,7 +116,7 @@ export async function listVpsApplications(serverId?: string): Promise<VpsApp[]> 
     const remote = await apiRequest<LinuxApp[]>(`/api/applications${query}`);
     if (Array.isArray(remote) && remote.length > 0) {
       const mapped = remote.map(mapLinuxApp);
-      const combined = [...DEFAULT_VPS_APPS];
+      const combined = [...BUILTIN_VPS_APPS];
       for (const item of mapped) {
         if (!combined.some((c) => c.id === item.id || c.exec === item.exec)) {
           combined.push(item);
@@ -170,5 +126,5 @@ export async function listVpsApplications(serverId?: string): Promise<VpsApp[]> 
     }
   } catch {}
 
-  return DEFAULT_VPS_APPS;
+  return BUILTIN_VPS_APPS;
 }

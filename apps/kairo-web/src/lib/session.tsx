@@ -98,22 +98,11 @@ function toWriteInput(input: NewServerInput) {
   };
 }
 
-const DEFAULT_PRIMARY: Server = {
-  id: "primary",
-  name: "Primary Dev VPS",
-  hostname: "kairo-agent.local",
-  address: "127.0.0.1",
-  status: "online",
-  sshPort: 9600,
-  username: "root",
-  authType: "password",
-};
-
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [screen, setScreen] = useState<AppScreen>("desktop");
-  const [servers, setServers] = useState<Server[]>([DEFAULT_PRIMARY]);
-  const [selectedServer, setSelectedServer] = useState<Server | null>(DEFAULT_PRIMARY);
-  const [loadingServers, setLoadingServers] = useState(false);
+  const [screen, setScreen] = useState<AppScreen>("server-selection");
+  const [servers, setServers] = useState<Server[]>([]);
+  const [selectedServer, setSelectedServer] = useState<Server | null>(null);
+  const [loadingServers, setLoadingServers] = useState(true);
   const [serversError, setServersError] = useState<string | null>(null);
   const [runtimeClient, setRuntimeClient] = useState<KairoClient | null>(null);
   const [runtimeConnected, setRuntimeConnected] = useState(false);
@@ -208,9 +197,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then((items) => {
         if (cancelled) return;
         const next = items.map(toSessionServer);
-        if (next.length > 0) {
-          setServers(next);
-          setSelectedServer((curr) => curr || next[0]);
+        setServers(next);
+        const storedActiveId =
+          typeof window !== "undefined" ? localStorage.getItem("kairo_active_server_id") : null;
+        if (storedActiveId) {
+          const matched = next.find((s) => s.id === storedActiveId);
+          if (matched) {
+            setSelectedServer(matched);
+            setScreen("desktop");
+          }
         }
         setServersError(null);
       })
@@ -228,6 +223,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const selectServer = useCallback((server: Server) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("kairo_active_server_id", server.id);
+    }
     setSelectedServer(server);
     setScreen("booting");
     return true;
@@ -284,6 +282,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const completeLogOut = useCallback(() => {
     const id = selectedServer?.id;
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("kairo_active_server_id");
+    }
     setSelectedServer(null);
     setScreen("server-selection");
     if (id) {
@@ -294,6 +295,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const backToServers = useCallback(() => {
     const id = selectedServer?.id;
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("kairo_active_server_id");
+    }
     setSelectedServer(null);
     setScreen("server-selection");
     if (id) {

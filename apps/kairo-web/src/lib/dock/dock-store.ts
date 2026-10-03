@@ -16,6 +16,7 @@ export const DEFAULT_DOCK_ITEMS: DockItem[] = [
   { id: "files", title: "Finder", builtinAppId: "files" },
   { id: "terminal", title: "Terminal", builtinAppId: "terminal" },
   { id: "dashboard", title: "Activity Monitor", builtinAppId: "dashboard" },
+  { id: "remote-apps", title: "Linux Applications", builtinAppId: "remote-apps" },
   { id: "settings", title: "System Settings", builtinAppId: "settings" },
 ];
 
