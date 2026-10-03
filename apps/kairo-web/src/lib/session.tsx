@@ -146,12 +146,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setRuntimeClient(client);
         setRuntimeConnected(true);
         setActiveRuntimeClient(client);
+        setSelectedServer((curr) => (curr ? { ...curr, status: "online" } : null));
+        setServers((curr) =>
+          curr.map((s) => (s.id === selectedServer.id ? { ...s, status: "online" } : s)),
+        );
       })
       .catch(() => {
         if (!active) return;
         setRuntimeClient(null);
         setRuntimeConnected(false);
         setActiveRuntimeClient(null);
+        setSelectedServer((curr) => (curr ? { ...curr, status: "offline" } : null));
+        setServers((curr) =>
+          curr.map((s) => (s.id === selectedServer.id ? { ...s, status: "offline" } : s)),
+        );
       });
 
     return () => {

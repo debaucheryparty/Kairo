@@ -7,6 +7,7 @@ import { BrandMark } from "@/src/components/brand/BrandMark";
 import { useServer } from "@/src/lib/api/server-context";
 import { useSelectedServer, useSession } from "@/src/lib/session";
 import { useWindowManager } from "@/src/components/window/window-context";
+import type { SystemMetrics } from "@kairo/runtime";
 
 function statusLabel(status: string | undefined, loading: boolean) {
   if (loading && !status) return "Connecting";
@@ -46,7 +47,7 @@ function formatMacDate(date: Date) {
 
 export function TopBar() {
   const selected = useSelectedServer();
-  const { servers, switchServer, backToServers, logOut } = useSession();
+  const { servers, switchServer, backToServers, logOut, runtimeClient, runtimeConnected } = useSession();
   const { server, loading, error } = useServer();
   const {
     openWindow,
@@ -62,13 +63,48 @@ export function TopBar() {
   const [dateStr, setDateStr] = useState("");
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
+  const [liveMetrics, setLiveMetrics] = useState<SystemMetrics | null>(null);
   const barRef = useRef<HTMLElement>(null);
   const serverMenuRef = useRef<HTMLDivElement>(null);
 
-  const online = server?.status === "online";
-  const ready = Boolean(server);
+  useEffect(() => {
+    if (!runtimeClient?.getSession()) {
+      setLiveMetrics(null);
+      return;
+    }
+
+    let active = true;
+    const fetchMetrics = async () => {
+      try {
+        const metrics = await runtimeClient.getMetrics();
+        if (active) setLiveMetrics(metrics);
+      } catch {}
+    };
+
+    void fetchMetrics();
+    const interval = setInterval(() => {
+      void fetchMetrics();
+    }, 2000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [runtimeClient]);
+
+  const isLive = Boolean(runtimeConnected || runtimeClient?.getSession());
+  const online = isLive || server?.status === "online" || selected?.status === "online";
+  const ready = Boolean(server || selected || isLive);
   const name = selected?.name || server?.name || "Server";
   const otherServers = servers.filter((item) => item.id !== selected?.id);
+
+  const cpuPercent = isLive && liveMetrics
+    ? Math.round(liveMetrics.cpuUsagePercent)
+    : server?.cpuUsage;
+
+  const ramPercent = isLive && liveMetrics && liveMetrics.memoryTotalBytes > 0
+    ? Math.round((liveMetrics.memoryUsedBytes / liveMetrics.memoryTotalBytes) * 100)
+    : server?.memoryUsage;
 
   useEffect(() => {
     const tick = () => setDateStr(formatMacDate(new Date()));
@@ -467,7 +503,7 @@ export function TopBar() {
             <span className="truncate font-medium">{name}</span>
             <ChevronDown className="size-3 opacity-70" aria-hidden />
           </button>
-          <span className="opacity-60 text-[11px]">{statusLabel(server?.status, loading)}</span>
+          <span className="opacity-60 text-[11px]">{online ? "Online" : statusLabel(server?.status || selected?.status, loading)}</span>
           {serverMenuOpen && (
             <div
               role="menu"
@@ -535,10 +571,10 @@ export function TopBar() {
         </div>
 
         <span className="hidden shrink-0 font-medium sm:inline opacity-80">
-          CPU {metric(server?.cpuUsage, loading, ready && online)}
+          CPU {metric(cpuPercent, loading, ready && online)}
         </span>
         <span className="hidden shrink-0 font-medium sm:inline opacity-80">
-          RAM {metric(server?.memoryUsage, loading, ready && online)}
+          RAM {metric(ramPercent, loading, ready && online)}
         </span>
 
         <div className="flex items-center gap-2 opacity-80">
