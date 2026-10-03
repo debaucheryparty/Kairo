@@ -53,6 +53,15 @@ message SurfaceInputEvent {
   int32 delta_y = 8;
 }
 
+message SurfaceFrame {
+  string surface_id = 1;
+  uint64 sequence = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  string codec = 5;
+  bytes data = 6;
+}
+
 message CloseSurfaceRequest {
   string surface_id = 1;
 }

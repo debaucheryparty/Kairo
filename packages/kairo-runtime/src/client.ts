@@ -65,7 +65,9 @@ import {
   type LinuxApp,
   type LaunchAppResponsePayload,
   encodeSurfaceInputEvent,
+  decodeSurfaceFrame,
   type SurfaceInputEventPayload,
+  type SurfaceFramePayload,
   type GetGpuInfoResponsePayload,
   type StartGpuStreamRequestPayload,
   type StartGpuStreamResponsePayload,
@@ -425,6 +427,16 @@ export class KairoClient {
   async sendSurfaceInput(event: SurfaceInputEventPayload): Promise<void> {
     const payload = encodeSurfaceInputEvent(event);
     await this.sendNotification(Opcode.SurfaceInput, payload);
+  }
+
+  onSurfaceFrame(listener: (frame: SurfaceFramePayload) => void): () => void {
+    return this.onEvent(Opcode.SurfaceFrame, (payload) => {
+      try {
+        listener(decodeSurfaceFrame(payload));
+      } catch (err) {
+        console.error('Failed to decode SurfaceFrame event:', err);
+      }
+    });
   }
 
   async getGpuInfo(): Promise<GetGpuInfoResponsePayload> {

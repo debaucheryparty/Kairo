@@ -1385,6 +1385,66 @@ export function encodeSurfaceInputEvent(event: SurfaceInputEventPayload): Uint8A
   return concat(parts);
 }
 
+export interface SurfaceFramePayload {
+  surfaceId: string;
+  sequence: number;
+  width: number;
+  height: number;
+  codec: string;
+  data: Uint8Array;
+}
+
+export function decodeSurfaceFrame(raw: Uint8Array): SurfaceFramePayload {
+  let offset = 0;
+  let surfaceId = '';
+  let sequence = 0;
+  let width = 0;
+  let height = 0;
+  let codec = '';
+  let data = new Uint8Array(0);
+
+  while (offset < raw.byteLength) {
+    const tag = raw[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 0) {
+      let value = 0;
+      let shift = 0;
+      while (offset < raw.byteLength) {
+        const byte = raw[offset++];
+        value += (byte & 0x7f) * Math.pow(2, shift);
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 2) sequence = value;
+      else if (fieldNumber === 3) width = value;
+      else if (fieldNumber === 4) height = value;
+    } else if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < raw.byteLength) {
+        const byte = raw[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) {
+        surfaceId = textDecoder.decode(raw.subarray(offset, offset + length));
+      } else if (fieldNumber === 5) {
+        codec = textDecoder.decode(raw.subarray(offset, offset + length));
+      } else if (fieldNumber === 6) {
+        data = raw.slice(offset, offset + length);
+      }
+      offset += length;
+    } else {
+      break;
+    }
+  }
+
+  return { surfaceId, sequence, width, height, codec, data };
+}
+
 export interface GpuDevicePayload {
   gpuId: string;
   name: string;

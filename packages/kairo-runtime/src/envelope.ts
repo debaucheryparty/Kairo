@@ -38,6 +38,7 @@ export enum Opcode {
   AppLaunch = 71,
   SurfaceInput = 72,
   SurfaceClose = 73,
+  SurfaceFrame = 74,
   GpuGetInfo = 80,
   GpuStartStream = 81,
   GpuStopStream = 82,
