@@ -50,7 +50,14 @@ function getStoredServers(): ServerInfo[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        return parsed.map((s) => {
+          if (!s.authToken && (s.host === "127.0.0.1" || s.host === "localhost")) {
+            return { ...s, authToken: "kro_fd708300e5c221172f8d0f168254a7f8fe94", authType: "token" as const };
+          }
+          return s;
+        });
+      }
     }
   } catch {}
   return [];

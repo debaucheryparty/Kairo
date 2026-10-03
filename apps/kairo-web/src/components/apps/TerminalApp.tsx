@@ -5,7 +5,7 @@ import "@xterm/xterm/css/xterm.css";
 import type { WindowPayload } from "@/src/components/window/window-context";
 import { wsUrl } from "@/src/lib/api/origin";
 import { getInjectedDesktopConfig, localAuthWSProtocols } from "@/src/lib/runtime/config";
-import { useRuntimeClient, useSelectedServer } from "@/src/lib/session";
+import { useSession } from "@/src/lib/session";
 
 function quotePath(value: string) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
@@ -14,8 +14,7 @@ function quotePath(value: string) {
 export function TerminalApp({ payload }: { payload?: WindowPayload }) {
   const host = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
-  const selected = useSelectedServer();
-  const runtimeClient = useRuntimeClient();
+  const { runtimeClient, runtimeConnected, selectedServer: selected } = useSession();
   const serverId = selected?.id || "";
   const serverName = selected?.name || "server";
   const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
@@ -57,7 +56,7 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
         terminal.open(host.current);
         fitAddon.fit();
 
-        if (runtimeClient?.getSession()) {
+        if (runtimeConnected && runtimeClient?.getSession()) {
           try {
             const ptyId = await runtimeClient.createPty("", terminal.cols, terminal.rows, cwd || "");
             if (disposed) {
@@ -95,6 +94,26 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
             terminal.writeln(`\r\n\x1b[1;31m[Kairo] Failed to create terminal session: ${errMsg}\x1b[0m`);
             return;
           }
+        }
+
+        if (!runtimeConnected) {
+          if (selected?.status === "authentication_failed") {
+            setError("Authentication failed: invalid pairing token.");
+            setStatus("disconnected");
+            terminal.writeln("\x1b[1;31m[Kairo] Authentication failed: invalid or missing pairing token.\x1b[0m");
+            terminal.writeln("\x1b[33mEdit this server and enter the correct pairing token, then reconnect.\x1b[0m\r\n");
+            return;
+          }
+          if (selected?.status === "error") {
+            setError("Connection failed. Host agent unreachable.");
+            setStatus("disconnected");
+            terminal.writeln("\x1b[1;31m[Kairo] Unable to connect to host agent at port 9600.\x1b[0m");
+            terminal.writeln("\x1b[33mEnsure kairo-agent is running on the host.\x1b[0m\r\n");
+            return;
+          }
+          setStatus("connecting");
+          terminal.writeln("\x1b[36m[Kairo] Connecting to host agent…\x1b[0m");
+          return;
         }
 
         if (!serverId) {
@@ -221,7 +240,7 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
       socketRef.current = null;
       terminal?.dispose();
     };
-  }, [nonce, serverId, runtimeClient]);
+  }, [nonce, serverId, runtimeClient, runtimeConnected, selected?.status]);
 
   useEffect(() => {
     if (status !== "connected" || !cwd || !socketRef.current) return;

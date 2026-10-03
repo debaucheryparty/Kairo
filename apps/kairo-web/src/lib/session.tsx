@@ -76,6 +76,7 @@ export function toSessionServer(info: ServerInfo): Server {
     sshPort: info.port,
     username: info.username,
     authType: info.authType,
+    authToken: info.authToken,
     tunnelMode: info.tunnelMode,
     tunnelUrl: info.tunnelUrl,
     error: info.error,
