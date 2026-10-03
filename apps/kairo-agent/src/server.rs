@@ -77,7 +77,7 @@ pub struct Server {
 impl Server {
     #[must_use]
     pub fn new(mut config: AgentConfig) -> Self {
-        if config.auth_token.is_none() {
+        if !config.no_auth && config.auth_token.is_none() {
             config.auth_token = config.resolved_auth_token();
         }
         Self {
@@ -99,6 +99,7 @@ impl Server {
             bind = %self.config.bind_address,
             data_dir = %self.config.data_dir,
             agent_id = %self.config.agent_id,
+            auth_token = ?self.config.auth_token,
             "kairo-agent listener started"
         );
 
