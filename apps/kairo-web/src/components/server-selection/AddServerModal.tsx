@@ -275,7 +275,7 @@ export function AddServerModal({
                     <button
                       type="button"
                       onClick={() => {
-                        const cmd = `curl -fsSL https://kairo.dev/install.sh | sudo sh -s -- --token ${authToken}${
+                        const cmd = `curl -fsSL https://raw.githubusercontent.com/debaucheryparty/Kairo/main/scripts/install.sh | sudo sh -s -- --token ${authToken}${
                           tunnelMode && tunnelUrl ? ` --tunnel ${tunnelUrl.trim()}` : ""
                         }`;
                         void navigator.clipboard.writeText(cmd);
@@ -298,11 +298,11 @@ export function AddServerModal({
                     </button>
                   </div>
                   <pre className="mt-2 overflow-x-auto rounded-lg bg-black/60 p-2.5 font-mono text-[11px] leading-5 text-emerald-400 whitespace-pre">
-                    curl -fsSL https://kairo.dev/install.sh | sudo sh -s -- --token {authToken}
+                    curl -fsSL https://raw.githubusercontent.com/debaucheryparty/Kairo/main/scripts/install.sh | sudo sh -s -- --token {authToken}
                     {tunnelMode && tunnelUrl ? ` --tunnel ${tunnelUrl.trim()}` : ""}
                   </pre>
                   <p className="mt-2 text-[11px] text-white/45">
-                    Run this on your remote server to automatically install and pair the agent.
+                    Run this on your remote server to install as a systemd service, or run directly via: <code className="text-white/70">kairo-agent --bind 0.0.0.0:9600 --auth-token {authToken}</code>
                   </p>
                 </div>
               ) : null}
