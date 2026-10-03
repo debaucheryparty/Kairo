@@ -26,6 +26,7 @@ Thumbs.db
 
 # Tauri
 apps/kairo-desktop/src-tauri/target/
+apps/kairo-desktop/src-tauri/binaries/*.exe
 
 # Protobuf generated (tracked separately)
 # proto/gen/
