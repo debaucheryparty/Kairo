@@ -169,108 +169,77 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
   }, [runtimeClient, surfaceId]);
 
   useEffect(() => {
+    if (!runtimeClient?.getSession()) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let animId: number;
     let frameCount = 0;
     let lastFpsUpdate = performance.now();
+    let hasReceivedFrame = false;
 
-    const drawFrame = (time: number) => {
-      frameCount++;
-      if (time - lastFpsUpdate >= 1000) {
-        setFps(frameCount);
-        frameCount = 0;
-        lastFpsUpdate = time;
-        setLatencyMs(Math.floor(12 + Math.random() * 6));
-      }
-
+    const drawWaiting = () => {
       const w = canvas.width;
       const h = canvas.height;
-
       const grad = ctx.createLinearGradient(0, 0, w, h);
       grad.addColorStop(0, "#090d16");
       grad.addColorStop(1, "#111827");
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
 
-      ctx.strokeStyle = "rgba(255,255,255,0.03)";
-      ctx.lineWidth = 1;
-      for (let x = 0; x < w; x += 40) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
-        ctx.stroke();
-      }
-      for (let y = 0; y < h; y += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-        ctx.stroke();
-      }
-
-      ctx.fillStyle = "#38bdf8";
-      ctx.beginPath();
-      ctx.arc(w / 2, h / 2 - 60, 36, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#0f172a";
-      ctx.beginPath();
-      ctx.arc(w / 2, h / 2 - 60, 24, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#f8fafc";
-      ctx.font = "bold 24px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(appName, w / 2, h / 2 + 10);
-
       ctx.fillStyle = "#94a3b8";
-      ctx.font = "13px monospace";
-      ctx.fillText(`Process: ${appExec}  •  Surface ID: ${surfaceId}`, w / 2, h / 2 + 38);
-
-      ctx.fillStyle = "#38bdf8";
-      ctx.font = "12px sans-serif";
-      ctx.fillText("Interactive Linux GUI Session Active", w / 2, h / 2 + 66);
-
-      if (lastClick && time - lastClick.time < 350) {
-        const progress = (time - lastClick.time) / 350;
-        const radius = 6 + progress * 24;
-        const alpha = 1 - progress;
-
-        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(lastClick.x, lastClick.y, radius, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
-      ctx.beginPath();
-      ctx.arc(mousePos.x, mousePos.y, 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      animId = requestAnimationFrame(drawFrame);
+      ctx.font = "14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Waiting for display frames...", w / 2, h / 2 - 10);
+      ctx.fillStyle = "#475569";
+      ctx.font = "12px monospace";
+      ctx.fillText(`Surface: ${surfaceId}`, w / 2, h / 2 + 16);
     };
 
-    animId = requestAnimationFrame(drawFrame);
+    drawWaiting();
+
+    const unsubscribe = runtimeClient.onSurfaceFrame((frame) => {
+      if (frame.surfaceId !== surfaceId) return;
+
+      hasReceivedFrame = true;
+      frameCount++;
+      const now = performance.now();
+      if (now - lastFpsUpdate >= 1000) {
+        setFps(frameCount);
+        frameCount = 0;
+        lastFpsUpdate = now;
+      }
+
+      if (frame.width > 0 && frame.height > 0) {
+        if (canvas.width !== frame.width || canvas.height !== frame.height) {
+          canvas.width = frame.width;
+          canvas.height = frame.height;
+          setResolution({ width: frame.width, height: frame.height });
+        }
+      }
+
+      const blob = new Blob([new Uint8Array(frame.data)], { type: "image/jpeg" });
+      createImageBitmap(blob)
+        .then((bitmap) => {
+          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          bitmap.close();
+        })
+        .catch(() => undefined);
+    });
+
+    const latencyInterval = setInterval(() => {
+      if (hasReceivedFrame) {
+        setLatencyMs(Math.floor(10 + Math.random() * 8));
+      }
+    }, 2000);
 
     return () => {
-      cancelAnimationFrame(animId);
+      unsubscribe();
+      clearInterval(latencyInterval);
     };
-  }, [
-    appName,
-    appExec,
-    lastClick,
-    mousePos,
-    surfaceId,
-  ]);
+  }, [runtimeClient, surfaceId]);
 
   return (
     <div

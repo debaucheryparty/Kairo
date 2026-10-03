@@ -730,7 +730,7 @@ impl Session {
             }
             Opcode::AppLaunch => {
                 let req = LaunchAppRequest::decode(message.payload)?;
-                match self.app.launch_app(req).await {
+                match self.app.launch_app(req, out_tx.clone()).await {
                     Ok(resp) => {
                         let mut buf = Vec::new();
                         resp.encode(&mut buf)?;
@@ -775,7 +775,8 @@ impl Session {
                 self.send_frame(out_tx, msg).await?;
             }
             Opcode::SurfaceInput => {
-                let _req = SurfaceInputEvent::decode(message.payload)?;
+                let req = SurfaceInputEvent::decode(message.payload)?;
+                self.app.handle_surface_input(req).await;
             }
             Opcode::GpuGetInfo => {
                 let _req = GetGpuInfoRequest::decode(message.payload)?;
