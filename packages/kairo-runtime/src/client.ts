@@ -177,7 +177,7 @@ export class KairoClient {
     await this.transport.send(frame.buffer as ArrayBuffer);
     const ack = await handshakeAckPromise;
 
-    if (ack.authenticated === false) {
+    if (ack.authenticated === false || Boolean(ack.errorMessage)) {
       const err = new Error(ack.errorMessage || 'Authentication failed: invalid token');
       store.setError(err.message);
       store.transition(ConnectionState.Disconnected);

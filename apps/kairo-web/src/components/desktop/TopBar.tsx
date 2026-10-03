@@ -92,8 +92,8 @@ export function TopBar() {
     };
   }, [runtimeClient]);
 
-  const isLive = Boolean(runtimeConnected || runtimeClient?.getSession());
-  const online = isLive || server?.status === "online" || selected?.status === "online";
+  const isLive = Boolean(runtimeConnected && runtimeClient?.getSession());
+  const online = isLive || server?.status === "online";
   const ready = Boolean(server || selected || isLive);
   const name = selected?.name || server?.name || "Server";
   const otherServers = servers.filter((item) => item.id !== selected?.id);

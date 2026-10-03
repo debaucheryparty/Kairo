@@ -151,14 +151,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           curr.map((s) => (s.id === selectedServer.id ? { ...s, status: "online" } : s)),
         );
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!active) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        const isAuth = msg.toLowerCase().includes("auth") || msg.toLowerCase().includes("token");
+        const status: ServerStatus = isAuth ? "authentication_failed" : "error";
         setRuntimeClient(null);
         setRuntimeConnected(false);
         setActiveRuntimeClient(null);
-        setSelectedServer((curr) => (curr ? { ...curr, status: "offline" } : null));
+        setSelectedServer((curr) => (curr ? { ...curr, status, error: msg } : null));
         setServers((curr) =>
-          curr.map((s) => (s.id === selectedServer.id ? { ...s, status: "offline" } : s)),
+          curr.map((s) => (s.id === selectedServer.id ? { ...s, status, error: msg } : s)),
         );
       });
 

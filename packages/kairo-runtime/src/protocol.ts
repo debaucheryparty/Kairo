@@ -144,7 +144,10 @@ export function decodeHandshakeAck(data: Uint8Array): HandshakeAckPayload {
       if (fieldNumber === 2) agentId = str;
       else if (fieldNumber === 3) sessionId = str;
       else if (fieldNumber === 4) capabilities.push(str);
-      else if (fieldNumber === 6) errorMessage = str;
+      else if (fieldNumber === 6) {
+        errorMessage = str;
+        authenticated = false;
+      }
     } else {
       break;
     }

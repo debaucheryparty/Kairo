@@ -58,11 +58,7 @@ function getStoredServers(): ServerInfo[] {
 
 function saveStoredServers(servers: ServerInfo[]) {
   try {
-    const sanitized = servers.map((s) => {
-      const { authToken: _, ...safe } = s;
-      return safe;
-    });
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(servers));
   } catch {}
 }
 
@@ -147,7 +143,7 @@ export async function updateServer(id: string, input: ServerWriteInput): Promise
         port: input.port,
         username: input.username,
         authType: input.authType,
-        authToken: input.authToken,
+        authToken: input.authToken !== undefined ? input.authToken : servers[index].authToken,
         tunnelMode: input.tunnelMode,
         tunnelUrl: input.tunnelUrl,
       };

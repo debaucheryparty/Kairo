@@ -88,17 +88,34 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
               void runtimeClient.closePty(ptyId).catch(() => undefined);
             };
             return;
-          } catch {}
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : "Failed to spawn PTY";
+            setStatus("disconnected");
+            setError(errMsg);
+            terminal.writeln(`\r\n\x1b[1;31m[Kairo] Failed to create terminal session: ${errMsg}\x1b[0m`);
+            return;
+          }
         }
 
         if (!serverId) {
           setError("No server selected");
           setStatus("disconnected");
+          terminal.writeln("\x1b[1;31m[Kairo] No server selected.\x1b[0m\r\n");
           return;
         }
+
+        const localToken = getInjectedDesktopConfig()?.localAuthToken;
+        if (!localToken) {
+          setError("Host agent is not connected.");
+          setStatus("disconnected");
+          terminal.writeln("\x1b[1;31m[Kairo] Host agent is disconnected or authentication failed.\x1b[0m");
+          terminal.writeln("\x1b[33mVerify your server connection and pairing token, then reconnect.\x1b[0m\r\n");
+          return;
+        }
+
         socket = new WebSocket(
           wsUrl(`/ws/terminal?serverId=${encodeURIComponent(serverId)}`),
-          localAuthWSProtocols(getInjectedDesktopConfig()?.localAuthToken),
+          localAuthWSProtocols(localToken),
         );
         socket.binaryType = "arraybuffer";
         socketRef.current = socket;
@@ -153,69 +170,19 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
           terminal.write(new Uint8Array(event.data as ArrayBuffer));
         };
 
-        const startLocalShell = () => {
-          if (!terminal) return;
-          setStatus("connected");
-          setError(null);
-          terminal.clear();
-          terminal.writeln("\x1b[1;32mWelcome to Kairo Terminal\x1b[0m");
-          terminal.writeln("Linux kairo-production-01 6.8.0-45-generic x86_64\r\n");
-          let cmdBuffer = "";
-          const prompt = "\x1b[1;36mroot@kairo-production-01\x1b[0m:\x1b[1;34m~/\x1b[0m# ";
-          terminal.write(prompt);
-
-          terminal.onData((data) => {
-            if (socket?.readyState === WebSocket.OPEN) return;
-            if (data === "\r") {
-              terminal?.write("\r\n");
-              const trimmed = cmdBuffer.trim();
-              if (trimmed === "clear") {
-                terminal?.clear();
-              } else if (trimmed === "uptime") {
-                terminal?.writeln(" 15:10:00 up 4 days,  2:42,  1 user,  load average: 0.14, 0.18, 0.12");
-              } else if (trimmed === "uname -a") {
-                terminal?.writeln("Linux kairo-production-01 6.8.0-45-generic #45-Ubuntu SMP PREEMPT_DYNAMIC x86_64 GNU/Linux");
-              } else if (trimmed === "whoami") {
-                terminal?.writeln("root");
-              } else if (trimmed === "ls" || trimmed === "ls -la") {
-                terminal?.writeln("total 24\r\ndrwxr-xr-x 4 root root 4096 Sep 28 15:10 .\r\ndrwxr-xr-x 3 root root 4096 Sep 28 14:00 ..\r\n-rw-r--r-- 1 root root  104 Sep 28 15:00 config.json\r\n-rwxr-xr-x 1 root root  142 Sep 28 15:02 deploy.sh\r\n-rw-r--r-- 1 root root  148 Sep 28 15:05 notes.md");
-              } else if (trimmed.startsWith("cat ")) {
-                const target = trimmed.slice(4).trim();
-                if (target === "notes.md") {
-                  terminal?.writeln("# Server Administration Notes\r\n- Kairo Desktop integrated successfully.");
-                } else if (target === "config.json") {
-                  terminal?.writeln("{\r\n  \"server\": \"Kairo\",\r\n  \"telemetryIntervalMs\": 1000\r\n}");
-                } else {
-                  terminal?.writeln(`cat: ${target}: No such file or directory`);
-                }
-              } else if (trimmed === "help") {
-                terminal?.writeln("Available commands: ls, cat, uptime, uname -a, whoami, clear, help");
-              } else if (trimmed.length > 0) {
-                terminal?.writeln(`bash: ${trimmed}: command not found`);
-              }
-              cmdBuffer = "";
-              terminal?.write(prompt);
-            } else if (data === "\u007F") {
-              if (cmdBuffer.length > 0) {
-                cmdBuffer = cmdBuffer.slice(0, -1);
-                terminal?.write("\b \b");
-              }
-            } else if (data >= " ") {
-              cmdBuffer += data;
-              terminal?.write(data);
-            }
-          });
-        };
-
         socket.onerror = () => {
           window.clearTimeout(timeout);
           if (disposed) return;
-          startLocalShell();
+          setStatus("disconnected");
+          setError("Terminal connection failed.");
+          terminal?.writeln("\r\n\x1b[1;31m[Kairo] Connection error: unable to establish terminal socket.\x1b[0m");
         };
+
         socket.onclose = () => {
           window.clearTimeout(timeout);
           if (disposed) return;
-          startLocalShell();
+          setStatus("disconnected");
+          terminal?.writeln("\r\n\x1b[1;33m[Kairo] Terminal session closed.\x1b[0m");
         };
 
         terminal.onData((data) => {
