@@ -24,6 +24,7 @@ interface ConnectionStoreActions {
 }
 
 export type ConnectionStore = ConnectionStoreState & ConnectionStoreActions;
+export type ConnectionStoreApi = ReturnType<typeof createConnectionStore>;
 
 const INITIAL_STATE: ConnectionStoreState = {
   state: ConnectionState.Disconnected,

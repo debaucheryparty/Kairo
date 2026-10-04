@@ -42,16 +42,13 @@ function fileQuery(serverId: string, extra: Record<string, string>) {
 
 async function resolveClient(client?: KairoClient | null): Promise<KairoClient | null> {
   const active = client ?? activeRuntimeClient;
-  if (active?.getSession()) return active;
-  if (active) {
-    const start = Date.now();
-    while (Date.now() - start < 1500) {
-      if (active.getSession()) return active;
-      await new Promise((r) => setTimeout(r, 40));
-    }
-    if (active.getSession()) return active;
+  if (!active) return null;
+  try {
+    await active.ensureReady(3000);
+    return active;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export async function listFiles(serverId: string, path: string, client?: KairoClient | null): Promise<FileList> {

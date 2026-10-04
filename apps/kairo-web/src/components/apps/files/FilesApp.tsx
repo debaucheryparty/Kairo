@@ -185,16 +185,25 @@ export function FilesApp() {
   useEffect(() => {
     if (!runtimeClient?.getSession()) return;
     let unsubscribe: (() => void) | undefined;
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
     void runtimeClient
       .watchDirectory(path, false)
       .then(() => {
-        unsubscribe = runtimeClient.onFileEvent(() => {
-          void load(path);
+        unsubscribe = runtimeClient.onFileEvent((event) => {
+          const eventDir = event.path.slice(0, event.path.lastIndexOf("/")) || "/";
+          if (eventDir === path || event.path === path) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+              void load(path);
+            }, 300);
+          }
         });
       })
       .catch(() => undefined);
 
     return () => {
+      clearTimeout(debounceTimer);
       unsubscribe?.();
     };
   }, [runtimeClient, path]);

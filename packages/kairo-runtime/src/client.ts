@@ -78,7 +78,10 @@ import type { TransportAdapter } from './transport';
 
 export interface KairoClientOptions {
   transport: TransportAdapter;
-  connectionStore: { getState: () => ConnectionStore };
+  connectionStore: {
+    getState: () => ConnectionStore;
+    subscribe?: (listener: (state: ConnectionStore) => void) => () => void;
+  };
   clientId?: string;
   authToken?: string;
   tunnelRelayUrl?: string;
@@ -93,7 +96,10 @@ interface PendingRequest {
 
 export class KairoClient {
   private transport: TransportAdapter;
-  private store: { getState: () => ConnectionStore };
+  private store: {
+    getState: () => ConnectionStore;
+    subscribe?: (listener: (state: ConnectionStore) => void) => () => void;
+  };
   private clientId: string;
   private authToken?: string;
   private tunnelRelayUrl?: string;
@@ -208,7 +214,43 @@ export class KairoClient {
     this.store.getState().transition(ConnectionState.Disconnected);
   }
 
+  async ensureReady(timeoutMs = 10_000): Promise<KairoSession> {
+    if (this.currentSession && this.store.getState().state === ConnectionState.Connected) {
+      return this.currentSession;
+    }
+    const state = this.store.getState().state;
+    if (state === ConnectionState.Disconnected) {
+      throw new Error('Not connected to a Kairo Agent');
+    }
+
+    return new Promise<KairoSession>((resolve, reject) => {
+      let unsubscribe: (() => void) | undefined;
+      const timer = setTimeout(() => {
+        unsubscribe?.();
+        reject(new Error('Timed out waiting for Kairo Agent connection'));
+      }, timeoutMs);
+
+      if (this.store.subscribe) {
+        unsubscribe = this.store.subscribe((curr: ConnectionStore) => {
+          if (curr.state === ConnectionState.Connected && this.currentSession) {
+            clearTimeout(timer);
+            unsubscribe?.();
+            resolve(this.currentSession);
+          } else if (curr.state === ConnectionState.Disconnected) {
+            clearTimeout(timer);
+            unsubscribe?.();
+            reject(new Error(curr.error || 'Not connected to a Kairo Agent'));
+          }
+        });
+      } else {
+        clearTimeout(timer);
+        reject(new Error('Connection store does not support subscriptions'));
+      }
+    });
+  }
+
   async sendRequest(opcode: Opcode, payload: Uint8Array): Promise<Uint8Array> {
+    await this.ensureReady();
     if (!this.currentSession) {
       throw new Error('Not connected to a Kairo Agent');
     }
@@ -277,6 +319,7 @@ export class KairoClient {
   }
 
   async sendNotification(opcode: Opcode, payload: Uint8Array): Promise<void> {
+    await this.ensureReady();
     if (!this.currentSession) {
       throw new Error('Not connected to a Kairo Agent');
     }
