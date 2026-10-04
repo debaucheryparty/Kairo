@@ -53,10 +53,9 @@ export function FilesApp() {
   const { server } = useServer();
   const selectedServer = useSelectedServer();
   const runtimeClient = useRuntimeClient();
+  const rawUser = selectedServer?.username || server?.username;
   const homePath =
-    selectedServer?.username || server?.username
-      ? `/home/${selectedServer?.username || server?.username}`
-      : "/home/root";
+    rawUser === "root" ? "/root" : rawUser ? `/home/${rawUser}` : "/";
   const [path, setPath] = useState(homePath);
   const [history, setHistory] = useState<string[]>([homePath]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -82,7 +81,7 @@ export function FilesApp() {
     setLoading(true);
     setError(null);
     try {
-      const result = await listFiles(serverId, nextPath);
+      const result = await listFiles(serverId, nextPath, runtimeClient);
       const sorted = [...result.entries].sort((a, b) => {
         if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
         return a.name.localeCompare(b.name);
@@ -98,7 +97,7 @@ export function FilesApp() {
         await Promise.all(
           Array.from(expandedPaths).map(async (dir) => {
             try {
-              const res = await listFiles(serverId, dir);
+              const res = await listFiles(serverId, dir, runtimeClient);
               const s = [...res.entries].sort((a, b) => {
                 if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
                 return a.name.localeCompare(b.name);
@@ -110,6 +109,9 @@ export function FilesApp() {
         setExpandedEntries((prev) => ({ ...prev, ...updates }));
       }
     } catch (err) {
+      if (nextPath !== "/") {
+        return load("/");
+      }
       setEntries([]);
       setError(err instanceof ApiError ? err.message : "unable to list files");
     } finally {
@@ -120,7 +122,7 @@ export function FilesApp() {
   useEffect(() => {
     if (!serverId) return;
     let cancelled = false;
-    listFiles(serverId, homePath)
+    listFiles(serverId, homePath, runtimeClient)
       .then((result) => {
         if (cancelled) return;
         const sorted = [...result.entries].sort((a, b) => {
@@ -131,10 +133,32 @@ export function FilesApp() {
         setPath(result.path || homePath);
         setError(null);
       })
-      .catch((err) => {
+      .catch(() => {
         if (cancelled) return;
+        if (homePath !== "/") {
+          listFiles(serverId, "/", runtimeClient)
+            .then((result) => {
+              if (cancelled) return;
+              const sorted = [...result.entries].sort((a, b) => {
+                if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+                return a.name.localeCompare(b.name);
+              });
+              setEntries(sorted);
+              setPath("/");
+              setError(null);
+            })
+            .catch((err) => {
+              if (cancelled) return;
+              setEntries([]);
+              setError(err instanceof ApiError ? err.message : "unable to list files");
+            })
+            .finally(() => {
+              if (!cancelled) setLoading(false);
+            });
+          return;
+        }
         setEntries([]);
-        setError(err instanceof ApiError ? err.message : "unable to list files");
+        setError("unable to list files");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -142,7 +166,7 @@ export function FilesApp() {
     return () => {
       cancelled = true;
     };
-  }, [serverId]);
+  }, [serverId, homePath, runtimeClient]);
 
   useEffect(() => {
     if (!runtimeClient?.getSession()) return;
@@ -217,7 +241,7 @@ export function FilesApp() {
     if (!expandedEntries[itemPath] && serverId) {
       setLoadingPaths((prev) => new Set(prev).add(itemPath));
       try {
-        const result = await listFiles(serverId, itemPath);
+        const result = await listFiles(serverId, itemPath, runtimeClient);
         const sorted = [...result.entries].sort((a, b) => {
           if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
           return a.name.localeCompare(b.name);
@@ -262,9 +286,9 @@ export function FilesApp() {
     const name = dialog.value.trim();
     try {
       if (dialog.type === "file") {
-        await createFile(serverId, joinPath(path, name));
+        await createFile(serverId, joinPath(path, name), runtimeClient);
       } else if (dialog.type === "dir") {
-        await createDirectory(serverId, joinPath(path, name));
+        await createDirectory(serverId, joinPath(path, name), runtimeClient);
       } else if (dialog.type === "rename") {
         await renameFile(serverId, dialog.from, joinPath(parentPath(dialog.from), name));
       }
@@ -291,7 +315,7 @@ export function FilesApp() {
     const file = fileList?.[0];
     if (!file) return;
     try {
-      await uploadFile(serverId, path, file);
+      await uploadFile(serverId, path, file, runtimeClient);
       await load(path);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "upload failed");
