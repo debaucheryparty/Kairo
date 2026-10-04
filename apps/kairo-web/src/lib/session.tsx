@@ -131,7 +131,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
 
     const protocol = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss" : "ws";
-    const port = selectedServer.sshPort || 9600;
+    const port = selectedServer.sshPort && selectedServer.sshPort !== 22 ? selectedServer.sshPort : 9600;
     const host = selectedServer.address.includes(":") ? selectedServer.address : `${selectedServer.address}:${port}`;
     const url = selectedServer.address.startsWith("ws://") || selectedServer.address.startsWith("wss://")
       ? selectedServer.address

@@ -270,40 +270,42 @@ export function AddServerModal({
 
               {authToken && !editing ? (
                 <div className="mt-3 rounded-xl border border-white/10 bg-black/40 p-3">
-                  <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.16em] text-white/48">
-                    <span>One-Click Pairing Command</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cmd = `curl -fsSL https://raw.githubusercontent.com/debaucheryparty/Kairo/main/scripts/install.sh | sudo sh -s -- --token ${authToken}${
-                          tunnelMode && tunnelUrl ? ` --tunnel ${tunnelUrl.trim()}` : ""
-                        }`;
-                        void navigator.clipboard.writeText(cmd);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2000);
-                      }}
-                      className="flex items-center gap-1 text-[11px] font-medium text-blue-400 hover:text-blue-300 transition"
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="size-3 text-emerald-400" />
-                          <span className="text-emerald-400 normal-case">Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="size-3" />
-                          <span className="normal-case">Copy Command</span>
-                        </>
-                      )}
-                    </button>
+                  <div className="flex items-center gap-2 text-[12px] font-medium text-emerald-400">
+                    <span className="flex size-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Automatic Setup on Connect</span>
                   </div>
-                  <pre className="mt-2 overflow-x-auto rounded-lg bg-black/60 p-2.5 font-mono text-[11px] leading-5 text-emerald-400 whitespace-pre">
-                    curl -fsSL https://raw.githubusercontent.com/debaucheryparty/Kairo/main/scripts/install.sh | sudo sh -s -- --token {authToken}
-                    {tunnelMode && tunnelUrl ? ` --tunnel ${tunnelUrl.trim()}` : ""}
-                  </pre>
-                  <p className="mt-2 text-[11px] text-white/45">
-                    Run this on your remote server to install as a systemd service, or run directly via: <code className="text-white/70">kairo-agent --bind 0.0.0.0:9600 --auth-token {authToken}</code>
+                  <p className="mt-1 text-[12px] leading-5 text-white/70">
+                    Kairo automatically installs and starts the agent in the background during connection. No manual terminal commands required.
                   </p>
+
+                  <details className="mt-2.5 text-[11px] text-white/50">
+                    <summary className="cursor-pointer hover:text-white/80 transition-colors">
+                      Manual pairing command (optional)
+                    </summary>
+                    <div className="mt-2 rounded-lg bg-black/60 p-2.5 font-mono text-[11px] leading-5 text-emerald-400">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] text-white/40 uppercase tracking-wider">Terminal Command</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const cmd = `curl -fsSL https://raw.githubusercontent.com/debaucheryparty/Kairo/main/scripts/install.sh | sudo sh -s -- --token ${authToken}${
+                              tunnelMode && tunnelUrl ? ` --tunnel ${tunnelUrl.trim()}` : ""
+                            }`;
+                            void navigator.clipboard.writeText(cmd);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 2000);
+                          }}
+                          className="text-[10px] text-blue-400 hover:text-blue-300"
+                        >
+                          {copied ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                      <pre className="overflow-x-auto whitespace-pre">
+                        curl -fsSL https://raw.githubusercontent.com/debaucheryparty/Kairo/main/scripts/install.sh | sudo sh -s -- --token {authToken}
+                        {tunnelMode && tunnelUrl ? ` --tunnel ${tunnelUrl.trim()}` : ""}
+                      </pre>
+                    </div>
+                  </details>
                 </div>
               ) : null}
             </Field>

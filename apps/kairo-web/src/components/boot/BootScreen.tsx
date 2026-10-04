@@ -16,9 +16,11 @@ const STEPS = [
   "Connecting to server",
   "Resolving server",
   "Establishing SSH connection",
-  "Authenticating",
-  "Checking server environment",
-  "Loading filesystem",
+  "Authenticating credentials",
+  "Checking Kairo Agent status",
+  "Provisioning Kairo Agent in background",
+  "Starting Kairo Agent daemon",
+  "Preparing user workspace",
   "Starting Kairo session",
 ] as const;
 

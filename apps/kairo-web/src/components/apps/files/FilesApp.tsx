@@ -82,10 +82,12 @@ export function FilesApp() {
     setError(null);
     try {
       const result = await listFiles(serverId, nextPath, runtimeClient);
-      const sorted = [...result.entries].sort((a, b) => {
-        if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
+      const sorted = result.entries
+        .filter((e) => e.name !== ".keep")
+        .sort((a, b) => {
+          if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
       setEntries(sorted);
       setPath(result.path || nextPath);
 
@@ -98,10 +100,12 @@ export function FilesApp() {
           Array.from(expandedPaths).map(async (dir) => {
             try {
               const res = await listFiles(serverId, dir, runtimeClient);
-              const s = [...res.entries].sort((a, b) => {
-                if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-                return a.name.localeCompare(b.name);
-              });
+              const s = res.entries
+                .filter((e) => e.name !== ".keep")
+                .sort((a, b) => {
+                  if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+                  return a.name.localeCompare(b.name);
+                });
               updates[dir] = s;
             } catch {}
           })
@@ -110,6 +114,19 @@ export function FilesApp() {
       }
     } catch (err) {
       if (nextPath !== "/") {
+        try {
+          await createDirectory(serverId, nextPath, runtimeClient);
+          const result = await listFiles(serverId, nextPath, runtimeClient);
+          const sorted = result.entries
+            .filter((e) => e.name !== ".keep")
+            .sort((a, b) => {
+              if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+              return a.name.localeCompare(b.name);
+            });
+          setEntries(sorted);
+          setPath(result.path || nextPath);
+          return;
+        } catch {}
         return load("/");
       }
       setEntries([]);
@@ -276,9 +293,10 @@ export function FilesApp() {
     return null;
   }, [entries, expandedEntries, selected]);
   const visible = useMemo(() => {
+    const list = entries.filter((entry) => entry.name !== ".keep");
     const needle = query.trim().toLowerCase();
-    if (!needle) return entries;
-    return entries.filter((entry) => entry.name.toLowerCase().includes(needle));
+    if (!needle) return list;
+    return list.filter((entry) => entry.name.toLowerCase().includes(needle));
   }, [entries, query]);
 
   async function submitDialog() {
