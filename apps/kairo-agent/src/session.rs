@@ -329,6 +329,11 @@ impl Session {
             }
         }
 
+        let home_capability = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .map(|h| format!("home:{h}"))
+            .unwrap_or_else(|_| "home:/".to_string());
+
         let ack = HandshakeAck {
             protocol_version: 1,
             agent_id: self.config.agent_id.to_string(),
@@ -342,6 +347,7 @@ impl Session {
                 "system.v1".to_string(),
                 "app.v1".to_string(),
                 "gpu.v1".to_string(),
+                home_capability,
             ],
             authenticated: true,
             error_message: String::new(),
