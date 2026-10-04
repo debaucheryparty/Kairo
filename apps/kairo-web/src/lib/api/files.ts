@@ -47,9 +47,9 @@ export async function listFiles(serverId: string, path: string, client?: KairoCl
     const mapped: FileEntry[] = entries.map((e) => ({
       name: e.path,
       path: joinPath(path || "/", e.path),
-      type: e.fileType === 1 ? "dir" : "file",
+      type: e.fileType === 2 ? "dir" : "file",
       size: e.size,
-      mode: e.fileType === 1 ? "0755" : "0644",
+      mode: e.fileType === 2 ? "0755" : "0644",
       modified: e.modifiedAt ? new Date(e.modifiedAt * 1000).toISOString() : new Date().toISOString(),
     }));
     return { path: path || "/", entries: mapped };

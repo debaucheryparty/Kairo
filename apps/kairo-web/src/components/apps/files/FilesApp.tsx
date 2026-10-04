@@ -98,7 +98,6 @@ export function FilesApp() {
 
       if (nextPath !== path) {
         setExpandedPaths(new Set());
-        setExpandedEntries({});
       } else if (expandedPaths.size > 0) {
         const updates: Record<string, FileEntry[]> = {};
         await Promise.all(
@@ -117,7 +116,7 @@ export function FilesApp() {
         );
         setExpandedEntries((prev) => ({ ...prev, ...updates }));
       }
-    } catch (err) {
+    } catch {
       try {
         await createDirectory(serverId, nextPath, runtimeClient);
         const result = await listFiles(serverId, nextPath, runtimeClient);
@@ -129,12 +128,13 @@ export function FilesApp() {
           });
         setEntries(sorted);
         setPath(result.path || nextPath);
+        setError(null);
         return;
       } catch {}
 
       setEntries([]);
       setPath(nextPath);
-      setError(err instanceof ApiError ? err.message : "unable to list files");
+      setError(null);
     } finally {
       setLoading(false);
     }
@@ -192,10 +192,10 @@ export function FilesApp() {
               setPath("/");
               setError(null);
             })
-            .catch((err) => {
+            .catch(() => {
               if (cancelled) return;
               setEntries([]);
-              setError(err instanceof ApiError ? err.message : "unable to list files");
+              setError(null);
             })
             .finally(() => {
               if (!cancelled) setLoading(false);
@@ -203,7 +203,7 @@ export function FilesApp() {
           return;
         }
         setEntries([]);
-        setError("unable to list files");
+        setError(null);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -237,6 +237,11 @@ export function FilesApp() {
     setHistory(nextHistory);
     setHistoryIndex(nextHistory.length - 1);
     setSelected(null);
+    if (expandedEntries[nextPath]) {
+      setEntries(expandedEntries[nextPath]);
+      setPath(nextPath);
+      setError(null);
+    }
     void load(nextPath);
   }
 
@@ -287,10 +292,12 @@ export function FilesApp() {
       setLoadingPaths((prev) => new Set(prev).add(itemPath));
       try {
         const result = await listFiles(serverId, itemPath, runtimeClient);
-        const sorted = [...result.entries].sort((a, b) => {
-          if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-          return a.name.localeCompare(b.name);
-        });
+        const sorted = result.entries
+          .filter((e) => e.name !== ".keep")
+          .sort((a, b) => {
+            if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
         setExpandedEntries((prev) => ({ ...prev, [itemPath]: sorted }));
       } catch {
         setExpandedEntries((prev) => ({ ...prev, [itemPath]: [] }));
