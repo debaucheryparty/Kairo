@@ -144,6 +144,21 @@ impl Session {
             "/".to_string()
         };
         let fs = FilesystemHandler::new(fs_root);
+        if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
+            let standard_dirs = [
+                "Desktop",
+                "Documents",
+                "Downloads",
+                "Movies",
+                "Music",
+                "Pictures",
+                "Public",
+                "Code",
+            ];
+            for dir in standard_dirs {
+                let _ = std::fs::create_dir_all(std::path::Path::new(&home).join(dir));
+            }
+        }
         let metrics = Arc::new(MetricsCollector::new());
         let process = Arc::new(ProcessManager::new());
         let system = Arc::new(SystemManager::new());
