@@ -95,43 +95,12 @@ export function FilesApp() {
         });
       setEntries(sorted);
       setPath(result.path || nextPath);
+      setExpandedEntries((prev) => ({ ...prev, [result.path || nextPath]: sorted }));
 
       if (nextPath !== path) {
         setExpandedPaths(new Set());
-      } else if (expandedPaths.size > 0) {
-        const updates: Record<string, FileEntry[]> = {};
-        await Promise.all(
-          Array.from(expandedPaths).map(async (dir) => {
-            try {
-              const res = await listFiles(serverId, dir, runtimeClient);
-              const s = res.entries
-                .filter((e) => e.name !== ".keep")
-                .sort((a, b) => {
-                  if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-                  return a.name.localeCompare(b.name);
-                });
-              updates[dir] = s;
-            } catch {}
-          })
-        );
-        setExpandedEntries((prev) => ({ ...prev, ...updates }));
       }
     } catch {
-      try {
-        await createDirectory(serverId, nextPath, runtimeClient);
-        const result = await listFiles(serverId, nextPath, runtimeClient);
-        const sorted = result.entries
-          .filter((e) => e.name !== ".keep")
-          .sort((a, b) => {
-            if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-            return a.name.localeCompare(b.name);
-          });
-        setEntries(sorted);
-        setPath(result.path || nextPath);
-        setError(null);
-        return;
-      } catch {}
-
       setEntries([]);
       setPath(nextPath);
       setError(null);
@@ -250,7 +219,13 @@ export function FilesApp() {
     const nextIndex = historyIndex - 1;
     setHistoryIndex(nextIndex);
     setSelected(null);
-    void load(history[nextIndex]);
+    const target = history[nextIndex];
+    if (expandedEntries[target]) {
+      setEntries(expandedEntries[target]);
+      setPath(target);
+      setError(null);
+    }
+    void load(target);
   }
 
   function forward() {
@@ -258,7 +233,13 @@ export function FilesApp() {
     const nextIndex = historyIndex + 1;
     setHistoryIndex(nextIndex);
     setSelected(null);
-    void load(history[nextIndex]);
+    const target = history[nextIndex];
+    if (expandedEntries[target]) {
+      setEntries(expandedEntries[target]);
+      setPath(target);
+      setError(null);
+    }
+    void load(target);
   }
 
   function openEntry(entry: FileEntry) {

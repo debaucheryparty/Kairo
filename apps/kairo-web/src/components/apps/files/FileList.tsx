@@ -125,8 +125,18 @@ export function FileList({
             ) : (
               <span className="w-4 shrink-0" />
             )}
-            <EntryIcon entry={entry} isSelected={isSelected} />
-            <span className="truncate">{entry.name}</span>
+            <div
+              className={`flex items-center gap-1.5 min-w-0 ${isDir ? "cursor-pointer group" : ""}`}
+              onClick={(e) => {
+                if (isDir) {
+                  e.stopPropagation();
+                  onOpen(entry);
+                }
+              }}
+            >
+              <EntryIcon entry={entry} isSelected={isSelected} />
+              <span className={`truncate ${isDir ? "group-hover:underline" : ""}`}>{entry.name}</span>
+            </div>
           </div>
 
           <div

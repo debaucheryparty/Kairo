@@ -40,8 +40,22 @@ function fileQuery(serverId: string, extra: Record<string, string>) {
   return new URLSearchParams({ serverId, ...extra }).toString();
 }
 
+async function resolveClient(client?: KairoClient | null): Promise<KairoClient | null> {
+  const active = client ?? activeRuntimeClient;
+  if (active?.getSession()) return active;
+  if (active) {
+    const start = Date.now();
+    while (Date.now() - start < 1500) {
+      if (active.getSession()) return active;
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    if (active.getSession()) return active;
+  }
+  return null;
+}
+
 export async function listFiles(serverId: string, path: string, client?: KairoClient | null): Promise<FileList> {
-  const activeClient = client ?? activeRuntimeClient;
+  const activeClient = await resolveClient(client);
   if (activeClient?.getSession()) {
     const entries = await activeClient.listDirectory(path);
     const mapped: FileEntry[] = entries.map((e) => ({
@@ -55,11 +69,11 @@ export async function listFiles(serverId: string, path: string, client?: KairoCl
     return { path: path || "/", entries: mapped };
   }
 
-  return await apiRequest<FileList>(`/api/files?${fileQuery(serverId, { path })}`);
+  return { path: path || "/", entries: [] };
 }
 
 export async function readFile(serverId: string, path: string, client?: KairoClient | null): Promise<FileContent> {
-  const activeClient = client ?? activeRuntimeClient;
+  const activeClient = await resolveClient(client);
   if (activeClient?.getSession()) {
     const resp = await activeClient.readFile(path);
     const text = new TextDecoder().decode(resp.content);
@@ -72,47 +86,38 @@ export async function readFile(serverId: string, path: string, client?: KairoCli
     };
   }
 
-  return await apiRequest<FileContent>(`/api/files/read?${fileQuery(serverId, { path })}`);
+  throw new Error("Client not connected to server");
 }
 
 export async function writeFile(serverId: string, path: string, content: string, client?: KairoClient | null): Promise<{ status: string }> {
-  const activeClient = client ?? activeRuntimeClient;
+  const activeClient = await resolveClient(client);
   if (activeClient?.getSession()) {
     const bytes = new TextEncoder().encode(content);
     await activeClient.writeFile(path, bytes);
     return { status: "ok" };
   }
 
-  return await apiRequest<{ status: string }>("/api/files/write", {
-    method: "POST",
-    body: JSON.stringify({ serverId, path, content }),
-  });
+  throw new Error("Client not connected to server");
 }
 
 export async function createFile(serverId: string, path: string, client?: KairoClient | null): Promise<{ status: string }> {
-  const activeClient = client ?? activeRuntimeClient;
+  const activeClient = await resolveClient(client);
   if (activeClient?.getSession()) {
     await activeClient.writeFile(path, new Uint8Array(0));
     return { status: "ok" };
   }
 
-  return await apiRequest<{ status: string }>("/api/files/create", {
-    method: "POST",
-    body: JSON.stringify({ serverId, path }),
-  });
+  throw new Error("Client not connected to server");
 }
 
 export async function createDirectory(serverId: string, path: string, client?: KairoClient | null): Promise<{ status: string }> {
-  const activeClient = client ?? activeRuntimeClient;
+  const activeClient = await resolveClient(client);
   if (activeClient?.getSession()) {
     await activeClient.writeFile(joinPath(path, ".keep"), new Uint8Array(0));
     return { status: "ok" };
   }
 
-  return await apiRequest<{ status: string }>("/api/files/mkdir", {
-    method: "POST",
-    body: JSON.stringify({ serverId, path }),
-  });
+  throw new Error("Client not connected to server");
 }
 
 export async function renameFile(serverId: string, from: string, to: string): Promise<{ status: string }> {
@@ -129,7 +134,7 @@ export async function deleteFile(serverId: string, path: string): Promise<{ stat
 }
 
 export async function uploadFile(serverId: string, directory: string, file: File, client?: KairoClient | null): Promise<{ status: string; path: string }> {
-  const activeClient = client ?? activeRuntimeClient;
+  const activeClient = await resolveClient(client);
   const dest = joinPath(directory, file.name);
   if (activeClient?.getSession()) {
     const buffer = await file.arrayBuffer();
@@ -137,14 +142,7 @@ export async function uploadFile(serverId: string, directory: string, file: File
     return { status: "ok", path: dest };
   }
 
-  const body = new FormData();
-  body.set("serverId", serverId);
-  body.set("path", directory);
-  body.set("file", file);
-  return await apiRequest<{ status: string; path: string }>("/api/files/upload", {
-    method: "POST",
-    body,
-  });
+  throw new Error("Client not connected to server");
 }
 
 export function downloadUrl(serverId: string, path: string): string {
