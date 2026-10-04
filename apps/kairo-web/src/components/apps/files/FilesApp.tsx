@@ -54,8 +54,14 @@ export function FilesApp() {
   const selectedServer = useSelectedServer();
   const runtimeClient = useRuntimeClient();
   const rawUser = selectedServer?.username || server?.username;
+  const detectedHome =
+    runtimeClient?.getHomeDirectory() ||
+    runtimeClient?.getSession()?.capabilities.find((c) => c.startsWith("home:"))?.slice(5);
+  const [detectedUserHome, setDetectedUserHome] = useState<string | null>(null);
   const homePath =
-    rawUser === "root" ? "/root" : rawUser ? `/home/${rawUser}` : "/";
+    detectedHome ||
+    detectedUserHome ||
+    (rawUser === "root" ? "/root" : rawUser ? `/home/${rawUser}` : "/");
   const [path, setPath] = useState(homePath);
   const [history, setHistory] = useState<string[]>([homePath]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -78,7 +84,6 @@ export function FilesApp() {
 
   async function load(nextPath: string) {
     if (!serverId) return;
-    setLoading(true);
     setError(null);
     try {
       const result = await listFiles(serverId, nextPath, runtimeClient);
@@ -113,23 +118,22 @@ export function FilesApp() {
         setExpandedEntries((prev) => ({ ...prev, ...updates }));
       }
     } catch (err) {
-      if (nextPath !== "/") {
-        try {
-          await createDirectory(serverId, nextPath, runtimeClient);
-          const result = await listFiles(serverId, nextPath, runtimeClient);
-          const sorted = result.entries
-            .filter((e) => e.name !== ".keep")
-            .sort((a, b) => {
-              if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-              return a.name.localeCompare(b.name);
-            });
-          setEntries(sorted);
-          setPath(result.path || nextPath);
-          return;
-        } catch {}
-        return load("/");
-      }
+      try {
+        await createDirectory(serverId, nextPath, runtimeClient);
+        const result = await listFiles(serverId, nextPath, runtimeClient);
+        const sorted = result.entries
+          .filter((e) => e.name !== ".keep")
+          .sort((a, b) => {
+            if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
+        setEntries(sorted);
+        setPath(result.path || nextPath);
+        return;
+      } catch {}
+
       setEntries([]);
+      setPath(nextPath);
       setError(err instanceof ApiError ? err.message : "unable to list files");
     } finally {
       setLoading(false);
@@ -142,24 +146,48 @@ export function FilesApp() {
     listFiles(serverId, homePath, runtimeClient)
       .then((result) => {
         if (cancelled) return;
-        const sorted = [...result.entries].sort((a, b) => {
-          if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-          return a.name.localeCompare(b.name);
-        });
+        const sorted = result.entries
+          .filter((e) => e.name !== ".keep")
+          .sort((a, b) => {
+            if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
         setEntries(sorted);
         setPath(result.path || homePath);
         setError(null);
       })
-      .catch(() => {
+      .catch(async () => {
         if (cancelled) return;
-        if (homePath !== "/") {
-          listFiles(serverId, "/", runtimeClient)
-            .then((result) => {
-              if (cancelled) return;
-              const sorted = [...result.entries].sort((a, b) => {
+        try {
+          const homeList = await listFiles(serverId, "/home", runtimeClient);
+          const firstUser = homeList.entries.find((e) => e.type === "dir" && !e.name.startsWith("."));
+          if (firstUser && !cancelled) {
+            const userHome = `/home/${firstUser.name}`;
+            setDetectedUserHome(userHome);
+            const userResult = await listFiles(serverId, userHome, runtimeClient);
+            const sorted = userResult.entries
+              .filter((e) => e.name !== ".keep")
+              .sort((a, b) => {
                 if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
                 return a.name.localeCompare(b.name);
               });
+            setEntries(sorted);
+            setPath(userHome);
+            setError(null);
+            return;
+          }
+        } catch {}
+
+        if (homePath !== "/" && !cancelled) {
+          listFiles(serverId, "/", runtimeClient)
+            .then((result) => {
+              if (cancelled) return;
+              const sorted = result.entries
+                .filter((e) => e.name !== ".keep")
+                .sort((a, b) => {
+                  if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+                  return a.name.localeCompare(b.name);
+                });
               setEntries(sorted);
               setPath("/");
               setError(null);
