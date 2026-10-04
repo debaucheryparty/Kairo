@@ -109,13 +109,29 @@ impl PtyManager {
             })
             .map_err(|e| PtyError::SpawnFailed(e.to_string()))?;
 
-        let default_shell = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
-        let shell_cmd = shell.unwrap_or(default_shell);
+        let default_shell = if cfg!(windows) {
+            "cmd.exe".to_string()
+        } else {
+            std::env::var("SHELL").unwrap_or_else(|_| {
+                if Path::new("/bin/bash").exists() {
+                    "/bin/bash".to_string()
+                } else {
+                    "/bin/sh".to_string()
+                }
+            })
+        };
+        let shell_cmd = shell.unwrap_or(&default_shell);
 
         let mut cmd = CommandBuilder::new(shell_cmd);
         if let Some(dir) = cwd {
             cmd.cwd(dir);
+        } else if let Ok(home) = std::env::var("HOME") {
+            cmd.cwd(home);
+        } else if let Ok(profile) = std::env::var("USERPROFILE") {
+            cmd.cwd(profile);
         }
+        cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
 
         let _child = pair
             .slave

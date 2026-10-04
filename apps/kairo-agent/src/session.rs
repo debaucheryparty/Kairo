@@ -136,7 +136,14 @@ impl Session {
         app: Arc<AppManager>,
         gpu: Arc<GpuManager>,
     ) -> Self {
-        let fs = FilesystemHandler::new(&config.data_dir);
+        let fs_root = if cfg!(windows) {
+            std::env::var("SystemDrive")
+                .map(|d| format!("{d}\\"))
+                .unwrap_or_else(|_| "C:\\".to_string())
+        } else {
+            "/".to_string()
+        };
+        let fs = FilesystemHandler::new(fs_root);
         let metrics = Arc::new(MetricsCollector::new());
         let process = Arc::new(ProcessManager::new());
         let system = Arc::new(SystemManager::new());
@@ -170,10 +177,7 @@ impl Session {
         self.state
     }
 
-    pub async fn run<S>(
-        &mut self,
-        mut stream: WebSocketStream<S>,
-    ) -> Result<(), SessionError>
+    pub async fn run<S>(&mut self, mut stream: WebSocketStream<S>) -> Result<(), SessionError>
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
     {
@@ -278,9 +282,16 @@ impl Session {
             "received valid HandshakeInit"
         );
 
-        if let Some(expected_token) = self.config.auth_token.as_deref().filter(|t| !t.trim().is_empty()) {
+        if let Some(expected_token) = self
+            .config
+            .auth_token
+            .as_deref()
+            .filter(|t| !t.trim().is_empty())
+        {
             let client_token = init.auth_token.trim();
-            if client_token.is_empty() || !constant_time_eq(client_token.as_bytes(), expected_token.as_bytes()) {
+            if client_token.is_empty()
+                || !constant_time_eq(client_token.as_bytes(), expected_token.as_bytes())
+            {
                 warn!("client handshake authentication failed: invalid token");
                 let ack = HandshakeAck {
                     protocol_version: 1,
@@ -288,7 +299,8 @@ impl Session {
                     session_id: self.session_id.to_string(),
                     capabilities: Vec::new(),
                     authenticated: false,
-                    error_message: "authentication failed: invalid or missing auth token".to_string(),
+                    error_message: "authentication failed: invalid or missing auth token"
+                        .to_string(),
                 };
                 let mut payload_buf = Vec::new();
                 let _ = ack.encode(&mut payload_buf);
