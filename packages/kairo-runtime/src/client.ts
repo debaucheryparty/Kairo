@@ -196,6 +196,12 @@ export class KairoClient {
     return this.currentSession;
   }
 
+  getHomeDirectory(): string | null {
+    const prefix = 'home:';
+    const entry = this.currentSession?.capabilities.find((c) => c.startsWith(prefix));
+    return entry ? entry.slice(prefix.length) : null;
+  }
+
   async disconnect(): Promise<void> {
     this.currentSession = null;
     await this.transport.close();
