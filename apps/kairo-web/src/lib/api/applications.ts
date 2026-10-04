@@ -56,16 +56,6 @@ export const BUILTIN_VPS_APPS: VpsApp[] = [
     builtinAppId: "dashboard",
   },
   {
-    id: "remote-apps",
-    name: "Linux Applications",
-    genericName: "App Launcher & GUI Streaming",
-    category: "System",
-    description: "Launch and stream interactive Linux GUI desktop applications with GPU acceleration",
-    icon: "remote-apps",
-    exec: "remote-apps",
-    builtinAppId: "remote-apps",
-  },
-  {
     id: "settings",
     name: "System Settings",
     genericName: "Server Preferences",
@@ -87,7 +77,7 @@ export const BUILTIN_VPS_APPS: VpsApp[] = [
   },
 ];
 
-function mapLinuxApp(app: LinuxApp): VpsApp {
+export function mapLinuxApp(app: LinuxApp): VpsApp {
   let category: AppCategory = "Utilities";
   const catStr = app.categories.join(" ").toLowerCase();
   if (catStr.includes("develop") || catStr.includes("ide") || catStr.includes("code") || catStr.includes("texteditor")) {
@@ -110,19 +100,23 @@ function mapLinuxApp(app: LinuxApp): VpsApp {
   };
 }
 
+export function mergeVpsApplications(remote: LinuxApp[]): VpsApp[] {
+  const mapped = remote.map(mapLinuxApp);
+  const combined = [...BUILTIN_VPS_APPS];
+  for (const item of mapped) {
+    if (!combined.some((c) => c.id === item.id || c.exec === item.exec)) {
+      combined.push(item);
+    }
+  }
+  return combined;
+}
+
 export async function listVpsApplications(serverId?: string): Promise<VpsApp[]> {
   try {
     const query = serverId ? `?serverId=${encodeURIComponent(serverId)}` : "";
     const remote = await apiRequest<LinuxApp[]>(`/api/applications${query}`);
     if (Array.isArray(remote) && remote.length > 0) {
-      const mapped = remote.map(mapLinuxApp);
-      const combined = [...BUILTIN_VPS_APPS];
-      for (const item of mapped) {
-        if (!combined.some((c) => c.id === item.id || c.exec === item.exec)) {
-          combined.push(item);
-        }
-      }
-      return combined;
+      return mergeVpsApplications(remote);
     }
   } catch {}
 

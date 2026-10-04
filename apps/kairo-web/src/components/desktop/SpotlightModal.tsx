@@ -1,11 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
-import { Search, MoreHorizontal, X, Pin } from "lucide-react";
-import { listVpsApplications, type VpsApp, APP_CATEGORIES, type AppCategory } from "@/src/lib/api/applications";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { Search, MoreHorizontal, X, Pin, Loader2, AlertCircle } from "lucide-react";
+import {
+  BUILTIN_VPS_APPS,
+  mergeVpsApplications,
+  type VpsApp,
+  APP_CATEGORIES,
+  type AppCategory,
+} from "@/src/lib/api/applications";
 import { MacAppIcon } from "@/src/components/brand/MacAppIcon";
 import { useWindowManager } from "@/src/components/window/window-context";
-import { useSession } from "@/src/lib/session";
+import { useSession, useRuntimeClient } from "@/src/lib/session";
 import { useDockStore } from "@/src/lib/dock/dock-store";
 import type { AppId } from "@/src/data/apps";
 
@@ -17,28 +23,45 @@ interface SpotlightModalProps {
 export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
   const { openWindow } = useWindowManager();
   const { selectedServer } = useSession();
+  const runtimeClient = useRuntimeClient();
   const { isPinned, pinApp, unpinApp } = useDockStore();
-  const [apps, setApps] = useState<VpsApp[]>([]);
+  const [apps, setApps] = useState<VpsApp[]>(BUILTIN_VPS_APPS);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<AppCategory>("All");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [launchingId, setLaunchingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const fetchApps = useCallback(async () => {
+    if (!runtimeClient?.getSession()) {
+      setApps(BUILTIN_VPS_APPS);
+      return;
+    }
+    try {
+      const remote = await runtimeClient.listApplications();
+      if (Array.isArray(remote) && remote.length > 0) {
+        setApps(mergeVpsApplications(remote));
+      } else {
+        setApps(BUILTIN_VPS_APPS);
+      }
+    } catch {
+      setApps(BUILTIN_VPS_APPS);
+    }
+  }, [runtimeClient]);
+
   useEffect(() => {
-    let active = true;
-    listVpsApplications(selectedServer?.id).then((result) => {
-      if (active) setApps(result);
-    });
-    return () => {
-      active = false;
-    };
-  }, [selectedServer?.id]);
+    if (open) {
+      void fetchApps();
+    }
+  }, [fetchApps, selectedServer?.id, open]);
 
   useEffect(() => {
     if (open) {
       setQuery("");
       setCategory("All");
       setSelectedIndex(0);
+      setError(null);
       const timer = setTimeout(() => {
         inputRef.current?.focus();
         inputRef.current?.select();
@@ -66,19 +89,44 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
     setSelectedIndex(0);
   }, [query, category]);
 
-  function launchApp(app: VpsApp) {
-    onClose();
-    if (app.builtinAppId) {
-      openWindow(app.builtinAppId as AppId);
-      return;
-    }
-    openWindow("surface", {
-      surfaceId: app.id,
-      appName: app.name,
-      appExec: app.exec,
-      appIcon: app.icon,
-    });
-  }
+  const launchApp = useCallback(
+    async (app: VpsApp) => {
+      if (app.builtinAppId) {
+        onClose();
+        openWindow(app.builtinAppId as AppId);
+        return;
+      }
+
+      if (!runtimeClient?.getSession()) {
+        setError("Cannot launch application: host agent session is not active");
+        return;
+      }
+
+      setLaunchingId(app.id);
+      setError(null);
+      try {
+        const resp = await runtimeClient.launchApplication({
+          appId: app.id,
+          exec: app.exec,
+        });
+
+        onClose();
+        openWindow("surface", {
+          surfaceId: resp.surfaceId,
+          appName: app.name,
+          appExec: app.exec,
+          appIcon: app.icon,
+        });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to launch application on host";
+        setError(message);
+      } finally {
+        setLaunchingId(null);
+      }
+    },
+    [onClose, openWindow, runtimeClient]
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -108,14 +156,14 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
         e.preventDefault();
         const selected = filteredApps[selectedIndex];
         if (selected) {
-          launchApp(selected);
+          void launchApp(selected);
         }
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, filteredApps, selectedIndex]);
+  }, [open, filteredApps, selectedIndex, launchApp]);
 
   if (!open) return null;
 
@@ -143,6 +191,12 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
             placeholder="Spotlight Search"
             className="flex-1 bg-transparent text-[17px] font-normal text-white placeholder-white/40 outline-none"
           />
+          {launchingId && (
+            <div className="flex items-center gap-1.5 text-xs text-sky-400 shrink-0 font-medium">
+              <Loader2 className="size-3.5 animate-spin" />
+              <span>Launching...</span>
+            </div>
+          )}
           {query ? (
             <button
               type="button"
@@ -165,6 +219,13 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
             </button>
           </div>
         </div>
+
+        {error && (
+          <div className="flex items-center gap-2 px-5 py-2.5 bg-red-500/15 border-b border-red-500/20 text-red-300 text-xs animate-fade-in">
+            <AlertCircle className="size-4 shrink-0 text-red-400" />
+            <span className="truncate flex-1">{error}</span>
+          </div>
+        )}
 
         <div className="flex items-center gap-1.5 overflow-x-auto px-5 py-2.5 border-b border-white/8 scrollbar-none">
           {APP_CATEGORIES.map((cat) => {
@@ -203,7 +264,7 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
                     <button
                       key={`recent-${app.id}`}
                       type="button"
-                      onClick={() => launchApp(app)}
+                      onClick={() => void launchApp(app)}
                       className="group flex flex-col items-center rounded-2xl p-2.5 hover:bg-white/10 transition-all outline-none"
                     >
                       <div className="size-13 p-1 transition-transform group-hover:scale-105 group-active:scale-95 flex items-center justify-center">
@@ -248,9 +309,11 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
                     <button
                       key={app.id}
                       type="button"
-                      onClick={() => launchApp(app)}
+                      onClick={() => void launchApp(app)}
                       className={`group flex items-start gap-3 rounded-[16px] p-3 text-left transition-all outline-none border ${
-                        selected
+                        launchingId === app.id
+                          ? "bg-sky-500/10 border-sky-500/25"
+                          : selected
                           ? "bg-white/15 border-white/25 shadow-md"
                           : "border-transparent hover:bg-white/8 hover:border-white/10"
                       }`}

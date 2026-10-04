@@ -49,6 +49,8 @@ const BUILTIN_ICONS: Record<string, ComponentType<IconProps>> = {
   editor: EditorGlyph,
   textedit: EditorGlyph,
   code: EditorGlyph,
+  vscode: EditorGlyph,
+  "com.microsoft.vscode": EditorGlyph,
   dashboard: ActivityMonitorGlyph,
   monitor: ActivityMonitorGlyph,
   activity: ActivityMonitorGlyph,
