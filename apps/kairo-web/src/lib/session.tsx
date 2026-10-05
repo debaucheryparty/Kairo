@@ -166,8 +166,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         );
       });
 
+    const unsubscribe = store.subscribe((state) => {
+      if (!active) return;
+      if (state.state === "disconnected") {
+        setRuntimeConnected(false);
+        setSelectedServer((curr) => (curr ? { ...curr, status: "offline" } : null));
+        setServers((curr) =>
+          curr.map((s) => (s.id === selectedServer.id ? { ...s, status: "offline" } : s)),
+        );
+      } else if (state.state === "connected") {
+        setRuntimeConnected(true);
+        setSelectedServer((curr) => (curr ? { ...curr, status: "online" } : null));
+        setServers((curr) =>
+          curr.map((s) => (s.id === selectedServer.id ? { ...s, status: "online" } : s)),
+        );
+      }
+    });
+
     return () => {
       active = false;
+      unsubscribe();
       void client.disconnect().catch(() => undefined);
       setRuntimeClient(null);
       setRuntimeConnected(false);

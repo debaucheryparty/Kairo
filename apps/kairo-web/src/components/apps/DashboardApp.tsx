@@ -106,38 +106,36 @@ export function DashboardApp() {
       ) : null}
       <p className="mt-1 text-xs sui-muted">
         {loading && !server && !isLive
-          ? "Last updated: —"
-          : lastUpdated
-            ? `Last updated: ${lastUpdated}`
-            : online
-              ? "Last updated: just now"
-              : "Metrics unavailable"}
+          ? "Connecting to agent..."
+          : isLive
+            ? (liveMetrics ? `Live • Last updated: ${lastUpdated || "just now"}` : "Agent connected • Loading metrics...")
+            : "Agent not loaded / offline"}
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-3">
         <MetricCard
           label="CPU"
-          value={online ? (liveMetrics ? `${Math.round(liveMetrics.cpuUsagePercent)}%` : `${Math.round(server?.cpuUsage || 0)}%`) : "—"}
+          value={isLive && liveMetrics ? `${Math.round(liveMetrics.cpuUsagePercent)}%` : "—"}
           loading={loading && !server && !isLive}
-          unavailable={!online && !loading}
+          unavailable={!isLive && !loading}
         />
         <MetricCard
           label="RAM"
-          value={online ? (liveMetrics && liveMetrics.memoryTotalBytes > 0 ? `${Math.round((liveMetrics.memoryUsedBytes / liveMetrics.memoryTotalBytes) * 100)}%` : `${Math.round(server?.memoryUsage || 0)}%`) : "—"}
+          value={isLive && liveMetrics && liveMetrics.memoryTotalBytes > 0 ? `${Math.round((liveMetrics.memoryUsedBytes / liveMetrics.memoryTotalBytes) * 100)}%` : "—"}
           loading={loading && !server && !isLive}
-          unavailable={!online && !loading}
+          unavailable={!isLive && !loading}
         />
         <MetricCard
           label="Disk"
-          value={online ? (liveMetrics && liveMetrics.diskTotalBytes > 0 ? `${Math.round((liveMetrics.diskUsedBytes / liveMetrics.diskTotalBytes) * 100)}%` : `${Math.round(server?.diskUsage || 0)}%`) : "—"}
+          value={isLive && liveMetrics && liveMetrics.diskTotalBytes > 0 ? `${Math.round((liveMetrics.diskUsedBytes / liveMetrics.diskTotalBytes) * 100)}%` : "—"}
           loading={loading && !server && !isLive}
-          unavailable={!online && !loading}
+          unavailable={!isLive && !loading}
         />
         <MetricCard
           label="Uptime"
-          value={online ? (liveMetrics ? formatUptime(liveMetrics.uptimeSeconds) : formatUptime(server?.uptimeSeconds || 0)) : "—"}
+          value={isLive && liveMetrics ? formatUptime(liveMetrics.uptimeSeconds) : "—"}
           loading={loading && !server && !isLive}
-          unavailable={!online && !loading}
+          unavailable={!isLive && !loading}
         />
       </div>
     </div>

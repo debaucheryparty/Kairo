@@ -27,7 +27,7 @@ function statusLabel(status: string | undefined, loading: boolean) {
 
 function metric(value: number | undefined, loading: boolean, ready: boolean) {
   if (loading && !ready) return "—";
-  if (typeof value !== "number") return "—";
+  if (!ready || typeof value !== "number") return "—";
   return `${Math.round(value)}%`;
 }
 
@@ -100,11 +100,11 @@ export function TopBar() {
 
   const cpuPercent = isLive && liveMetrics
     ? Math.round(liveMetrics.cpuUsagePercent)
-    : server?.cpuUsage;
+    : undefined;
 
   const ramPercent = isLive && liveMetrics && liveMetrics.memoryTotalBytes > 0
     ? Math.round((liveMetrics.memoryUsedBytes / liveMetrics.memoryTotalBytes) * 100)
-    : server?.memoryUsage;
+    : undefined;
 
   useEffect(() => {
     const tick = () => setDateStr(formatMacDate(new Date()));
@@ -307,9 +307,9 @@ export function TopBar() {
               />
               <MenuItem
                 label="Linux Applications"
-                shortcut="⌘A"
+                shortcut="⌘Space"
                 onSelect={() => {
-                  openWindow("remote-apps");
+                  window.dispatchEvent(new Event("kairo:toggle-spotlight"));
                   closeMenus();
                 }}
               />
@@ -570,11 +570,11 @@ export function TopBar() {
           )}
         </div>
 
-        <span className="hidden shrink-0 font-medium sm:inline opacity-80">
-          CPU {metric(cpuPercent, loading, ready && online)}
+        <span className="hidden shrink-0 font-medium sm:inline opacity-80" title={!isLive ? "Agent not loaded / offline" : undefined}>
+          CPU {metric(cpuPercent, loading, isLive)}
         </span>
-        <span className="hidden shrink-0 font-medium sm:inline opacity-80">
-          RAM {metric(ramPercent, loading, ready && online)}
+        <span className="hidden shrink-0 font-medium sm:inline opacity-80" title={!isLive ? "Agent not loaded / offline" : undefined}>
+          RAM {metric(ramPercent, loading, isLive)}
         </span>
 
         <div className="flex items-center gap-2 opacity-80">

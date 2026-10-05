@@ -113,14 +113,14 @@ export async function idbSetPreference<T>(key: string, value: T): Promise<void> 
   } catch {}
 }
 
-// In-memory short-lived session credential store (never stored in persistent browser storage)
+// In-memory and persistent session credential store
 const activeSessionTokens = new Map<string, string>();
 
 export function setSessionToken(serverId: string, token: string): void {
   activeSessionTokens.set(serverId, token);
   try {
-    // Only in sessionStorage (cleared as soon as tab/browser closes, never in localStorage)
     sessionStorage.setItem(`kairo_session_token:${serverId}`, token);
+    localStorage.setItem(`kairo_token:${serverId}`, token);
   } catch {}
 }
 
@@ -129,7 +129,9 @@ export function getSessionToken(serverId: string): string | undefined {
     return activeSessionTokens.get(serverId);
   }
   try {
-    const stored = sessionStorage.getItem(`kairo_session_token:${serverId}`);
+    const stored =
+      sessionStorage.getItem(`kairo_session_token:${serverId}`) ||
+      localStorage.getItem(`kairo_token:${serverId}`);
     if (stored) {
       activeSessionTokens.set(serverId, stored);
       return stored;
@@ -142,5 +144,6 @@ export function clearSessionToken(serverId: string): void {
   activeSessionTokens.delete(serverId);
   try {
     sessionStorage.removeItem(`kairo_session_token:${serverId}`);
+    localStorage.removeItem(`kairo_token:${serverId}`);
   } catch {}
 }
