@@ -59,6 +59,7 @@ struct X11TrackedWindow {
     is_transient: bool,
     parent_surface_id: Option<String>,
     sequence: u64,
+    pending_damage: Option<(i32, i32, u32, u32)>,
 }
 
 #[inline]
@@ -164,7 +165,7 @@ impl X11Backend {
         let display_str = Self::find_available_display(display.as_deref());
 
         let (cmd_tx, cmd_rx) = mpsc::channel::<X11Command>(256);
-        let (frame_tx, _) = broadcast::channel::<SurfaceDamageFrame>(512);
+        let (frame_tx, _) = broadcast::channel::<SurfaceDamageFrame>(32);
         let (lifecycle_tx, _) = broadcast::channel::<SurfaceLifecycleNotification>(128);
         let running = Arc::new(AtomicBool::new(false));
         let surfaces = Arc::new(RwLock::new(HashMap::new()));
@@ -825,68 +826,98 @@ impl RemoteGuiBackend for X11Backend {
                                     let clip_x1 = (raw_x + raw_w).min(win_w);
                                     let clip_y1 = (raw_y + raw_h).min(win_h);
 
-                                    if clip_x1 <= clip_x0 || clip_y1 <= clip_y0 {
-                                        continue;
-                                    }
+                                    if clip_x1 > clip_x0 && clip_y1 > clip_y0 {
+                                        let new_x = clip_x0;
+                                        let new_y = clip_y0;
+                                        let new_w = (clip_x1 - clip_x0) as u32;
+                                        let new_h = (clip_y1 - clip_y0) as u32;
 
-                                    let x = clip_x0 as i16;
-                                    let y = clip_y0 as i16;
-                                    let w = (clip_x1 - clip_x0) as u16;
-                                    let h = (clip_y1 - clip_y0) as u16;
-
-                                    if let Ok(Ok(reply)) = get_image(
-                                        &conn,
-                                        ImageFormat::Z_PIXMAP,
-                                        xid,
-                                        x,
-                                        y,
-                                        w,
-                                        h,
-                                        !0,
-                                    )
-                                    .map(|c| c.reply())
-                                    {
-                                        let expected_len = (w as usize) * (h as usize) * 4;
-                                        if reply.data.len() < expected_len {
-                                            continue;
-                                        }
-
-                                        let mut data = reply.data;
-                                        bgra_to_rgba_inplace(&mut data);
-
-                                        win.sequence += 1;
-                                        let seq = win.sequence;
-                                        let sid = win.surface_id.clone();
-
-                                        let timestamp_us = SystemTime::now()
-                                            .duration_since(UNIX_EPOCH)
-                                            .unwrap_or_default()
-                                            .as_micros()
-                                            as u64;
-
-                                        info!(
-                                            "[AGENT FRAME] captured sid={} seq={} area={}x{}+{}+{} bytes={}",
-                                            sid, seq, w, h, x, y, data.len()
-                                        );
-
-                                        let frame = SurfaceDamageFrame {
-                                            surface_id: sid,
-                                            sequence: seq,
-                                            x: x as i32,
-                                            y: y as i32,
-                                            width: w as u32,
-                                            height: h as u32,
-                                            codec: "raw_rgba".to_string(),
-                                            data,
-                                            timestamp_us,
+                                        // Coalesce dirty bounding boxes
+                                        win.pending_damage = match win.pending_damage {
+                                            Some((cur_x, cur_y, cur_w, cur_h)) => {
+                                                let x0 = cur_x.min(new_x);
+                                                let y0 = cur_y.min(new_y);
+                                                let x1 = (cur_x + cur_w as i32).max(new_x + new_w as i32);
+                                                let y1 = (cur_y + cur_h as i32).max(new_y + new_h as i32);
+                                                Some((x0, y0, (x1 - x0) as u32, (y1 - y0) as u32))
+                                            }
+                                            None => Some((new_x, new_y, new_w, new_h)),
                                         };
-
-                                        let _ = frame_tx.send(frame);
                                     }
                                 }
                             }
                         }
                         _ => {}
+                    }
+                }
+
+                // Flush coalesced damage for all tracked windows after event drain
+                for (&xid, win) in tracked_windows.iter_mut() {
+                    if let Some((dmg_x, dmg_y, dmg_w, dmg_h)) = win.pending_damage.take() {
+                        if dmg_w == 0 || dmg_h == 0 || win.width == 0 || win.height == 0 {
+                            continue;
+                        }
+
+                        let damage_area = (dmg_w as u64) * (dmg_h as u64);
+                        let win_area = (win.width as u64) * (win.height as u64);
+
+                        // Adaptive rule: If damage covers more than 65% of the window, capture full window
+                        let (capture_x, capture_y, capture_w, capture_h) =
+                            if win_area > 0 && (damage_area as f64 / win_area as f64) > 0.65 {
+                                (0i16, 0i16, win.width as u16, win.height as u16)
+                            } else {
+                                (dmg_x as i16, dmg_y as i16, dmg_w as u16, dmg_h as u16)
+                            };
+
+                        if let Ok(Ok(reply)) = get_image(
+                            &conn,
+                            ImageFormat::Z_PIXMAP,
+                            xid,
+                            capture_x,
+                            capture_y,
+                            capture_w,
+                            capture_h,
+                            !0,
+                        )
+                        .map(|c| c.reply())
+                        {
+                            let expected_len = (capture_w as usize) * (capture_h as usize) * 4;
+                            if reply.data.len() < expected_len {
+                                continue;
+                            }
+
+                            let mut data = reply.data;
+                            bgra_to_rgba_inplace(&mut data);
+
+                            win.sequence += 1;
+                            let seq = win.sequence;
+                            let sid = win.surface_id.clone();
+
+                            let timestamp_us = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_micros()
+                                as u64;
+
+                            info!(
+                                "[AGENT FRAME] captured sid={} seq={} area={}x{}+{}+{} bytes={}",
+                                sid, seq, capture_w, capture_h, capture_x, capture_y, data.len()
+                            );
+
+                            let frame = SurfaceDamageFrame {
+                                surface_id: sid,
+                                sequence: seq,
+                                x: capture_x as i32,
+                                y: capture_y as i32,
+                                width: capture_w as u32,
+                                height: capture_h as u32,
+                                codec: "raw_rgba".to_string(),
+                                data,
+                                timestamp_us,
+                            };
+
+                            let _ = frame_tx.send(frame);
+                        }
                     }
                 }
 
@@ -1169,7 +1200,7 @@ impl X11Backend {
             Err(_) => return,
         };
 
-        if damage::create(conn, dmg_id, win, ReportLevel::NON_EMPTY)
+        if damage::create(conn, dmg_id, win, ReportLevel::BOUNDING_BOX)
             .map(|c| c.check())
             .is_err()
         {
@@ -1207,6 +1238,7 @@ impl X11Backend {
             is_transient,
             parent_surface_id: parent_surface_id.clone(),
             sequence: 0,
+            pending_damage: None,
         };
 
         tracked_windows.insert(win, tracked);
