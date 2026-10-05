@@ -7,14 +7,16 @@ use futures_util::{SinkExt, StreamExt};
 use kairo_common::KairoId;
 use kairo_protocol::v1::{
     AttachPtyRequest, AttachPtyResponse, ClosePtyRequest, CloseSurfaceRequest,
-    CloseSurfaceResponse, ContainerAction, ContainerLogsRequest, CreatePtyRequest,
-    CreatePtyResponse, ErrorCode, GetGpuInfoRequest, GetMetricsRequest, GetMetricsResponse,
+    CloseSurfaceResponse, ConfigureSurfaceRequest, ConfigureSurfaceResponse, ContainerAction,
+    ContainerLogsRequest, CreatePtyRequest, CreatePtyResponse, ErrorCode, FocusSurfaceRequest,
+    FocusSurfaceResponse, GetGpuInfoRequest, GetMetricsRequest, GetMetricsResponse,
     HandshakeAck, HandshakeInit, KairoError, KillProcessRequest, LaunchAppRequest, ListAppsRequest,
     ListAppsResponse, ListContainersRequest, ListDirectoryRequest, ListProcessesRequest,
     ListProcessesResponse, ListPtysRequest, ListPtysResponse, ListServicesRequest,
-    ManageContainerRequest, ManageServiceRequest, PtyInput, PtyOutput, ReadFileRequest,
-    ResizePtyRequest, ServiceAction, StartGpuStreamRequest, StopGpuStreamRequest,
-    StopGpuStreamResponse, SurfaceInputEvent, WatchRequest, WatchResponse, WriteFileRequest,
+    ListSurfacesRequest, ListSurfacesResponse, ManageContainerRequest, ManageServiceRequest,
+    PtyInput, PtyOutput, ReadFileRequest, ResizePtyRequest, ServiceAction, StartGpuStreamRequest,
+    StopGpuStreamRequest, StopGpuStreamResponse, SurfaceInputEvent, WatchRequest, WatchResponse,
+    WriteFileRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
@@ -221,11 +223,21 @@ impl Session {
 
         let writer_handle = tokio::spawn(async move {
             while let Some(msg) = out_rx.recv().await {
-                if ws_tx.send(msg).await.is_err() {
+                let write_start = std::time::Instant::now();
+                let len = msg.len();
+                let res = ws_tx.send(msg).await;
+                let elapsed = write_start.elapsed();
+                if elapsed > Duration::from_millis(30) {
+                    warn!("[AGENT WS_TX SLOW] ws_tx.send took {:?} for {} bytes", elapsed, len);
+                }
+                if res.is_err() {
                     break;
                 }
             }
         });
+
+        // Attach this session to the AppManager event stream
+        self.app.attach_session(out_tx.clone());
 
         while let Some(msg_res) = ws_rx.next().await {
             let ws_msg = msg_res.map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
@@ -763,7 +775,7 @@ impl Session {
             }
             Opcode::AppLaunch => {
                 let req = LaunchAppRequest::decode(message.payload)?;
-                match self.app.launch_app(req, out_tx.clone()).await {
+                match self.app.launch_app(req).await {
                     Ok(resp) => {
                         let mut buf = Vec::new();
                         resp.encode(&mut buf)?;
@@ -808,8 +820,64 @@ impl Session {
                 self.send_frame(out_tx, msg).await?;
             }
             Opcode::SurfaceInput => {
+                let a0 = std::time::Instant::now();
                 let req = SurfaceInputEvent::decode(message.payload)?;
+                info!(
+                    "[AGENT WS] received input surface_id={} event_type={} key={} x={} y={} (decode: {:?})",
+                    req.surface_id,
+                    req.event_type,
+                    req.key,
+                    req.x,
+                    req.y,
+                    a0.elapsed()
+                );
                 self.app.handle_surface_input(req).await;
+            }
+            Opcode::SurfaceConfigure => {
+                let req = ConfigureSurfaceRequest::decode(message.payload)?;
+                let success = self
+                    .app
+                    .configure_surface(&req.surface_id, req.x, req.y, req.width, req.height)
+                    .await
+                    .is_ok();
+                let resp = ConfigureSurfaceResponse { success };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::SurfaceConfigure,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::SurfaceFocus => {
+                let req = FocusSurfaceRequest::decode(message.payload)?;
+                let success = self.app.focus_surface(&req.surface_id).await.is_ok();
+                let resp = FocusSurfaceResponse { success };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::SurfaceFocus,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::SurfaceList => {
+                let _req = ListSurfacesRequest::decode(message.payload)?;
+                let surfaces = self.app.list_surfaces().await;
+                let resp = ListSurfacesResponse { surfaces };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::SurfaceList,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
             }
             Opcode::GpuGetInfo => {
                 let _req = GetGpuInfoRequest::decode(message.payload)?;
