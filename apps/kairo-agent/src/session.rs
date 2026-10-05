@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,7 +22,7 @@ use kairo_protocol::v1::{
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
 use thiserror::Error;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex, Notify};
 use tokio::time::timeout;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
@@ -219,39 +220,74 @@ impl Session {
         }
 
         let (mut ws_tx, mut ws_rx) = stream.split();
-        let (out_tx, mut out_rx) = mpsc::channel::<WsMessage>(256);
+        let (high_tx, mut high_rx) = mpsc::channel::<WsMessage>(512);
+        let latest_frames: Arc<Mutex<HashMap<String, WsMessage>>> = Arc::new(Mutex::new(HashMap::new()));
+        let frame_notify = Arc::new(Notify::new());
+
+        let pending_frames_writer = latest_frames.clone();
+        let frame_notify_writer = frame_notify.clone();
 
         let writer_handle = tokio::spawn(async move {
-            while let Some(msg) = out_rx.recv().await {
-                let write_start = std::time::Instant::now();
-                let len = msg.len();
-                let res = ws_tx.send(msg).await;
-                let elapsed = write_start.elapsed();
-                if elapsed > Duration::from_millis(30) {
-                    warn!("[AGENT WS_TX SLOW] ws_tx.send took {:?} for {} bytes", elapsed, len);
-                }
-                if res.is_err() {
-                    break;
+            loop {
+                tokio::select! {
+                    biased;
+                    Some(high_msg) = high_rx.recv() => {
+                        let res = ws_tx.send(high_msg).await;
+                        if res.is_err() {
+                            break;
+                        }
+                    }
+                    _ = frame_notify_writer.notified() => {
+                        let next_frame = {
+                            let mut lock = pending_frames_writer.lock().await;
+                            if let Some(key) = lock.keys().next().cloned() {
+                                lock.remove(&key)
+                            } else {
+                                None
+                            }
+                        };
+
+                        if let Some(frame_msg) = next_frame {
+                            {
+                                let lock = pending_frames_writer.lock().await;
+                                if !lock.is_empty() {
+                                    frame_notify_writer.notify_one();
+                                }
+                            }
+
+                            let write_start = std::time::Instant::now();
+                            let len = frame_msg.len();
+                            let res = ws_tx.send(frame_msg).await;
+                            let elapsed = write_start.elapsed();
+                            if elapsed > Duration::from_millis(30) {
+                                warn!("[AGENT WS_TX SLOW] ws_tx.send took {:?} for {} bytes", elapsed, len);
+                            }
+                            if res.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    else => break,
                 }
             }
         });
 
         // Attach this session to the AppManager event stream
-        self.app.attach_session(out_tx.clone());
+        self.app.attach_session(high_tx.clone(), latest_frames.clone(), frame_notify.clone());
 
         while let Some(msg_res) = ws_rx.next().await {
             let ws_msg = msg_res.map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
 
             match ws_msg {
                 WsMessage::Binary(data) => {
-                    self.handle_message(&out_tx, data).await?;
+                    self.handle_message(&high_tx, data).await?;
                 }
                 WsMessage::Close(_) => {
                     info!(session_id = %self.session_id, "client closed connection");
                     break;
                 }
                 WsMessage::Ping(payload) => {
-                    let _ = out_tx.send(WsMessage::Pong(payload)).await;
+                    let _ = high_tx.send(WsMessage::Pong(payload)).await;
                 }
                 _ => {}
             }
@@ -259,7 +295,7 @@ impl Session {
 
         self.state = SessionState::Terminated;
         self.watcher = None;
-        drop(out_tx);
+        drop(high_tx);
         let _ = writer_handle.await;
 
         Ok(())

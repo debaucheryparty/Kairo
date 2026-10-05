@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -9,10 +10,9 @@ use kairo_protocol::v1::{
 use kairo_protocol::{KairoMessage, MessageKind, Opcode};
 use prost::Message as ProstMessage;
 use thiserror::Error;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex, Notify};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
-use std::time::Duration;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::gui::{x11::X11Backend, GuiInputEvent, RemoteGuiBackend};
 
@@ -162,49 +162,59 @@ impl AppManager {
         })
     }
 
-    pub fn attach_session(&self, out_tx: mpsc::Sender<WsMessage>) {
+    pub fn attach_session(
+        &self,
+        high_tx: mpsc::Sender<WsMessage>,
+        latest_frames: Arc<Mutex<HashMap<String, WsMessage>>>,
+        frame_notify: Arc<Notify>,
+    ) {
         let mut frame_rx = self.gui_backend.subscribe_frames();
-        let frame_tx = out_tx.clone();
+        let frames_store = latest_frames;
+        let notify = frame_notify;
         tokio::spawn(async move {
-            while let Ok(frame) = frame_rx.recv().await {
-                let proto_frame = SurfaceFrame {
-                    surface_id: frame.surface_id,
-                    sequence: frame.sequence,
-                    width: frame.width,
-                    height: frame.height,
-                    codec: frame.codec,
-                    data: frame.data,
-                    x: frame.x,
-                    y: frame.y,
-                    timestamp_us: frame.timestamp_us,
-                };
-                let mut buf = Vec::new();
-                let seq = proto_frame.sequence;
-                let sid = proto_frame.surface_id.clone();
-                let data_len = proto_frame.data.len();
-                if proto_frame.encode(&mut buf).is_ok() {
-                    let msg = KairoMessage::with_opcode(
-                        MessageKind::Event,
-                        Opcode::SurfaceFrame,
-                        0,
-                        Bytes::from(buf),
-                    );
-                    if let Ok(encoded) = msg.encode() {
-                        let t_send = std::time::Instant::now();
-                        if frame_tx.send(WsMessage::Binary(encoded)).await.is_err() {
-                            break;
-                        }
-                        let elapsed = t_send.elapsed();
-                        if elapsed > Duration::from_millis(15) {
-                            warn!("[AGENT FRAME QUEUE SLOW] queued sid={} seq={} bytes={} in {:?}", sid, seq, data_len, elapsed);
+            loop {
+                match frame_rx.recv().await {
+                    Ok(frame) => {
+                        let proto_frame = SurfaceFrame {
+                            surface_id: frame.surface_id.clone(),
+                            sequence: frame.sequence,
+                            width: frame.width,
+                            height: frame.height,
+                            codec: frame.codec,
+                            data: frame.data,
+                            x: frame.x,
+                            y: frame.y,
+                            timestamp_us: frame.timestamp_us,
+                        };
+                        let mut buf = Vec::new();
+                        if proto_frame.encode(&mut buf).is_ok() {
+                            let msg = KairoMessage::with_opcode(
+                                MessageKind::Event,
+                                Opcode::SurfaceFrame,
+                                0,
+                                Bytes::from(buf),
+                            );
+                            if let Ok(encoded) = msg.encode() {
+                                {
+                                    let mut lock = frames_store.lock().await;
+                                    // Overwrite previous unsent frame for this surface - zero stale frame backlog
+                                    lock.insert(frame.surface_id, WsMessage::Binary(encoded));
+                                }
+                                notify.notify_one();
+                            }
                         }
                     }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(dropped)) => {
+                        debug!("[AGENT FRAME] backend frame channel lagged, dropped {} stale frames", dropped);
+                        continue;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }
         });
 
         let mut lifecycle_rx = self.gui_backend.subscribe_lifecycle();
-        let lc_tx = out_tx;
+        let lc_tx = high_tx;
         tokio::spawn(async move {
             while let Ok(notif) = lifecycle_rx.recv().await {
                 let proto_event = kairo_protocol::v1::SurfaceLifecycleEvent {
