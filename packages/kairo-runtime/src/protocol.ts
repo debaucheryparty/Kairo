@@ -1395,6 +1395,9 @@ export interface SurfaceFramePayload {
   height: number;
   codec: string;
   data: Uint8Array;
+  x: number;
+  y: number;
+  timestampUs: number;
 }
 
 export function decodeSurfaceFrame(raw: Uint8Array): SurfaceFramePayload {
@@ -1405,6 +1408,9 @@ export function decodeSurfaceFrame(raw: Uint8Array): SurfaceFramePayload {
   let height = 0;
   let codec = '';
   let data = new Uint8Array(0);
+  let x = 0;
+  let y = 0;
+  let timestampUs = 0;
 
   while (offset < raw.byteLength) {
     const tag = raw[offset++];
@@ -1423,6 +1429,9 @@ export function decodeSurfaceFrame(raw: Uint8Array): SurfaceFramePayload {
       if (fieldNumber === 2) sequence = value;
       else if (fieldNumber === 3) width = value;
       else if (fieldNumber === 4) height = value;
+      else if (fieldNumber === 7) x = value | 0;
+      else if (fieldNumber === 8) y = value | 0;
+      else if (fieldNumber === 9) timestampUs = value;
     } else if (wireType === 2) {
       let length = 0;
       let shift = 0;
@@ -1445,7 +1454,213 @@ export function decodeSurfaceFrame(raw: Uint8Array): SurfaceFramePayload {
     }
   }
 
-  return { surfaceId, sequence, width, height, codec, data };
+  return { surfaceId, sequence, width, height, codec, data, x, y, timestampUs };
+}
+
+export interface SurfaceLifecycleEventPayload {
+  surfaceId: string;
+  state: string;
+  title: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  parentId: string;
+  isTransient: boolean;
+}
+
+export function decodeSurfaceLifecycle(raw: Uint8Array): SurfaceLifecycleEventPayload {
+  let offset = 0;
+  let surfaceId = '';
+  let state = '';
+  let title = '';
+  let x = 0;
+  let y = 0;
+  let width = 0;
+  let height = 0;
+  let parentId = '';
+  let isTransient = false;
+
+  while (offset < raw.byteLength) {
+    const tag = raw[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (wireType === 0) {
+      let value = 0;
+      let shift = 0;
+      while (offset < raw.byteLength) {
+        const byte = raw[offset++];
+        value += (byte & 0x7f) * Math.pow(2, shift);
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 4) x = value | 0;
+      else if (fieldNumber === 5) y = value | 0;
+      else if (fieldNumber === 6) width = value;
+      else if (fieldNumber === 7) height = value;
+      else if (fieldNumber === 9) isTransient = value !== 0;
+    } else if (wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < raw.byteLength) {
+        const byte = raw[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) {
+        surfaceId = textDecoder.decode(raw.subarray(offset, offset + length));
+      } else if (fieldNumber === 2) {
+        state = textDecoder.decode(raw.subarray(offset, offset + length));
+      } else if (fieldNumber === 3) {
+        title = textDecoder.decode(raw.subarray(offset, offset + length));
+      } else if (fieldNumber === 8) {
+        parentId = textDecoder.decode(raw.subarray(offset, offset + length));
+      }
+      offset += length;
+    } else {
+      break;
+    }
+  }
+
+  return { surfaceId, state, title, x, y, width, height, parentId, isTransient };
+}
+
+export function encodeConfigureSurfaceRequest(req: {
+  surfaceId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}): Uint8Array {
+  const parts: Uint8Array[] = [
+    encodeStringField(1, req.surfaceId),
+    encodeIntField(2, req.x),
+    encodeIntField(3, req.y),
+    encodeUintField(4, req.width),
+    encodeUintField(5, req.height),
+  ];
+  return concat(parts);
+}
+
+export function decodeConfigureSurfaceResponse(raw: Uint8Array): { success: boolean } {
+  let success = false;
+  let offset = 0;
+  while (offset < raw.byteLength) {
+    const tag = raw[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+    if (wireType === 0) {
+      let value = 0;
+      let shift = 0;
+      while (offset < raw.byteLength) {
+        const byte = raw[offset++];
+        value += (byte & 0x7f) * Math.pow(2, shift);
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      if (fieldNumber === 1) success = value !== 0;
+    } else {
+      break;
+    }
+  }
+  return { success };
+}
+
+export function encodeFocusSurfaceRequest(req: { surfaceId: string }): Uint8Array {
+  return encodeStringField(1, req.surfaceId);
+}
+
+export function decodeFocusSurfaceResponse(raw: Uint8Array): { success: boolean } {
+  return decodeConfigureSurfaceResponse(raw);
+}
+
+export interface RemoteSurfaceInfo {
+  surfaceId: string;
+  appId: string;
+  title: string;
+  width: number;
+  height: number;
+  backend: string;
+  state: string;
+}
+
+export function encodeListSurfacesRequest(): Uint8Array {
+  return new Uint8Array(0);
+}
+
+export function decodeListSurfacesResponse(data: Uint8Array): RemoteSurfaceInfo[] {
+  const surfaces: RemoteSurfaceInfo[] = [];
+  let offset = 0;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fieldNumber = tag >> 3;
+    const wireType = tag & 0x07;
+
+    if (fieldNumber === 1 && wireType === 2) {
+      let length = 0;
+      let shift = 0;
+      while (offset < data.byteLength) {
+        const byte = data[offset++];
+        length |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+      }
+      const end = offset + length;
+      let surfaceId = '';
+      let appId = '';
+      let title = '';
+      let width = 0;
+      let height = 0;
+      let backend = '';
+      let state = '';
+
+      while (offset < end) {
+        const t = data[offset++];
+        const fn = t >> 3;
+        const wt = t & 0x07;
+
+        if (wt === 2) {
+          let l = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            l |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          const str = textDecoder.decode(data.subarray(offset, offset + l));
+          offset += l;
+          if (fn === 1) surfaceId = str;
+          else if (fn === 2) appId = str;
+          else if (fn === 3) title = str;
+          else if (fn === 6) backend = str;
+          else if (fn === 7) state = str;
+        } else if (wt === 0) {
+          let val = 0;
+          let s = 0;
+          while (offset < end) {
+            const b = data[offset++];
+            val |= (b & 0x7f) << s;
+            if ((b & 0x80) === 0) break;
+            s += 7;
+          }
+          if (fn === 4) width = val;
+          else if (fn === 5) height = val;
+        } else {
+          break;
+        }
+      }
+
+      surfaces.push({ surfaceId, appId, title, width, height, backend, state });
+    } else {
+      break;
+    }
+  }
+
+  return surfaces;
 }
 
 export interface GpuDevicePayload {

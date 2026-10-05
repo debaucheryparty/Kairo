@@ -66,8 +66,17 @@ import {
   type LaunchAppResponsePayload,
   encodeSurfaceInputEvent,
   decodeSurfaceFrame,
+  decodeSurfaceLifecycle,
+  encodeConfigureSurfaceRequest,
+  decodeConfigureSurfaceResponse,
+  encodeFocusSurfaceRequest,
+  decodeFocusSurfaceResponse,
+  encodeListSurfacesRequest,
+  decodeListSurfacesResponse,
+  type RemoteSurfaceInfo,
   type SurfaceInputEventPayload,
   type SurfaceFramePayload,
+  type SurfaceLifecycleEventPayload,
   type GetGpuInfoResponsePayload,
   type StartGpuStreamRequestPayload,
   type StartGpuStreamResponsePayload,
@@ -486,6 +495,40 @@ export class KairoClient {
         console.error('Failed to decode SurfaceFrame event:', err);
       }
     });
+  }
+
+  async configureSurface(
+    surfaceId: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): Promise<boolean> {
+    const payload = encodeConfigureSurfaceRequest({ surfaceId, x, y, width, height });
+    const respBytes = await this.sendRequest(Opcode.SurfaceConfigure, payload);
+    return decodeConfigureSurfaceResponse(respBytes).success;
+  }
+
+  async focusSurface(surfaceId: string): Promise<boolean> {
+    const payload = encodeFocusSurfaceRequest({ surfaceId });
+    const respBytes = await this.sendRequest(Opcode.SurfaceFocus, payload);
+    return decodeFocusSurfaceResponse(respBytes).success;
+  }
+
+  onSurfaceLifecycle(listener: (event: SurfaceLifecycleEventPayload) => void): () => void {
+    return this.onEvent(Opcode.SurfaceLifecycle, (payload) => {
+      try {
+        listener(decodeSurfaceLifecycle(payload));
+      } catch (err) {
+        console.error('Failed to decode SurfaceLifecycle event:', err);
+      }
+    });
+  }
+
+  async listSurfaces(): Promise<RemoteSurfaceInfo[]> {
+    const payload = encodeListSurfacesRequest();
+    const respBytes = await this.sendRequest(Opcode.SurfaceList, payload);
+    return decodeListSurfacesResponse(respBytes);
   }
 
   async getGpuInfo(): Promise<GetGpuInfoResponsePayload> {

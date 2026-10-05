@@ -60,6 +60,9 @@ message SurfaceFrame {
   uint32 height = 4;
   string codec = 5;
   bytes data = 6;
+  int32 x = 7;
+  int32 y = 8;
+  uint64 timestamp_us = 9;
 }
 
 message CloseSurfaceRequest {
@@ -68,4 +71,42 @@ message CloseSurfaceRequest {
 
 message CloseSurfaceResponse {
   bool success = 1;
+}
+
+message ConfigureSurfaceRequest {
+  string surface_id = 1;
+  int32 x = 2;
+  int32 y = 3;
+  uint32 width = 4;
+  uint32 height = 5;
+}
+
+message ConfigureSurfaceResponse {
+  bool success = 1;
+}
+
+message FocusSurfaceRequest {
+  string surface_id = 1;
+}
+
+message FocusSurfaceResponse {
+  bool success = 1;
+}
+
+message SurfaceLifecycleEvent {
+  string surface_id = 1;
+  string state = 2;
+  string title = 3;
+  int32 x = 4;
+  int32 y = 5;
+  uint32 width = 6;
+  uint32 height = 7;
+  string parent_id = 8;
+  bool is_transient = 9;
+}
+
+message ListSurfacesRequest {}
+
+message ListSurfacesResponse {
+  repeated RemoteSurface surfaces = 1;
 }
