@@ -2,12 +2,11 @@ export const APP_IDS = [
   "dashboard",
   "files",
   "terminal",
-  "remote-apps",
   "settings",
 ] as const;
 
 export type DockAppId = (typeof APP_IDS)[number];
-export type AppId = DockAppId | "about" | "viewer" | "surface" | "trash";
+export type AppId = DockAppId | "about" | "viewer" | "surface" | "trash" | "editor";
 
 export type WindowChrome = "light" | "dark";
 
@@ -41,13 +40,6 @@ export const APP_META: Record<
     height: 480,
     available: true,
     chrome: "dark",
-  },
-  "remote-apps": {
-    title: "Linux Apps",
-    width: 960,
-    height: 620,
-    available: true,
-    chrome: "light",
   },
   surface: {
     title: "Remote Surface",
@@ -83,5 +75,12 @@ export const APP_META: Record<
     height: 520,
     available: true,
     chrome: "light",
+  },
+  editor: {
+    title: "Visual Studio Code",
+    width: 1024,
+    height: 680,
+    available: true,
+    chrome: "dark",
   },
 };

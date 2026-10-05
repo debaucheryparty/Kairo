@@ -85,7 +85,8 @@ type Action =
       width: number;
       height: number;
     }
-  | { type: "syncMaximized" };
+  | { type: "syncMaximized" }
+  | { type: "updateTitle"; id: string; title: string };
 
 function nextZ(state: ManagerState) {
   return state.zCounter + 1;
@@ -396,6 +397,14 @@ function reducer(state: ManagerState, action: Action): ManagerState {
         windows: state.windows.map((item) => (item.maximized ? { ...item, ...max } : item)),
       };
     }
+    case "updateTitle": {
+      return {
+        ...state,
+        windows: state.windows.map((item) =>
+          item.id === action.id ? { ...item, title: action.title } : item,
+        ),
+      };
+    }
     default:
       return state;
   }
@@ -417,6 +426,7 @@ type WindowManagerApi = {
   clearFocus: () => void;
   updateWindowPosition: (id: string, x: number, y: number) => void;
   updateWindowSize: (id: string, width: number, height: number, x: number, y: number) => void;
+  updateWindowTitle: (id: string, title: string) => void;
 };
 
 const WindowManagerContext = createContext<WindowManagerApi | null>(null);
@@ -471,6 +481,9 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+  const updateWindowTitle = useCallback((id: string, title: string) => {
+    dispatch({ type: "updateTitle", id, title });
+  }, []);
 
   const value = useMemo<WindowManagerApi>(
     () => ({
@@ -489,6 +502,7 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
       clearFocus,
       updateWindowPosition,
       updateWindowSize,
+      updateWindowTitle,
     }),
     [
       state.windows,
@@ -505,6 +519,7 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
       clearFocus,
       updateWindowPosition,
       updateWindowSize,
+      updateWindowTitle,
     ],
   );
 

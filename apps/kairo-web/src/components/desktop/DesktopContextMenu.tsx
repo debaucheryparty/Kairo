@@ -63,10 +63,10 @@ export function DesktopContextMenu({
         }}
       />
       <MenuItem
-        label="Open Linux Apps"
-        shortcut="⌘A"
+        label="Linux Applications"
+        shortcut="⌘Space"
         onSelect={() => {
-          openWindow("remote-apps");
+          window.dispatchEvent(new Event("kairo:toggle-spotlight"));
           onClose();
         }}
       />

@@ -5,7 +5,7 @@ import { APP_META } from "@/src/data/apps";
 import { WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH } from "@/src/lib/desktop";
 import { WindowHeader } from "@/src/components/window/WindowHeader";
 import { useServer } from "@/src/lib/api/server-context";
-import { useSelectedServer } from "@/src/lib/session";
+import { useSelectedServer, useRuntimeClient } from "@/src/lib/session";
 import { useTheme } from "@/src/lib/theme";
 import {
   useWindowManager,
@@ -33,7 +33,22 @@ export function Window({ window: win, children }: { window: WindowState; childre
   } = useWindowManager();
   const { server } = useServer();
   const selected = useSelectedServer();
+  const runtimeClient = useRuntimeClient();
   const { theme } = useTheme();
+
+  const handleFocus = () => {
+    focusWindow(win.id);
+    if (win.app === "surface" && win.payload?.surfaceId && runtimeClient?.getSession()) {
+      void runtimeClient.focusSurface(win.payload.surfaceId).catch(() => undefined);
+    }
+  };
+
+  const handleClose = () => {
+    if (win.app === "surface" && win.payload?.surfaceId && runtimeClient?.getSession()) {
+      void runtimeClient.closeSurface(win.payload.surfaceId).catch(() => undefined);
+    }
+    closeWindow(win.id);
+  };
   const [isDragging, setIsDragging] = useState(false);
   const drag = useRef<{
     offsetX: number;
@@ -59,7 +74,7 @@ export function Window({ window: win, children }: { window: WindowState; childre
 
   function onHeaderPointerDown(event: ReactPointerEvent<HTMLElement>) {
     if (event.button !== 0) return;
-    focusWindow(win.id);
+    handleFocus();
 
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
@@ -125,7 +140,7 @@ export function Window({ window: win, children }: { window: WindowState; childre
   function onResizePointerDown(event: ReactPointerEvent<HTMLDivElement>, edge: ResizeEdge) {
     if (event.button !== 0 || win.maximized) return;
     event.stopPropagation();
-    focusWindow(win.id);
+    handleFocus();
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
     resize.current = {
@@ -205,7 +220,7 @@ export function Window({ window: win, children }: { window: WindowState; childre
               zIndex: win.zIndex,
             }
       }
-      onPointerDown={() => focusWindow(win.id)}
+      onPointerDown={handleFocus}
     >
       <WindowHeader
         title={title}
@@ -221,7 +236,7 @@ export function Window({ window: win, children }: { window: WindowState; childre
           win.maximized || win.snapped ? restoreWindow(win.id) : maximizeWindow(win.id)
         }
         onSnap={(side) => snapWindow(win.id, side)}
-        onClose={() => closeWindow(win.id)}
+        onClose={handleClose}
       />
       <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
       {!win.maximized

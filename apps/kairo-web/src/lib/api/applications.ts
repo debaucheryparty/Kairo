@@ -11,7 +11,7 @@ export interface VpsApp {
   description: string;
   icon: string;
   exec: string;
-  builtinAppId?: "terminal" | "files" | "dashboard" | "settings" | "remote-apps" | "about";
+  builtinAppId?: "terminal" | "files" | "dashboard" | "settings" | "remote-apps" | "about" | "editor";
   isTerminal?: boolean;
 }
 
@@ -24,6 +24,16 @@ export const APP_CATEGORIES: AppCategory[] = [
 ];
 
 export const BUILTIN_VPS_APPS: VpsApp[] = [
+  {
+    id: "editor",
+    name: "Visual Studio Code",
+    genericName: "Web Code Editor",
+    category: "Developer Tools",
+    description: "Fast web-native code editor with syntax highlighting, explorer, and tabs",
+    icon: "vscode",
+    exec: "code",
+    builtinAppId: "editor",
+  },
   {
     id: "terminal",
     name: "Terminal",
@@ -88,14 +98,40 @@ export function mapLinuxApp(app: LinuxApp): VpsApp {
     category = "Services";
   }
 
+  const appIdLower = app.appId.toLowerCase();
+  const execLower = app.exec.toLowerCase();
+
+  let builtinAppId: VpsApp["builtinAppId"] | undefined;
+  if (
+    appIdLower.includes("code") ||
+    execLower.startsWith("code") ||
+    appIdLower.includes("vscode")
+  ) {
+    builtinAppId = "editor";
+  } else if (
+    app.isTerminal ||
+    appIdLower.includes("terminal") ||
+    execLower === "bash" ||
+    execLower.startsWith("xterm")
+  ) {
+    builtinAppId = "terminal";
+  } else if (
+    appIdLower.includes("nautilus") ||
+    appIdLower.includes("thunar") ||
+    appIdLower === "files"
+  ) {
+    builtinAppId = "files";
+  }
+
   return {
     id: app.appId,
     name: app.name,
     genericName: app.genericName,
     category,
     description: app.comment || app.genericName || `Launch ${app.exec} on remote computer`,
-    icon: app.icon || (app.isTerminal ? "terminal" : "files"),
+    icon: app.icon || (builtinAppId === "editor" ? "vscode" : app.isTerminal ? "terminal" : "files"),
     exec: app.exec,
+    builtinAppId,
     isTerminal: app.isTerminal,
   };
 }

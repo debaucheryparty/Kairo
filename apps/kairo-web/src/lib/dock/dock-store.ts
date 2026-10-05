@@ -10,13 +10,12 @@ export type DockItem = {
   builtinAppId?: string;
 };
 
-const STORAGE_KEY = "kairo_dock_items_v2";
+const STORAGE_KEY = "kairo_dock_items_v3";
 
 export const DEFAULT_DOCK_ITEMS: DockItem[] = [
   { id: "files", title: "Finder", builtinAppId: "files" },
   { id: "terminal", title: "Terminal", builtinAppId: "terminal" },
   { id: "dashboard", title: "Activity Monitor", builtinAppId: "dashboard" },
-  { id: "remote-apps", title: "Linux Applications", builtinAppId: "remote-apps" },
   { id: "settings", title: "System Settings", builtinAppId: "settings" },
 ];
 
@@ -27,7 +26,8 @@ export function loadDockItems(): DockItem[] {
     if (!raw) return DEFAULT_DOCK_ITEMS;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_DOCK_ITEMS;
-    return parsed;
+    const filtered = parsed.filter((x) => x.id !== "remote-apps" && x.builtinAppId !== "remote-apps");
+    return filtered.length > 0 ? filtered : DEFAULT_DOCK_ITEMS;
   } catch {
     return DEFAULT_DOCK_ITEMS;
   }

@@ -1,13 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Activity,
-  AppWindow,
-  Cpu,
-  Power,
-  Zap,
-} from "lucide-react";
 import { useWindowManager, type WindowPayload } from "@/src/components/window/window-context";
 import { useRuntimeClient } from "@/src/lib/session";
 
@@ -17,26 +10,62 @@ interface RemoteSurfaceViewerProps {
 }
 
 export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerProps) {
-  const { closeWindow } = useWindowManager();
+  const { closeWindow, updateWindowTitle } = useWindowManager();
   const runtimeClient = useRuntimeClient();
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const lastSequenceRef = useRef<number>(0);
+  const lastConfiguredSize = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+  const mousePosRef = useRef<{ x: number; y: number }>({ x: 640, y: 360 });
 
-  const [fps, setFps] = useState(0);
-  const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [scaleMode, setScaleMode] = useState<"fit" | "native">("fit");
-  const [resolution, setResolution] = useState<{ width: number; height: number }>({
-    width: 1280,
-    height: 720,
-  });
-  const [mousePos, setMousePos] = useState({ x: 640, y: 360 });
-  const [lastClick, setLastClick] = useState<{ x: number; y: number; time: number } | null>(null);
   const [isFocused, setIsFocused] = useState(true);
+  const [activeSurfaceId, setActiveSurfaceId] = useState(payload?.surfaceId || "surface-default");
 
-  const surfaceId = payload?.surfaceId || "surface-default";
-  const appName = payload?.appName || "Linux GUI Application";
-  const appExec = payload?.appExec || "app";
+  useEffect(() => {
+    if (payload?.surfaceId) {
+      setActiveSurfaceId(payload.surfaceId);
+    }
+  }, [payload?.surfaceId]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        const targetW = Math.round(width);
+        const targetH = Math.round(height);
+
+        if (targetW < 64 || targetH < 64) continue;
+
+        if (
+          Math.abs(lastConfiguredSize.current.width - targetW) > 4 ||
+          Math.abs(lastConfiguredSize.current.height - targetH) > 4
+        ) {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            if (!runtimeClient?.getSession()) return;
+            lastConfiguredSize.current = { width: targetW, height: targetH };
+            void runtimeClient
+              .configureSurface(activeSurfaceId, 0, 0, targetW, targetH)
+              .catch(() => undefined);
+          }, 150);
+        }
+      }
+    });
+
+    observer.observe(viewport);
+
+    return () => {
+      clearTimeout(resizeTimer);
+      observer.disconnect();
+    };
+  }, [activeSurfaceId, runtimeClient]);
 
   const sendInput = useCallback(
     (event: {
@@ -51,75 +80,100 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
       if (!runtimeClient?.getSession()) return;
       void runtimeClient
         .sendSurfaceInput({
-          surfaceId,
+          surfaceId: activeSurfaceId,
           ...event,
         })
         .catch(() => undefined);
     },
-    [runtimeClient, surfaceId]
+    [runtimeClient, activeSurfaceId]
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const getCanvasCoords = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement> | React.MouseEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
-      if (!canvas) return;
-
+      if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
 
-      const canvasX = Math.round((e.clientX - rect.left) * scaleX);
-      const canvasY = Math.round((e.clientY - rect.top) * scaleY);
+      const rawX = Math.round((e.clientX - rect.left) * scaleX);
+      const rawY = Math.round((e.clientY - rect.top) * scaleY);
 
-      setMousePos({ x: canvasX, y: canvasY });
-      sendInput({ eventType: "mousemove", x: canvasX, y: canvasY });
+      const x = Math.max(0, Math.min(canvas.width - 1, rawX));
+      const y = Math.max(0, Math.min(canvas.height - 1, rawY));
+
+      return { x, y };
     },
-    [sendInput]
+    []
   );
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const coords = getCanvasCoords(e);
+      if (!coords) return;
 
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
+      mousePosRef.current = { x: coords.x, y: coords.y };
+      sendInput({ eventType: "mousemove", x: coords.x, y: coords.y });
+    },
+    [getCanvasCoords, sendInput]
+  );
 
-      const canvasX = Math.round((e.clientX - rect.left) * scaleX);
-      const canvasY = Math.round((e.clientY - rect.top) * scaleY);
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const coords = getCanvasCoords(e);
+      if (!coords) return;
 
-      setLastClick({ x: canvasX, y: canvasY, time: performance.now() });
+      const t0 = performance.now();
+      console.log(`[CLIENT INPUT] type=mousedown button=${e.button} x=${coords.x} y=${coords.y} timestamp=${t0.toFixed(2)}ms`);
+
+      const target = e.currentTarget;
+      try {
+        target.setPointerCapture(e.pointerId);
+      } catch {
+        // Ignore
+      }
+
+      if (runtimeClient?.getSession()) {
+        void runtimeClient.focusSurface(activeSurfaceId).catch(() => undefined);
+      }
+
       sendInput({
         eventType: "mousedown",
         button: e.button,
-        x: canvasX,
-        y: canvasY,
+        x: coords.x,
+        y: coords.y,
       });
+
+      const t1 = performance.now();
+      console.log(`[CLIENT WS] sent input mousedown timestamp=${t1.toFixed(2)}ms (prep: ${(t1 - t0).toFixed(2)}ms)`);
     },
-    [sendInput]
+    [activeSurfaceId, getCanvasCoords, runtimeClient, sendInput]
   );
 
-  const handleMouseUp = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const coords = getCanvasCoords(e);
+      if (!coords) return;
 
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-
-      const canvasX = Math.round((e.clientX - rect.left) * scaleX);
-      const canvasY = Math.round((e.clientY - rect.top) * scaleY);
+      const target = e.currentTarget;
+      try {
+        if (target.hasPointerCapture(e.pointerId)) {
+          target.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        // Ignore
+      }
 
       sendInput({
         eventType: "mouseup",
         button: e.button,
-        x: canvasX,
-        y: canvasY,
+        x: coords.x,
+        y: coords.y,
       });
     },
-    [sendInput]
+    [getCanvasCoords, sendInput]
   );
 
   const handleWheel = useCallback(
@@ -128,17 +182,21 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
         eventType: "wheel",
         deltaX: Math.round(e.deltaX),
         deltaY: Math.round(e.deltaY),
-        x: mousePos.x,
-        y: mousePos.y,
+        x: mousePosRef.current.x,
+        y: mousePosRef.current.y,
       });
     },
-    [mousePos, sendInput]
+    [sendInput]
   );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (!isFocused) return;
+      const t0 = performance.now();
+      console.log(`[CLIENT INPUT] type=keydown key=${e.key} timestamp=${t0.toFixed(2)}ms`);
       sendInput({ eventType: "keydown", key: e.key });
+      const t1 = performance.now();
+      console.log(`[CLIENT WS] sent input keydown key=${e.key} timestamp=${t1.toFixed(2)}ms (prep: ${(t1 - t0).toFixed(2)}ms)`);
     },
     [isFocused, sendInput]
   );
@@ -151,33 +209,14 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
     [isFocused, sendInput]
   );
 
-  const handleCloseSurface = useCallback(() => {
-    if (runtimeClient?.getSession()) {
-      void runtimeClient.closeSurface(surfaceId).catch(() => undefined);
-    }
-    if (windowId) {
-      closeWindow(windowId);
-    }
-  }, [closeWindow, runtimeClient, surfaceId, windowId]);
-
-  useEffect(() => {
-    return () => {
-      if (runtimeClient?.getSession()) {
-        void runtimeClient.closeSurface(surfaceId).catch(() => undefined);
-      }
-    };
-  }, [runtimeClient, surfaceId]);
-
   useEffect(() => {
     if (!runtimeClient?.getSession()) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
 
-    let frameCount = 0;
-    let lastFpsUpdate = performance.now();
     let hasReceivedFrame = false;
 
     const drawWaiting = () => {
@@ -195,46 +234,116 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
       ctx.fillText("Waiting for display frames...", w / 2, h / 2 - 10);
       ctx.fillStyle = "#475569";
       ctx.font = "12px monospace";
-      ctx.fillText(`Surface: ${surfaceId}`, w / 2, h / 2 + 16);
+      ctx.fillText(`Surface: ${activeSurfaceId}`, w / 2, h / 2 + 16);
     };
 
     drawWaiting();
 
-    const unsubscribe = runtimeClient.onSurfaceFrame((frame) => {
-      if (frame.surfaceId !== surfaceId) return;
-
-      hasReceivedFrame = true;
-      frameCount++;
-      const now = performance.now();
-      if (now - lastFpsUpdate >= 1000) {
-        setFps(frameCount);
-        frameCount = 0;
-        lastFpsUpdate = now;
+    const unsubLifecycle = runtimeClient.onSurfaceLifecycle((event) => {
+      if (event.surfaceId === activeSurfaceId || (activeSurfaceId.startsWith("app-") && !hasReceivedFrame)) {
+        if (activeSurfaceId !== event.surfaceId) {
+          setActiveSurfaceId(event.surfaceId);
+        }
+        if (event.title && windowId) {
+          updateWindowTitle(windowId, event.title);
+        }
+        if (event.state === "destroyed" && windowId) {
+          closeWindow(windowId);
+          return;
+        }
+        if (event.width > 0 && event.height > 0) {
+          if (canvas.width !== event.width || canvas.height !== event.height) {
+            canvas.width = event.width;
+            canvas.height = event.height;
+          }
+        }
       }
+    });
 
-      if (frame.width > 0 && frame.height > 0) {
-        if (canvas.width !== frame.width || canvas.height !== frame.height) {
-          canvas.width = frame.width;
-          canvas.height = frame.height;
-          setResolution({ width: frame.width, height: frame.height });
+    const unsubscribe = runtimeClient.onSurfaceFrame((frame) => {
+      if (frame.surfaceId !== activeSurfaceId) {
+        if (activeSurfaceId.startsWith("app-") && !hasReceivedFrame) {
+          setActiveSurfaceId(frame.surfaceId);
+        } else {
+          return;
         }
       }
 
-      const renderStart = performance.now();
-      const blob = new Blob([new Uint8Array(frame.data)], { type: "image/jpeg" });
-      createImageBitmap(blob)
-        .then((bitmap) => {
-          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-          bitmap.close();
-          setLatencyMs(Math.max(1, Math.round(performance.now() - renderStart)));
-        })
-        .catch(() => undefined);
+      if (frame.sequence && frame.sequence < lastSequenceRef.current) {
+        return; // Drop out-of-order stale frame
+      }
+      if (frame.sequence) {
+        lastSequenceRef.current = frame.sequence;
+      }
+
+      hasReceivedFrame = true;
+
+      const renderX = Math.max(0, frame.x || 0);
+      const renderY = Math.max(0, frame.y || 0);
+
+      const targetW = Math.max(canvas.width, renderX + frame.width);
+      const targetH = Math.max(canvas.height, renderY + frame.height);
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        const prev = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        canvas.width = targetW;
+        canvas.height = targetH;
+        ctx.putImageData(prev, 0, 0);
+      }
+
+      const t_recv = performance.now();
+      console.log(`[CLIENT FRAME] received surfaceId=${frame.surfaceId} seq=${frame.sequence} w=${frame.width} h=${frame.height} codec=${frame.codec} size=${frame.data.byteLength} timestamp=${t_recv.toFixed(2)}ms`);
+
+      if (frame.codec === "raw_rgba") {
+        const totalPixels = frame.width * frame.height;
+        const src = frame.data instanceof Uint8Array ? frame.data : new Uint8Array(frame.data);
+        if (src.length < totalPixels * 4) {
+          return;
+        }
+        const clamped = new Uint8ClampedArray(src.buffer, src.byteOffset, totalPixels * 4);
+        const imgData = new ImageData(clamped, frame.width, frame.height);
+        ctx.putImageData(imgData, renderX, renderY);
+        const t_paint = performance.now();
+        console.log(`[CLIENT CANVAS] painted seq=${frame.sequence} timestamp=${t_paint.toFixed(2)}ms (render: ${(t_paint - t_recv).toFixed(2)}ms)`);
+      } else if (frame.codec === "raw_bgra") {
+        const totalPixels = frame.width * frame.height;
+        const src = frame.data instanceof Uint8Array ? frame.data : new Uint8Array(frame.data);
+        if (src.length < totalPixels * 4) {
+          return; // Drop truncated / malformed frame
+        }
+
+        const imgData = ctx.createImageData(frame.width, frame.height);
+        const dst = imgData.data;
+        for (let i = 0; i < totalPixels; i++) {
+          const s = i * 4;
+          const d = i * 4;
+          dst[d] = src[s + 2];     // Red
+          dst[d + 1] = src[s + 1]; // Green
+          dst[d + 2] = src[s];     // Blue
+          dst[d + 3] = 255;        // Alpha
+        }
+        ctx.putImageData(imgData, renderX, renderY);
+        const t_paint = performance.now();
+        console.log(`[CLIENT CANVAS] painted seq=${frame.sequence} timestamp=${t_paint.toFixed(2)}ms (render: ${(t_paint - t_recv).toFixed(2)}ms)`);
+      } else {
+        const blob = new Blob([new Uint8Array(frame.data)], {
+          type: frame.codec === "png" ? "image/png" : "image/jpeg",
+        });
+        createImageBitmap(blob)
+          .then((bitmap) => {
+            ctx.drawImage(bitmap, renderX, renderY, frame.width, frame.height);
+            bitmap.close();
+            const t_paint = performance.now();
+            console.log(`[CLIENT CANVAS] painted seq=${frame.sequence} timestamp=${t_paint.toFixed(2)}ms (render: ${(t_paint - t_recv).toFixed(2)}ms)`);
+          })
+          .catch(() => undefined);
+      }
     });
 
     return () => {
+      unsubLifecycle();
       unsubscribe();
     };
-  }, [runtimeClient, surfaceId]);
+  }, [runtimeClient, activeSurfaceId, windowId, closeWindow, updateWindowTitle]);
 
   return (
     <div
@@ -246,110 +355,21 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
       onBlur={() => setIsFocused(false)}
       className="relative flex h-full w-full flex-col overflow-hidden bg-black text-slate-100 outline-none select-none"
     >
-      <div className="flex items-center justify-between border-b border-white/10 bg-slate-950/80 px-4 py-2 backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <AppWindow className="h-4 w-4 text-indigo-400" />
-            <span className="text-xs font-semibold text-white">{appName}</span>
-          </div>
-
-          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[10px] text-slate-400">
-            {appExec}
-          </span>
-
-          <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Streaming Live</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 text-xs">
-          <div className="hidden sm:flex items-center gap-2 font-mono text-[11px] text-slate-400">
-            <span className="text-emerald-400 font-semibold">{fps} FPS</span>
-            {latencyMs !== null ? (
-              <>
-                <span>•</span>
-                <span className="text-sky-400">{latencyMs}ms render</span>
-              </>
-            ) : null}
-            <span>•</span>
-            <span className="text-slate-300">{resolution.width}x{resolution.height}</span>
-          </div>
-
-          <div className="flex items-center rounded-lg border border-white/10 bg-white/5 p-0.5">
-            <button
-              type="button"
-              onClick={() => setScaleMode("fit")}
-              className={`rounded px-2 py-1 text-[11px] font-medium transition-all ${
-                scaleMode === "fit"
-                  ? "bg-indigo-600 text-white"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Fit
-            </button>
-            <button
-              type="button"
-              onClick={() => setScaleMode("native")}
-              className={`rounded px-2 py-1 text-[11px] font-medium transition-all ${
-                scaleMode === "native"
-                  ? "bg-indigo-600 text-white"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              1:1
-            </button>
-          </div>
-
-          <select
-            value={`${resolution.width}x${resolution.height}`}
-            onChange={(e) => {
-              const [w, h] = e.target.value.split("x").map(Number);
-              if (w && h) setResolution({ width: w, height: h });
-            }}
-            className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-[11px] font-mono text-slate-300 outline-none"
-          >
-            <option value="1280x720">720p (1280×720)</option>
-            <option value="1920x1080">1080p (1920×1080)</option>
-            <option value="1024x768">XGA (1024×768)</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={handleCloseSurface}
-            className="flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-300 transition-colors hover:bg-red-500/20"
-            title="Terminate Remote Surface"
-          >
-            <Power className="h-3 w-3" />
-            <span>Stop</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="relative flex flex-1 items-center justify-center overflow-auto bg-black">
+      <div
+        ref={viewportRef}
+        className="relative flex flex-1 items-center justify-center overflow-hidden bg-black"
+      >
         <canvas
           ref={canvasRef}
-          width={resolution.width}
-          height={resolution.height}
-          onMouseMove={handleMouseMove}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
+          width={1280}
+          height={720}
+          onPointerMove={handlePointerMove}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onContextMenu={(e) => e.preventDefault()}
           onWheel={handleWheel}
-          className={`cursor-crosshair object-contain ${
-            scaleMode === "native"
-              ? "max-h-none max-w-none"
-              : "h-full w-full max-h-full max-w-full"
-          }`}
+          className="cursor-default object-contain h-full w-full max-h-full max-w-full"
         />
-
-        <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/80 px-3 py-1 text-[11px] font-mono text-slate-300 shadow-xl backdrop-blur-md opacity-50 hover:opacity-100 transition-opacity">
-          <Activity className="h-3.5 w-3.5 text-emerald-400" />
-          <span>{fps} FPS</span>
-          <span className="text-slate-600">•</span>
-          <span>{latencyMs}ms</span>
-          <span className="text-slate-600">•</span>
-          <span>Hardware Accelerated Stream</span>
-        </div>
       </div>
     </div>
   );

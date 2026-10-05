@@ -707,7 +707,6 @@ export const DOCK_GLYPHS: Record<
   files: FinderGlyph,
   finder: FinderGlyph,
   terminal: TerminalGlyph,
-  "remote-apps": RemoteAppsGlyph,
   editor: EditorGlyph,
   databases: DatabasesGlyph,
   domains: DomainsGlyph,

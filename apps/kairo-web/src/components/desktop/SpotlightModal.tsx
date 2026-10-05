@@ -105,18 +105,12 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
       setLaunchingId(app.id);
       setError(null);
       try {
-        const resp = await runtimeClient.launchApplication({
+        await runtimeClient.launchApplication({
           appId: app.id,
           exec: app.exec,
         });
 
         onClose();
-        openWindow("surface", {
-          surfaceId: resp.surfaceId,
-          appName: app.name,
-          appExec: app.exec,
-          appIcon: app.icon,
-        });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to launch application on host";

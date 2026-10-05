@@ -13,6 +13,7 @@ function quotePath(value: string) {
 
 export function TerminalApp({ payload }: { payload?: WindowPayload }) {
   const host = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<import("@xterm/xterm").Terminal | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const { runtimeClient, runtimeConnected, selectedServer: selected } = useSession();
   const serverId = selected?.id || "";
@@ -51,10 +52,12 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
             cursor: "#5fff6a",
           },
         });
+        terminalRef.current = terminal;
         fitAddon = new FitAddon();
         terminal.loadAddon(fitAddon);
         terminal.open(host.current);
         fitAddon.fit();
+        terminal.focus();
 
         if (runtimeConnected && runtimeClient?.getSession()) {
           try {
@@ -72,8 +75,15 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
             });
 
             terminal.onData((data) => {
-              void runtimeClient.writePty(ptyId, data).catch(() => undefined);
+              void runtimeClient.writePty(ptyId, data).catch((err) => {
+                console.error("[TerminalApp] writePty error:", err);
+              });
             });
+
+            terminal.focus();
+            setTimeout(() => {
+              terminal?.focus();
+            }, 50);
 
             observer = new ResizeObserver(() => {
               if (!terminal || !fitAddon) return;
@@ -238,6 +248,7 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
       observer?.disconnect();
       socket?.close();
       socketRef.current = null;
+      terminalRef.current = null;
       terminal?.dispose();
     };
   }, [nonce, serverId, runtimeClient, runtimeConnected, selected?.status]);
@@ -247,9 +258,17 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
     socketRef.current.send(new TextEncoder().encode(`cd ${quotePath(cwd)}\n`));
   }, [cwd, status]);
 
+  const focusTerminal = () => {
+    terminalRef.current?.focus();
+  };
+
   return (
-    <div className="flex h-full flex-col bg-[#111111] text-[#5fff6a]">
-      <div className="flex items-center justify-between gap-3 px-3 py-2 text-[11px] text-white/70">
+    <div
+      className="flex h-full flex-col bg-[#111111] text-[#5fff6a]"
+      onPointerDown={focusTerminal}
+      onClick={focusTerminal}
+    >
+      <div className="flex items-center justify-between gap-3 px-3 py-2 text-[11px] text-white/70 select-none">
         <span>
           {status === "connecting"
             ? `Connecting to ${serverName}…`
@@ -271,7 +290,14 @@ export function TerminalApp({ payload }: { payload?: WindowPayload }) {
           </button>
         ) : null}
       </div>
-      <div ref={host} className="min-h-0 flex-1 px-2 pb-2" />
+      <div
+        ref={host}
+        tabIndex={0}
+        className="min-h-0 flex-1 px-2 pb-2 outline-none cursor-text"
+        onFocus={focusTerminal}
+        onPointerDown={focusTerminal}
+        onClick={focusTerminal}
+      />
     </div>
   );
 }

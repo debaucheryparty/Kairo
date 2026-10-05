@@ -2,9 +2,9 @@
 
 import { AboutApp } from "@/src/components/apps/AboutApp";
 import { DashboardApp } from "@/src/components/apps/DashboardApp";
+import { EditorApp } from "@/src/components/apps/EditorApp";
 import { FileViewer } from "@/src/components/apps/files/viewers/FileViewer";
 import { FilesApp } from "@/src/components/apps/FilesApp";
-import { RemoteAppsApp } from "@/src/components/apps/RemoteAppsApp";
 import { RemoteSurfaceViewer } from "@/src/components/apps/RemoteSurfaceViewer";
 import { SettingsApp } from "@/src/components/apps/SettingsApp";
 import { TerminalApp } from "@/src/components/apps/TerminalApp";
@@ -56,8 +56,6 @@ function AppBody({
       return <FilesApp />;
     case "terminal":
       return <TerminalApp payload={payload} />;
-    case "remote-apps":
-      return <RemoteAppsApp />;
     case "viewer":
       return <FileViewer payload={payload} windowId={windowId} />;
     case "surface":
@@ -68,5 +66,7 @@ function AppBody({
       return <AboutApp />;
     case "trash":
       return <TrashApp />;
+    case "editor":
+      return <EditorApp payload={payload} />;
   }
 }

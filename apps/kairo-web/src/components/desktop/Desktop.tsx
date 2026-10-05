@@ -3,7 +3,7 @@
 import { useEffect, useState, type MouseEvent, type PointerEvent } from "react";
 import { ServerProvider } from "@/src/lib/api/server-context";
 import { isDesktopRuntime } from "@/src/lib/runtime";
-import { useSession } from "@/src/lib/session";
+import { useSession, useRuntimeClient } from "@/src/lib/session";
 import { DesktopContextMenu } from "@/src/components/desktop/DesktopContextMenu";
 import { Dock } from "@/src/components/desktop/Dock";
 import { TopBar } from "@/src/components/desktop/TopBar";
@@ -30,6 +30,7 @@ export function Desktop() {
 
 function DesktopShell() {
   const { logOut } = useSession();
+  const runtimeClient = useRuntimeClient();
   const {
     clearFocus,
     windows,
@@ -40,6 +41,7 @@ function DesktopShell() {
     maximizeWindow,
     restoreWindow,
     tileWindows,
+    updateWindowTitle,
   } = useWindowManager();
   const fullscreen = windows.some((item) => item.maximized && !item.minimized);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -99,11 +101,46 @@ function DesktopShell() {
     };
     window.addEventListener("kairo:open-surface", onOpenSurface);
     window.addEventListener("kairo:close-surface", onCloseSurface);
+
+    let unsubLifecycle: (() => void) | undefined;
+    if (runtimeClient?.getSession()) {
+      // Reconcile existing active surfaces on connect/reconnect
+      runtimeClient
+        .listSurfaces()
+        .then((surfaces) => {
+          for (const s of surfaces) {
+            if (s.state !== "destroyed") {
+              openWindow("surface", {
+                surfaceId: s.surfaceId,
+                appName: s.title || "Remote Application",
+                appExec: s.surfaceId,
+              });
+            }
+          }
+        })
+        .catch(() => undefined);
+
+      unsubLifecycle = runtimeClient.onSurfaceLifecycle((event) => {
+        if (event.state === "created" || event.state === "transient") {
+          openWindow("surface", {
+            surfaceId: event.surfaceId,
+            appName: event.title || "Remote Application",
+            appExec: event.surfaceId,
+          });
+        } else if (event.state === "destroyed") {
+          closeWindow(`surface:${event.surfaceId}`);
+        } else if (event.state === "configured" && event.title) {
+          updateWindowTitle(`surface:${event.surfaceId}`, event.title);
+        }
+      });
+    }
+
     return () => {
       window.removeEventListener("kairo:open-surface", onOpenSurface);
       window.removeEventListener("kairo:close-surface", onCloseSurface);
+      if (unsubLifecycle) unsubLifecycle();
     };
-  }, [closeWindow, openWindow]);
+  }, [closeWindow, openWindow, runtimeClient]);
 
   useEffect(() => {
     function isTypingTarget(target: EventTarget | null) {
