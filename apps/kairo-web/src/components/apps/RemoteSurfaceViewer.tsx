@@ -22,6 +22,7 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
 
   const [isFocused, setIsFocused] = useState(true);
   const [activeSurfaceId, setActiveSurfaceId] = useState(payload?.surfaceId || "surface-default");
+  const [surfaceSize, setSurfaceSize] = useState<{ width: number; height: number }>({ width: 958, height: 594 });
 
   useEffect(() => {
     if (payload?.surfaceId) {
@@ -252,6 +253,7 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
           return;
         }
         if (event.width > 0 && event.height > 0) {
+          setSurfaceSize({ width: event.width, height: event.height });
           if (canvas.width !== event.width || canvas.height !== event.height) {
             canvas.width = event.width;
             canvas.height = event.height;
@@ -281,13 +283,22 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
       const renderX = Math.max(0, frame.x || 0);
       const renderY = Math.max(0, frame.y || 0);
 
-      const targetW = Math.max(canvas.width, renderX + frame.width);
-      const targetH = Math.max(canvas.height, renderY + frame.height);
-      if (canvas.width !== targetW || canvas.height !== targetH) {
-        const prev = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        canvas.width = targetW;
-        canvas.height = targetH;
-        ctx.putImageData(prev, 0, 0);
+      if (renderX === 0 && renderY === 0 && frame.width > 0 && frame.height > 0) {
+        if (canvas.width !== frame.width || canvas.height !== frame.height) {
+          canvas.width = frame.width;
+          canvas.height = frame.height;
+          setSurfaceSize({ width: frame.width, height: frame.height });
+        }
+      } else {
+        const targetW = Math.max(canvas.width, renderX + frame.width);
+        const targetH = Math.max(canvas.height, renderY + frame.height);
+        if (canvas.width !== targetW || canvas.height !== targetH) {
+          const prev = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          canvas.width = targetW;
+          canvas.height = targetH;
+          ctx.putImageData(prev, 0, 0);
+          setSurfaceSize({ width: targetW, height: targetH });
+        }
       }
 
       const t_recv = performance.now();
@@ -299,8 +310,8 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
         if (src.length < totalPixels * 4) {
           return;
         }
-        const clamped = new Uint8ClampedArray(src.buffer, src.byteOffset, totalPixels * 4);
-        const imgData = new ImageData(clamped, frame.width, frame.height);
+        const imgData = ctx.createImageData(frame.width, frame.height);
+        imgData.data.set(src.subarray(0, totalPixels * 4));
         ctx.putImageData(imgData, renderX, renderY);
         const t_paint = performance.now();
         console.log(`[CLIENT CANVAS] painted seq=${frame.sequence} timestamp=${t_paint.toFixed(2)}ms (render: ${(t_paint - t_recv).toFixed(2)}ms)`);
@@ -357,18 +368,22 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
     >
       <div
         ref={viewportRef}
-        className="relative flex flex-1 items-center justify-center overflow-hidden bg-black"
+        className="relative flex flex-1 items-center justify-center overflow-auto bg-[#0a0a0c]"
       >
         <canvas
           ref={canvasRef}
-          width={1280}
-          height={720}
+          width={surfaceSize.width}
+          height={surfaceSize.height}
+          style={{
+            width: `${surfaceSize.width}px`,
+            height: `${surfaceSize.height}px`,
+          }}
           onPointerMove={handlePointerMove}
           onPointerDown={handlePointerDown}
           onPointerUp={handlePointerUp}
           onContextMenu={(e) => e.preventDefault()}
           onWheel={handleWheel}
-          className="cursor-default object-contain h-full w-full max-h-full max-w-full"
+          className="cursor-default select-none block"
         />
       </div>
     </div>
