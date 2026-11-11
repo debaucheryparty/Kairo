@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use kairo_bridge::common::MockCommandRunner;
 use kairo_bridge::{PlatformBridge, select_adapter};
-use kairo_core::{AuthContext, CoreConfig, ExecutionTarget, KairoCore, OperationLevel};
+use kairo_core::{AuthContext, CoreConfig, CoreError, ExecutionTarget, KairoCore, OperationLevel};
 use kairo_protocol::v1::{
     InitSystem, OsFamily, PackageManager, PlatformSupportTier, PrivilegeLevel, ServiceAction,
     SystemProfile,
@@ -318,4 +318,169 @@ fn test_environment_api_and_reserved_key_protection() {
     // Privileged user can override reserved variable
     assert!(core.env().set("PATH", "/custom/bin", &root_auth).is_ok());
     assert_eq!(core.env().get("PATH").as_deref(), Some("/custom/bin"));
+}
+
+#[test]
+fn test_filesystem_rejects_escape_attempts() {
+    let temp = TempDir::new().unwrap();
+    let runner = Arc::new(MockCommandRunner::new());
+    let profile = make_ubuntu_profile(false, false);
+    let core = create_test_core(profile, &temp, runner);
+
+    let auth = AuthContext::new("user1", false, false).with_confirmed(true);
+
+    // ParentDir escaping above the managed root is an error, not a silent clamp
+    let escape = core.fs().read_file(
+        std::path::Path::new("sub/../../escape.txt"),
+        ExecutionTarget::Managed,
+        &auth,
+    );
+    assert!(matches!(escape, Err(CoreError::BoundaryViolation { .. })));
+
+    // A bare ParentDir prefix escapes by construction
+    let dotdot = core.fs().write_file(
+        std::path::Path::new("../outside.txt"),
+        b"x",
+        ExecutionTarget::Managed,
+        &auth,
+    );
+    assert!(matches!(dotdot, Err(CoreError::BoundaryViolation { .. })));
+
+    // Windows drive-letter paths cannot address the managed root
+    #[cfg(windows)]
+    assert!(matches!(
+        core.fs().read_file(
+            std::path::Path::new("C:\\Windows\\system32\\config"),
+            ExecutionTarget::Managed,
+            &auth,
+        ),
+        Err(CoreError::BoundaryViolation { .. })
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_filesystem_symlink_containment() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new().unwrap();
+    let runner = Arc::new(MockCommandRunner::new());
+    let profile = make_ubuntu_profile(false, false);
+    let core = create_test_core(profile, &temp, runner);
+    let auth = AuthContext::new("user1", false, false).with_confirmed(true);
+
+    let managed_root = core
+        .fs()
+        .resolve_path(std::path::Path::new(""), ExecutionTarget::Managed)
+        .unwrap();
+
+    let outside_dir = TempDir::new().unwrap();
+    let outside_file = outside_dir.path().join("secret.txt");
+    std::fs::write(&outside_file, b"outside").unwrap();
+
+    symlink(&outside_file, managed_root.join("leak")).unwrap();
+    let leak = core.fs().read_file(
+        std::path::Path::new("leak"),
+        ExecutionTarget::Managed,
+        &auth,
+    );
+    assert!(matches!(leak, Err(CoreError::BoundaryViolation { .. })));
+
+    // A dangling symlink must not become a creation target either
+    symlink(
+        outside_dir.path().join("missing.txt"),
+        managed_root.join("dangling"),
+    )
+    .unwrap();
+    let via_dangling = core.fs().write_file(
+        std::path::Path::new("dangling"),
+        b"x",
+        ExecutionTarget::Managed,
+        &auth,
+    );
+    assert!(matches!(
+        via_dangling,
+        Err(CoreError::BoundaryViolation { .. })
+    ));
+
+    // Links that stay inside the root keep working
+    core.fs()
+        .write_file(
+            std::path::Path::new("inner.txt"),
+            b"inner",
+            ExecutionTarget::Managed,
+            &auth,
+        )
+        .unwrap();
+    symlink(
+        managed_root.join("inner.txt"),
+        managed_root.join("alias.txt"),
+    )
+    .unwrap();
+    let alias = core
+        .fs()
+        .read_file(
+            std::path::Path::new("alias.txt"),
+            ExecutionTarget::Managed,
+            &auth,
+        )
+        .unwrap();
+    assert_eq!(alias, b"inner");
+}
+
+#[test]
+fn test_filesystem_write_is_atomic_and_leaves_no_temp_files() {
+    let temp = TempDir::new().unwrap();
+    let runner = Arc::new(MockCommandRunner::new());
+    let profile = make_ubuntu_profile(false, false);
+    let core = create_test_core(profile, &temp, runner);
+    let auth = AuthContext::new("user1", false, false).with_confirmed(true);
+
+    core.fs()
+        .write_file(
+            std::path::Path::new("nested/dir/file.txt"),
+            b"payload",
+            ExecutionTarget::Managed,
+            &auth,
+        )
+        .unwrap();
+
+    let managed_root = core
+        .fs()
+        .resolve_path(std::path::Path::new(""), ExecutionTarget::Managed)
+        .unwrap();
+    let leftovers: Vec<String> = fs_walk(&managed_root)
+        .into_iter()
+        .filter(|p| p.contains(".tmp-"))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "temp files left behind: {leftovers:?}"
+    );
+
+    let content = core
+        .fs()
+        .read_file(
+            std::path::Path::new("nested/dir/file.txt"),
+            ExecutionTarget::Managed,
+            &auth,
+        )
+        .unwrap();
+    assert_eq!(content, b"payload");
+}
+
+fn fs_walk(root: &std::path::Path) -> Vec<String> {
+    let mut out = Vec::new();
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            out.extend(fs_walk(&path));
+        } else {
+            out.push(path.to_string_lossy().to_string());
+        }
+    }
+    out
 }
