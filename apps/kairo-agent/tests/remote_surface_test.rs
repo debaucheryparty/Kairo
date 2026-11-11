@@ -5,7 +5,9 @@ use std::time::Duration;
 
 #[tokio::test]
 async fn test_x11_remote_surface_pipeline_end_to_end() {
-    let backend = X11Backend::new(None);
+    // Distinct preferred displays keep parallel tests off each other's windows
+    // Distinct preferred displays keep parallel tests off each other's windows
+    let backend = X11Backend::new(Some(":150".to_string()));
 
     // 1. Start the X11 Backend
     if let Err(e) = backend.start().await {
@@ -127,7 +129,7 @@ async fn test_x11_remote_surface_pipeline_end_to_end() {
 
 #[tokio::test]
 async fn test_generic_process_lifecycle_and_association() {
-    let backend = X11Backend::new(None);
+    let backend = X11Backend::new(Some(":151".to_string()));
     if let Err(e) = backend.start().await {
         eprintln!("Skipping X11 test (Xvfb unavailable: {e:?})");
         return;
@@ -192,7 +194,7 @@ async fn test_generic_process_lifecycle_and_association() {
 
 #[tokio::test]
 async fn test_latency_measurements() {
-    let backend = X11Backend::new(None);
+    let backend = X11Backend::new(Some(":152".to_string()));
     if let Err(e) = backend.start().await {
         eprintln!("Skipping X11 test (Xvfb unavailable: {e:?})");
         return;
