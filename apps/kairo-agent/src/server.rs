@@ -13,6 +13,8 @@ use crate::media::MediaManager;
 use crate::notification::NotificationManager;
 use crate::pty::PtyManager;
 use crate::session::{Session, SessionError};
+use kairo_bridge::PlatformBridge;
+use kairo_core::{CoreConfig, KairoCore};
 use kairo_transport::tunnel::{ReverseTunnelClient, TunnelConfig, VirtualStream};
 
 struct RateLimiter {
@@ -70,6 +72,7 @@ impl RateLimiter {
 
 pub struct Server {
     config: Arc<AgentConfig>,
+    core: Arc<KairoCore>,
     pty: Arc<PtyManager>,
     app: Arc<AppManager>,
     gpu: Arc<GpuManager>,
@@ -84,8 +87,25 @@ impl Server {
         if !config.no_auth && config.auth_token.is_none() {
             config.auth_token = config.resolved_auth_token();
         }
+        let config = Arc::new(config);
+
+        // One core per agent process: sessions share the managed userspace,
+        // package registry and service supervisor instead of rebuilding them
+        // per connection.
+        let profile = kairo_discovery::discover();
+        let bridge = Arc::new(PlatformBridge::from_profile(&profile));
+        let core = Arc::new(KairoCore::new(
+            bridge,
+            profile,
+            CoreConfig {
+                data_dir: config.data_dir.clone(),
+                audit_capacity: 1000,
+            },
+        ));
+
         Self {
-            config: Arc::new(config),
+            config,
+            core,
             pty: Arc::new(PtyManager::new()),
             app: Arc::new(AppManager::new()),
             gpu: Arc::new(GpuManager::new()),
@@ -111,6 +131,12 @@ impl Server {
 
         let (tunnel_stream_tx, mut tunnel_stream_rx) =
             tokio::sync::mpsc::channel::<VirtualStream>(32);
+
+        // Persisted managed services flagged for autostart come up with the
+        // agent, before any client connects.
+        if let Err(e) = self.core.services().start_autostart_services().await {
+            warn!(error = %e, "managed service autostart failed");
+        }
 
         if let Some(tunnel_url) = &self.config.tunnel_url {
             let token = self
@@ -160,6 +186,7 @@ impl Server {
                     info!(peer = %peer_addr, "accepted tcp connection");
 
                     let config = Arc::clone(&self.config);
+                    let core = Arc::clone(&self.core);
                     let pty = Arc::clone(&self.pty);
                     let app = Arc::clone(&self.app);
                     let gpu = Arc::clone(&self.gpu);
@@ -177,7 +204,15 @@ impl Server {
 
                         info!(peer = %peer_addr, "websocket connection established");
 
-                        let mut session = Session::with_components(config, pty, app, gpu, media, notification);
+                        let mut session = Session::with_core(
+                            config,
+                            core,
+                            pty,
+                            app,
+                            gpu,
+                            media,
+                            notification,
+                        );
                         match session.run(ws_stream).await {
                             Ok(()) => {
                                 limiter.record_success(&peer_addr.ip());
@@ -200,6 +235,7 @@ impl Server {
                 Some(vstream) = tunnel_stream_rx.recv() => {
                     info!(stream_id = vstream.stream_id, "accepted virtual tunnel stream");
                     let config = Arc::clone(&self.config);
+                    let core = Arc::clone(&self.core);
                     let pty = Arc::clone(&self.pty);
                     let app = Arc::clone(&self.app);
                     let gpu = Arc::clone(&self.gpu);
@@ -247,7 +283,15 @@ impl Server {
                             }
                         };
 
-                        let mut session = Session::with_components(config, pty, app, gpu, media, notification);
+                        let mut session = Session::with_core(
+                            config,
+                            core,
+                            pty,
+                            app,
+                            gpu,
+                            media,
+                            notification,
+                        );
                         let _ = session.run(ws_stream).await;
                         pipe_to_vstream.abort();
                         pipe_from_vstream.abort();

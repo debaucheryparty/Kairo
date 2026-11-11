@@ -156,6 +156,31 @@ impl Session {
         media: Arc<MediaManager>,
         notification: Arc<NotificationManager>,
     ) -> Self {
+        let profile = kairo_discovery::discover();
+        let bridge = Arc::new(PlatformBridge::from_profile(&profile));
+        let core = Arc::new(KairoCore::new(
+            bridge.clone(),
+            profile,
+            CoreConfig {
+                data_dir: config.data_dir.clone(),
+                audit_capacity: 1000,
+            },
+        ));
+        Self::with_core(config, core, pty, app, gpu, media, notification)
+    }
+
+    /// Builds a session around an externally owned core so that all sessions
+    /// of one agent process share the same managed state and supervisor.
+    #[must_use]
+    pub fn with_core(
+        config: Arc<AgentConfig>,
+        core: Arc<KairoCore>,
+        pty: Arc<PtyManager>,
+        app: Arc<AppManager>,
+        gpu: Arc<GpuManager>,
+        media: Arc<MediaManager>,
+        notification: Arc<NotificationManager>,
+    ) -> Self {
         let fs_root = if !config.data_dir.is_empty() {
             config.data_dir.clone()
         } else if cfg!(windows) {
@@ -184,15 +209,8 @@ impl Session {
         let metrics = Arc::new(MetricsCollector::new());
         let process = Arc::new(ProcessManager::new());
         let system = Arc::new(SystemManager::new());
-        let profile = kairo_discovery::discover();
-        let bridge = Arc::new(PlatformBridge::from_profile(&profile));
-        let core = Arc::new(KairoCore::new(
-            bridge.clone(),
-            profile,
-            CoreConfig {
-                data_dir: config.data_dir.clone(),
-                audit_capacity: 1000,
-            },
+        let bridge = Arc::new(PlatformBridge::from_profile(
+            &core.system().profile().clone(),
         ));
         Self {
             session_id: KairoId::new(),
@@ -891,12 +909,12 @@ impl Session {
                     self.core.system().profile().has_sudo,
                 )
                 .with_confirmed(true);
-                let resp = match self.core.services().manage_service(
-                    &req.service_name,
-                    action,
-                    ExecutionTarget::Host,
-                    &auth,
-                ) {
+                let resp = match self
+                    .core
+                    .services()
+                    .manage_service(&req.service_name, action, ExecutionTarget::Host, &auth)
+                    .await
+                {
                     Ok(resp) => resp,
                     Err(e) => ManageServiceResponse {
                         success: false,
