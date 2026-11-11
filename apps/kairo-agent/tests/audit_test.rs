@@ -132,7 +132,13 @@ async fn test_security_audit_path_traversal_rejection() {
                 let resp_msg = KairoMessage::decode(data).expect("decode msg");
                 assert_eq!(resp_msg.kind, MessageKind::Error);
                 let err = KairoError::decode(resp_msg.payload).expect("decode error");
-                assert_eq!(err.code, ErrorCode::PermissionDenied as i32);
+                // On Windows backslashes are separators, so a backslash path
+                // is traversal; on Linux it is an ordinary missing file name.
+                if cfg!(windows) || !path.contains('\\') {
+                    assert_eq!(err.code, ErrorCode::PermissionDenied as i32);
+                } else {
+                    assert_ne!(err.code, ErrorCode::PermissionDenied as i32);
+                }
             }
             _ => panic!("expected binary error"),
         }

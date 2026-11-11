@@ -42,13 +42,18 @@ mod tests {
 
     #[test]
     fn test_run_fast_command() {
-        let mut cmd = Command::new("cmd");
         #[cfg(windows)]
-        cmd.args(["/c", "echo fast"]);
+        let cmd = {
+            let mut c = Command::new("cmd");
+            c.args(["/c", "echo fast"]);
+            c
+        };
         #[cfg(not(windows))]
-        let mut cmd = Command::new("echo");
-        #[cfg(not(windows))]
-        cmd.arg("fast");
+        let cmd = {
+            let mut c = Command::new("echo");
+            c.arg("fast");
+            c
+        };
 
         let out = run_with_timeout(cmd, Duration::from_secs(2));
         assert!(out.is_some());
@@ -65,7 +70,7 @@ mod tests {
             c
         };
         #[cfg(not(windows))]
-        let mut cmd = {
+        let cmd = {
             let mut c = Command::new("sleep");
             c.arg("1.5");
             c

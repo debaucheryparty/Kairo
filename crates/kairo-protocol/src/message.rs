@@ -296,7 +296,7 @@ mod tests {
         buf.put_u32(0);
 
         let err = KairoMessage::decode(buf.freeze()).unwrap_err();
-        assert_eq!(err, ProtocolError::InvalidMagic([b'X', b'X']));
+        assert_eq!(err, ProtocolError::InvalidMagic(*b"XX"));
     }
 
     #[test]
