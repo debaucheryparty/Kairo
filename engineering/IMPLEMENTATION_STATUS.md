@@ -28,7 +28,7 @@ Inventory of every subsystem with honest statuses. Evidence rules:
 | **Declarative configuration engine** | NOT_STARTED | — | — | M4 |
 | **Kairo Dots (dotfiles/profiles)** | NOT_STARTED | — | — | M5 |
 | **Real managed packages** | TESTED | `crates/kairo-core/src/package*.rs` | `tests/package_test.rs` (7 + env-gated HTTP test) | artifact acquisition (local + HTTP), sha-256 verify, hardened tar.gz extraction, dependency ordering, transactional install, persisted receipts, upgrade/rollback — replaces the registry-only stub (SEC-04 fixed) |
-| **Service runtime (supervision)** | NOT_STARTED | — | — | managed services today are in-memory toggles (M7) |
+| **Managed services / runtime supervision** | TESTED | `crates/kairo-core/src/runtime.rs`, `service.rs` | `tests/runtime_test.rs` (6) | real process launch, restart policies with backoff, SIGTERM→SIGKILL stop on Unix, log capture to userspace logs dir, definitions persisted via state store, autostart at agent boot; agent now shares one core across sessions (SEC-05 fixed) |
 | **Operator CLI** | NOT_STARTED | — | — | M9 |
 | **Install/lifecycle** | PARTIAL | `scripts/install.sh` (Linux) | never executed | no Windows path, no upgrade/uninstall (M10) |
 | **Observability (structured logs, rotation)** | PARTIAL | tracing-subscriber in agent | none | correlation IDs absent (M8) |

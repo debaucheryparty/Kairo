@@ -37,18 +37,24 @@ supervision, CLI, install lifecycle) is in early stages — see IMPLEMENTATION_S
    extraction (zip-slip, links, unpacked-size cap, exec bit), dependency ordering with cycle
    detection, transactional installs, persisted receipts, upgrade + rollback. Windows 120 tests,
    Linux 123 tests, all four gates green on both platforms, HTTP path verified live on both.
-7. Linux verification on InstaBox found and fixed four real defects: apt-lock false positive
+7. M7 managed service runtime (f7d7f8b + 0d63bda): real supervised processes with restart
+   policies, log capture, SIGTERM/SIGKILL stop on Unix, persisted definitions + autostart; the
+   agent now shares one KairoCore across sessions (fixes concurrent-session state races).
+   Windows 126 tests, Linux 129 tests, all four gates green on both platforms.
+8. Linux verification on InstaBox found and fixed five real defects: apt-lock false positive
    (109754d), Xvfb display-allocation race (caf03ed), windows-only traversal test expectation
-   (6c74259), parallel tests sharing one display (5dd6c19).
-8. engineering/ documentation system live and synchronized.
+   (6c74259), parallel tests sharing one display (5dd6c19), supervisor unsafe-block lint +
+   formatting drift (fc3dc87). Gate scripts now sync with `git fetch + reset --hard` and run
+   with CARGO_INCREMENTAL=0 after the box's disk filled with incremental caches.
+9. engineering/ documentation system live and synchronized.
 
 ## Immediate next actions (in order)
 
-1. M7 service runtime/supervision persisted via the state store (SEC-05): real process launch,
-   restart policies, log capture, health checks — replacing the in-memory managed-service toggles.
-2. M4 declarative configuration engine (drift detection, idempotent apply, transactions) on the
-   userspace config dir; M5 dots on top of it; M9 CLI exposing userspace/packages/runtime.
-3. M10 installer consumes the Linux prerequisites list in TEST_MATRIX.md.
+1. M4 declarative configuration engine (drift detection, idempotent apply, transactions) on the
+   userspace config dir; M5 dots on top of it.
+2. M9 CLI exposing userspace/packages/services (headless-first).
+3. M10 installer consumes the Linux prerequisites list in TEST_MATRIX.md; M8 observability
+   (correlation IDs, rotation); M11 transport hardening.
 4. Rewrites of README and docs/INDEX.md when the CLI/install story lands (M9/M10).
 
 ## Verification environment (Linux)

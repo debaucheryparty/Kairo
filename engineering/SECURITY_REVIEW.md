@@ -62,10 +62,11 @@ the manifest, extracts with zip-slip/symlink/size-cap defenses into the userspac
 persisted receipt. A package is installed only after its artifact is on disk and verified.
 Tests: `package_test.rs`, including a real HTTP acquisition run (env-gated) on Windows and Linux.
 
-### SEC-05 — Managed state is lost on agent restart (Medium, reliability/security)
-Managed service/package state is `RwLock<HashMap<..>>` in the process. Restart loses it; a
-"stopped" service silently returns to its default state. Persisted, integrity-checked state is
-required before any managed-service claim is credible. **Fix planned: M3/M7.**
+### SEC-05 — Managed state is lost on agent restart (Medium, reliability/security) — **FIXED 2026-11-11**
+Package receipts, userspace manifest and service definitions are persisted through the
+integrity-checked state store. Managed services are supervised real processes with persisted
+definitions and autostart; the agent now owns one KairoCore per process shared across sessions,
+so concurrent sessions no longer race on the same state files.
 
 ### SEC-06 — Agent logs the auth token in the startup line (Low/Medium)
 `server.rs` `info!(auth_token=[redacted] ...)` — verified that the field is redacted at emit time in

@@ -58,6 +58,22 @@ Append-only ADR log. Superseded decisions stay here with their replacement noted
   forbids registry-only installs.
 - **Consequences:** Requires persistent package store (M3), dependency ordering, and rollback
   support in M6.
+## ADR-0008 — Managed services are supervised real processes; one core per agent process
+- **Date:** 2026-11-11
+- **Decision:** A `ServiceSupervisor` in kairo-core launches managed services as real child
+  processes with restart policies (never / on-failure-with-cap / always), streaming their output
+  into the userspace logs directory, and persisting definitions (name, command, args, env,
+  working dir, policy, autostart) via the state store. Stop is SIGTERM with a 5 s grace period
+  then SIGKILL on Unix; immediate termination on Windows (no portable graceful-stop API without
+  console integration). The agent's Server owns ONE KairoCore shared by all sessions.
+- **Context:** The in-memory managed-service toggles (SEC-05) were neither real nor persistent;
+  per-session KairoCore instances would race on the same persisted state files.
+- **Alternatives:** systemd units for managed services (makes systemd mandatory — forbidden),
+  Docker (forbidden as a requirement), per-session supervisors (state races).
+- **Consequences:** adds unix-only `libc` for SIGTERM; the workspace-wide `unsafe_code = deny`
+  lint is overridden for the single, documented `libc::kill` call. HTTP health checks for
+  services are deferred (process-liveness is the v1 health model).
+
 ## ADR-0006 - Integrity-checked state store primitive in kairo-core
 - **Date:** 2026-11-11
 - **Decision:** Persistent state is stored as JSON envelopes `{kind, generation, data, checksum}`
