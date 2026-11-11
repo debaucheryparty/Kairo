@@ -21,58 +21,59 @@ supervision, CLI, install lifecycle) is in early stages — see IMPLEMENTATION_S
 1. Recon: verified actual repo (not prior reports). 89 uncommitted entries existed; three whole
    crates (kairo-bridge, kairo-core, kairo-discovery) were untracked while already required by
    the workspace build.
-2. Baseline build `cargo check --workspace`: PASS (1m45s). Two unused-import warnings fixed.
+2. Baseline committed (27314f5) after full verification; pushed to origin/main.
 3. Repaired two stale pre-existing test defects (not weakened — updated to current behavior):
-   - `crates/kairo-core/tests/core_test.rs` used a removed bridge API (`CommandOutput`,
-     `set_default_response`); now uses `set_response(binary, first_arg, exit, out, err)` and mocks
-     the `systemctl --version` capability probe.
-   - `apps/kairo-agent/tests/filesystem_test.rs` asserted an exact listing count; the session now
-     creates the managed root under `data_dir`, so the test asserts the written file's presence.
-   - `MockCommandRunner` no longer spawns a real shell to synthesize `ExitStatus` (was `cmd /c` /
-     `true`); uses `ExitStatus::from_raw(0)` deterministically.
-4. Full Windows test suite: all suites pass except the filesystem case above (then fixed, 2/2).
-5. `cargo fmt --all` applied (baseline had formatting debt).
-6. `engineering/` documentation system created (7 files).
-7. InstaBox Linux verification environment prepared (see below).
+   core_test bridge-runner API usage; filesystem e2e exact-count vs. managed-root creation.
+4. M2 filesystem hardening (b55aab8): managed-root traversal now rejected explicitly; symlink
+   escapes blocked via canonicalize containment (incl. dangling-symlink create targets); writes
+   atomic via temp+rename. Windows 106 tests, Linux 108 tests pass.
+5. Linux verification environment on InstaBox (see below); gates run there found and fixed four
+   real defects: apt-lock false positive (109754d), Xvfb display-allocation race (caf03ed),
+   windows-only traversal test expectation (6c74259), parallel tests sharing one display (5dd6c19).
+6. Both platforms now pass all four gates: check, test (Win 106 / Linux 108), fmt, clippy -D warnings.
+7. engineering/ documentation system live and synchronized.
 
 ## Verification environment (Linux)
 
 - InstaBox machine `m_agq3cscsuugpmq6rcmyfurqrlq` (name `app`), template agent-browser
   (Debian 13 trixie), 4 vCPU / 8 GiB, sudo passwordless, Rust 1.99, Node 22, pnpm, docker.
 - **Free plan limit: 1 sandbox.** Do not delete this machine — it is the only Linux host available.
-  If a second OS (e.g. Arch for pacman tests) is needed, it must replace this one or the plan upgraded.
-- API key lives at `%USERPROFILE%\.instabox\api_key` — **outside the repo**, never commit it.
-- API: `POST /v1/machines/{id}/exec` (bash -lc, max 600 s per call; use `nohup ... &` for long builds
-  then poll), `GET /v1/machines/{id}/files?path=` to read files.
-- Machine auto-pauses after 30 min idle; wakes on the next call.
+- Repo checkout: `/data/home/Kairo`. InstaBox API key: `%USERPROFILE%\.instabox\api_key`
+  (outside the repo; never commit).
+- Installed for Kairo: protobuf-compiler, webkit2gtk/gtk dev stack, xvfb, xterm, x11-utils,
+  x11-xserver-utils, xfonts-base. Sidecar prep: build kairo-agent → copy to
+  `apps/kairo-desktop/src-tauri/binaries/kairo-backend-x86_64-unknown-linux-gnu`.
+- Gates are run as nohup scripts (/tmp/kairo-gate*.sh), logs /tmp/kairo-{check,test,clippy,fmt}.log.
 
-## Tests executed and actual results (session 1)
+## Tests executed and actual results (session 1, final)
 
-| Gate | Result |
-|---|---|
-| `cargo check --workspace` (Windows) | PASS |
-| `cargo test --workspace --no-fail-fast` (Windows, pre-fmt) | 1 stale assertion failure → fixed; all else pass |
-| `cargo test -p kairo-core` / `filesystem_test` (post-fix) | PASS 6/6 · 2/2 |
-| `cargo fmt --all` | applied |
-| `cargo test --workspace` post-fmt | run in flight at handoff — see TEST_MATRIX.md |
-| clippy `-D warnings`, Linux build/tests | clippy **PASS on Windows**; Linux build/tests not yet run |
+| Gate | Windows | Linux (Debian 13 box) |
+|---|---|---|
+| `cargo check --workspace` | PASS | PASS |
+| `cargo test --workspace --no-fail-fast` | **PASS 106/0** | **PASS 108/0** (incl. unix-only symlink-containment test) |
+| `cargo fmt --all -- --check` | PASS | PASS |
+| `cargo clippy --workspace --all-targets -- -D warnings` | PASS | PASS (rustc 1.99 strictness fixed in 6c74259) |
+
+Full evidence and per-suite counts: TEST_MATRIX.md. Linux prerequisites documented there.
 
 ## Immediate next actions (in order)
 
-1. Finish post-fmt workspace test run; record result in TEST_MATRIX.md.
-2. Run `cargo clippy --workspace --all-targets -- -D warnings`; fix findings.
-3. Create baseline commit (pre-existing work + repairs + docs), then `cargo fmt` follow-up commit
-   if the fmt diff remains separable; push to `origin/main` (verify push actually succeeded).
-4. Clone on the Linux machine and run the full gate there (check/test/fmt/clippy).
-5. Begin M2: filesystem boundary hardening (`kairo-core/src/fs.rs`): reject traversal explicitly,
-   canonicalize-based symlink containment, atomic writes; tests for each (SEC-01/02).
-6. Then M3 userspace, M4 config engine, M6 real packages, M7 runtime, M9 CLI.
+1. M3 managed userspace: persistent layout under the managed root (config/, packages/, services/,
+   state/, logs/, cache/), integrity-checked persisted state (SEC-05), init/migration-safe.
+2. M6 real managed packages (SEC-04): artifact acquisition + checksum verify + receipts + rollback,
+   replacing the register-only stub; depends on M3 store.
+3. M4 declarative configuration engine; M5 dots; M7 service runtime/supervision; M9 CLI.
+4. M10 installer should consume the Linux prerequisites list in TEST_MATRIX.md.
+5. Rewrites of README and docs/INDEX.md when the CLI/install story lands (M9/M10).
 
 ## Known failures / open problems
 
-- None failing at handoff. Pre-existing weaknesses are catalogued in SECURITY_REVIEW.md (SEC-01…08).
-- `README.md` describes the old vision and links a non-existent `docs/INDEX.md` — needs rewriting
-  when the CLI/install story lands (M9/M10).
+- None failing at handoff on either platform. Security weaknesses beyond the fixed SEC-01/02/09/10
+  are catalogued in SECURITY_REVIEW.md (SEC-03…08 remain open, planned per roadmap).
+- `README.md` describes the old vision and links a non-existent `docs/INDEX.md` — rewrite when the
+  CLI/install story lands (M9/M10).
+- InstaBox free plan: 1 sandbox total; the Linux box doubles as the user's general machine —
+  leave it running and do not delete it.
 
 ## Important architectural context
 

@@ -28,17 +28,27 @@ Adversaries considered:
 
 ## Findings
 
-### SEC-01 — Managed path traversal is silently clamped instead of rejected (Medium)
-`crates/kairo-core/src/fs.rs::resolve_path` folds `..` components and drops a leading drive/root,
-so `../../etc/shadow` resolves to an in-root path rather than returning an error. Nothing escapes,
-but callers get a *different* path than requested with no signal. Production behavior should reject
-traversal explicitly (error) and cover it with a test. **Fix planned: M2.**
+### SEC-01 — Managed path traversal is silently clamped instead of rejected (Medium) — **FIXED 2026-11-11**
+`resolve_path` now rejects any `..` that escapes above the managed root and rejects absolute
+platform paths (drive prefixes) with `BoundaryViolation`. Tests:
+`test_filesystem_rejects_escape_attempts` (Windows + Linux).
 
-### SEC-02 — No symlink / canonicalization defense for managed paths (High)
-`fs::read`/`fs::write`/`remove_dir_all` follow symlinks and junctions. A symlink planted inside the
-managed root (e.g. by a malicious package) resolves outside it on the next managed operation.
-`canonicalize`-based containment plus refusal to traverse symlinks out of root is required.
-**Fix planned: M2 (with tests planting a symlink to an outside directory).**
+### SEC-02 — No symlink / canonicalization defense for managed paths (High) — **FIXED 2026-11-11**
+Managed filesystem operations now verify via `canonicalize` that the real path stays inside the
+managed root. Dangling symlinks are rejected as creation targets (writing through one would
+follow the link outside). Tests: `test_filesystem_symlink_containment` (Linux) covers leak,
+dangling, and in-root alias cases.
+
+### SEC-09 — Unreadable apt lock files reported as held locks (High on real Debian) — **FIXED 2026-11-11**
+`is_file_locked` treated `PermissionDenied` as "lock held"; the dpkg locks are root-owned, so
+every unprivileged user (the normal sudo case) was always denied package operations on a real
+host. Found by the Linux verification run — it never reproduces on Windows or in mock-only
+tests. Now only `EWOULDBLOCK`/`EBUSY` count as held.
+
+### SEC-10 — Xvfb display allocation raced between backends (Medium) — **FIXED 2026-11-11**
+Three concurrent backends all probed the same display number as free and fought over one Xvfb.
+Spawning is now serialized per process, the display lock file is claimed before spawn, and a
+display claimed elsewhere is shared instead of duplicated.
 
 ### SEC-03 — `OperationLevel::Read` authorizes every actor (Medium)
 `PermissionManager::require_level(auth, Read)` returns `Ok(())` unconditionally, so any

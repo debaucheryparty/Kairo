@@ -17,6 +17,26 @@ Only actually executed results are recorded. Platform: Windows dev host unless s
 | `cargo fmt --all` | 2026-11-11 | Windows | applied; pre-existing debt in session.rs + others | commit history |
 | `cargo test --workspace --no-fail-fast` (post-fmt) | 2026-11-11 | Windows | **PASS: 104 tests, 0 failed (exit 0)** | test-run4.log |
 | `cargo clippy --workspace --all-targets -- -D warnings` | 2026-11-11 | Windows | **PASS (exit 0)** after removing 2 unused imports in core_test.rs | clippy2.log |
+| `cargo test --workspace --no-fail-fast` (after M2 hardening) | 2026-11-11 | Windows | **PASS: 106 tests, 0 failed** | test-run5.log |
+| `cargo check --workspace` | 2026-11-11 | **Linux** (Debian 13, rustc 1.99) | PASS after installing `protobuf-compiler` + webkit2gtk dev packages and building the agent sidecar binary into `apps/kairo-desktop/src-tauri/binaries/` (tauri.conf.json externalBin; gitignored — a clean checkout needs this prep step, documented as M10 work) | /tmp/kairo-check.log on box |
+| `cargo fmt --all -- --check` | 2026-11-11 | Linux | PASS | /tmp/kairo-fmt.log |
+| `cargo clippy -D warnings` | 2026-11-11 | Linux | **PASS** (gate 4, exit 0) after fixing 4 rustc-1.99-only lint errors | /tmp/kairo-clippy.log |
+| `cargo test --workspace` (gate 6, final) | 2026-11-11 | Linux | **PASS: 108 tests, 0 failed (exit 0)** | /tmp/kairo-test.log |
+
+## Linux environment prerequisites (found by verification; M10 installer inputs)
+
+- `protobuf-compiler` (kairo-protocol build.rs needs `protoc`)
+- Tauri desktop crate: `libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev
+  libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev`
+- Agent sidecar prep: build `kairo-agent`, copy to
+  `apps/kairo-desktop/src-tauri/binaries/kairo-backend-<target>` per `tauri.conf.json` externalBin
+- Remote GUI: `xvfb xterm x11-utils x11-xserver-utils xfonts-base` (xterm without bitmap fonts
+  does not draw → no damage frames)
+| `cargo test --workspace --no-fail-fast` (after M2 hardening) | 2026-11-11 | Windows | **PASS: 106 tests, 0 failed** | test-run5.log |
+| `cargo check --workspace` | 2026-11-11 | **Linux** (Debian 13, rustc 1.99) | PASS after installing `protobuf-compiler` + webkit2gtk dev packages and building the agent sidecar binary into `apps/kairo-desktop/src-tauri/binaries/` (tauri.conf.json externalBin; gitignored — a clean checkout needs this prep step, documented as M10 work) | /tmp/kairo-check.log on box |
+| `cargo fmt --all -- --check` | 2026-11-11 | Linux | PASS | /tmp/kairo-fmt.log |
+| `cargo test --workspace` | 2026-11-11 | Linux | found 5 real failures (apt-lock false positive, Xvfb display race, windows-only traversal expectation, 4 newer-clippy lint errors); all fixed and re-verified — see gate 4 | /tmp/kairo-test.log |
+| `cargo clippy -D warnings` | 2026-11-11 | Linux | 4 lint errors on rustc 1.99 (fixed: cfg-shadowed bindings, as_chunks_mut, byte str) — gate 4 pending re-run | /tmp/kairo-clippy.log |
 
 ## Suite counts (pre-fmt run, `--no-fail-fast`)
 

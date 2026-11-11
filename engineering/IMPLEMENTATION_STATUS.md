@@ -14,11 +14,11 @@ Inventory of every subsystem with honest statuses. Evidence rules:
 | Host discovery → SystemProfile | IMPLEMENTED | `crates/kairo-discovery` | `apps/kairo-agent/tests/discovery_test.rs` | Linux-focused; Windows paths unverified |
 | Platform bridge + adapter selection | IMPLEMENTED | `crates/kairo-bridge` | `crates/kairo-bridge/tests/bridge_test.rs` | apt/pacman/systemd/openrc real command execution; unsupported-capability responses exist |
 | Core APIs (fs/process/service/package/env/system) | IMPLEMENTED | `crates/kairo-core` | `crates/kairo-core/tests/core_test.rs` (6/6 pass) | audit ring + permission levels + reserved env keys |
-| Managed filesystem boundary | IN_PROGRESS | `crates/kairo-core/src/fs.rs` | core_test boundary case | silently clamps `..`; no symlink defense; no atomic writes — M2 |
+| Managed filesystem boundary | TESTED | `crates/kairo-core/src/fs.rs` | core_test: boundary, escape rejection, symlink containment (Linux), atomic write | traversal + symlink escapes rejected explicitly; writes atomic via temp+rename — M2 done |
 | Agent server (WS + tunnel + rate limit) | IMPLEMENTED | `apps/kairo-agent/src/server.rs`, `session.rs` | handshake_test | auth token; no session expiry/revocation yet |
 | Terminal (PTY) | IMPLEMENTED | `apps/kairo-agent/src/pty.rs` | terminal_test.rs (385 lines) | |
 | File manager backend | IMPLEMENTED | `apps/kairo-agent/src/fs.rs` | filesystem_test.rs | |
-| Remote GUI (X11 capture/input) | IMPLEMENTED (Linux-only) | `apps/kairo-agent/src/gui/` | remote_surface_test.rs | requires X; headless via Xvfb documented in commit history |
+| Remote GUI (X11 capture/input) | TESTED (Linux) | `apps/kairo-agent/src/gui/` | remote_surface_test.rs | requires Xvfb + xterm + xfonts-base on headless hosts; Xvfb display allocation race fixed 2026-11-11 |
 | Metrics | IMPLEMENTED | `apps/kairo-agent/src/metrics.rs` | via session tests | no rotation/retention policy yet |
 | Media / notifications / GPU | IMPLEMENTED | `media.rs`, `notification.rs`, `gpu.rs` | media_and_notification_test.rs | |
 | Web client shell | IMPLEMENTED | `apps/kairo-web` | none (manual) | large uncommitted UI rework; frontend not prioritized per roadmap |
