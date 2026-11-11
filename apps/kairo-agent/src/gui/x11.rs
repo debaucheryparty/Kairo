@@ -66,7 +66,7 @@ struct X11TrackedWindow {
 
 #[inline]
 fn bgra_to_rgba_inplace(buf: &mut [u8]) {
-    for chunk in buf.chunks_exact_mut(4) {
+    for chunk in buf.as_chunks_mut::<4>().0 {
         chunk.swap(0, 2);
         chunk[3] = 255;
     }
@@ -227,6 +227,18 @@ impl X11Backend {
             return Ok(None);
         }
 
+        static XVFB_SPAWN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = XVFB_SPAWN
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        // Re-check under the lock: a concurrent backend may have brought
+        // this display up between the probe above and now.
+        if let Ok((_c, _s)) = x11rb::connect(Some(&self.display)) {
+            debug!(display = %self.display, "X11 display already running");
+            return Ok(None);
+        }
+
         let display_num = self.display.trim_start_matches(':');
         let lock_path = format!("/tmp/.X{display_num}-lock");
         let sock_path = format!("/tmp/.X11-unix/X{display_num}");
@@ -240,8 +252,24 @@ impl X11Backend {
             }
         }
 
+        // Another backend claimed the display while we held the lock: share
+        // it instead of racing a second Xvfb onto the same number. Whoever
+        // owns the lock is about to accept connections.
+        if std::path::Path::new(&lock_path).exists() || std::path::Path::new(&sock_path).exists() {
+            debug!(display = %self.display, "display claimed elsewhere; sharing");
+            return Ok(None);
+        }
+
+        // Claim the display before spawning so concurrent backends resolve
+        // to distinct numbers. Xvfb rewrites the lock with its own pid.
+        if let Err(e) = std::fs::write(&lock_path, format!("{}", std::process::id())) {
+            return Err(GuiError::SpawnError(format!(
+                "cannot claim display lock {lock_path}: {e}"
+            )));
+        }
+
         info!(display = %self.display, "Starting headless Xvfb display server");
-        let child = tokio::process::Command::new("Xvfb")
+        match tokio::process::Command::new("Xvfb")
             .args([
                 &self.display,
                 "-screen",
@@ -252,9 +280,13 @@ impl X11Backend {
                 "tcp",
             ])
             .spawn()
-            .map_err(|e| GuiError::SpawnError(format!("Failed to start Xvfb: {e}")))?;
-
-        Ok(Some(child))
+        {
+            Ok(child) => Ok(Some(child)),
+            Err(e) => {
+                let _ = std::fs::remove_file(&lock_path);
+                Err(GuiError::SpawnError(format!("Failed to start Xvfb: {e}")))
+            }
+        }
     }
 }
 
