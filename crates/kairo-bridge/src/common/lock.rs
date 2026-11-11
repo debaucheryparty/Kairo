@@ -33,13 +33,15 @@ pub fn is_file_locked(path: &Path) -> bool {
         return false;
     }
 
-    // Attempt to open the lock file for exclusive write access
+    // Attempt to open the lock file for exclusive write access. Only
+    // EWOULDBLOCK/EBUSY prove another process holds an advisory lock:
+    // PermissionDenied just means this user may not write the file (the
+    // dpkg locks are root-owned), which is normal for unprivileged users
+    // running through sudo and must not read as "package lock held".
     match fs::OpenOptions::new().write(true).open(path) {
         Ok(_) => false,
         Err(e) => {
-            // Permission denied or resource busy indicates lock is held or cannot be accessed
-            e.kind() == std::io::ErrorKind::PermissionDenied
-                || e.kind() == std::io::ErrorKind::WouldBlock
+            e.kind() == std::io::ErrorKind::WouldBlock
                 || e.raw_os_error() == Some(11) // EAGAIN/EWOULDBLOCK
                 || e.raw_os_error() == Some(16) // EBUSY
         }
