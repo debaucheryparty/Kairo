@@ -4,17 +4,16 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use kairo_protocol::v1::{
-    LaunchAppRequest, LaunchAppResponse, LinuxApp, RemoteSurface, SurfaceFrame,
-    SurfaceInputEvent,
+    LaunchAppRequest, LaunchAppResponse, LinuxApp, RemoteSurface, SurfaceFrame, SurfaceInputEvent,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode};
 use prost::Message as ProstMessage;
 use thiserror::Error;
-use tokio::sync::{mpsc, Mutex, Notify};
+use tokio::sync::{Mutex, Notify, mpsc};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tracing::{debug, info, warn};
 
-use crate::gui::{x11::X11Backend, GuiInputEvent, RemoteGuiBackend};
+use crate::gui::{GuiInputEvent, RemoteGuiBackend, x11::X11Backend};
 
 #[derive(Debug, Error)]
 pub enum AppError {
@@ -73,7 +72,9 @@ impl AppManager {
                         continue;
                     }
                     if let Some(app) = Self::parse_desktop_file(&path).await {
-                        if !apps.iter().any(|existing: &LinuxApp| existing.app_id == app.app_id || existing.exec == app.exec) {
+                        if !apps.iter().any(|existing: &LinuxApp| {
+                            existing.app_id == app.app_id || existing.exec == app.exec
+                        }) {
                             apps.push(app);
                         }
                     }
@@ -185,6 +186,7 @@ impl AppManager {
                             x: frame.x,
                             y: frame.y,
                             timestamp_us: frame.timestamp_us,
+                            is_full_frame: frame.is_full_frame,
                         };
                         let mut buf = Vec::new();
                         if proto_frame.encode(&mut buf).is_ok() {
@@ -205,7 +207,10 @@ impl AppManager {
                         }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(dropped)) => {
-                        debug!("[AGENT FRAME] backend frame channel lagged, dropped {} stale frames", dropped);
+                        debug!(
+                            "[AGENT FRAME] backend frame channel lagged, dropped {} stale frames",
+                            dropped
+                        );
                         continue;
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
@@ -227,6 +232,7 @@ impl AppManager {
                     height: notif.surface.height,
                     parent_id: notif.surface.parent_surface_id.unwrap_or_default(),
                     is_transient: notif.surface.is_transient,
+                    app_id: notif.surface.app_id,
                 };
                 let mut buf = Vec::new();
                 if proto_event.encode(&mut buf).is_ok() {
@@ -252,12 +258,12 @@ impl AppManager {
         });
     }
 
-    pub async fn launch_app(
-        &self,
-        req: LaunchAppRequest,
-    ) -> Result<LaunchAppResponse, AppError> {
+    pub async fn launch_app(&self, req: LaunchAppRequest) -> Result<LaunchAppResponse, AppError> {
         let t0 = std::time::Instant::now();
-        info!("[APP LAUNCH] starting GUI backend for app_id={}", req.app_id);
+        info!(
+            "[APP LAUNCH] starting GUI backend for app_id={}",
+            req.app_id
+        );
         self.gui_backend
             .start()
             .await
@@ -278,12 +284,15 @@ impl AppManager {
             .map_err(|e| AppError::SpawnFailed(e.to_string()))?;
         info!("[APP LAUNCH] app spawned pid={} in {:?}", pid, t1.elapsed());
 
-        let surface_id = format!("app-{pid}");
         Ok(LaunchAppResponse {
-            surface_id,
+            surface_id: String::new(),
             process_id: pid.to_string(),
             state: "running".to_string(),
         })
+    }
+
+    pub async fn list_processes(&self) -> Vec<crate::gui::ApplicationProcess> {
+        self.gui_backend.list_processes().await
     }
 
     pub async fn configure_surface(
@@ -338,7 +347,11 @@ impl AppManager {
             _ => return,
         };
 
-        if let Err(e) = self.gui_backend.send_input(&event.surface_id, gui_event).await {
+        if let Err(e) = self
+            .gui_backend
+            .send_input(&event.surface_id, gui_event)
+            .await
+        {
             warn!(surface_id = %event.surface_id, error = %e, "failed to send GUI surface input");
         }
     }
@@ -368,6 +381,7 @@ impl AppManager {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

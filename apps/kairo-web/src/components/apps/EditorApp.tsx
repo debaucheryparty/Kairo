@@ -20,6 +20,7 @@ import { useWindowManager, type WindowPayload } from "@/src/components/window/wi
 import { useRuntimeClient, useSelectedServer } from "@/src/lib/session";
 import { listFiles, readFile, writeFile, type FileEntry } from "@/src/lib/api/files";
 import { getHighlightLanguage } from "@/src/lib/files/file-type";
+import { M3Button, M3Chip } from "@/src/components/m3";
 
 interface OpenTab {
   path: string;
@@ -181,16 +182,13 @@ export function EditorApp({ payload }: { payload?: WindowPayload }) {
   }, [entries, searchQuery]);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-[#18181b] text-slate-200 select-none font-sans">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] select-none font-sans">
       {/* Top Application Bar */}
-      <div className="flex h-9 items-center justify-between border-b border-white/10 bg-[#1e1e24] px-3 text-xs select-none">
+      <div className="flex h-9 items-center justify-between border-b border-[var(--md-sys-color-outline-variant)]/25 bg-[var(--md-sys-color-surface-container-low)] px-3 text-xs select-none">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 font-medium text-slate-200">
-            <Code2 className="h-4 w-4 text-sky-400" />
-            <span className="font-semibold">Visual Studio Code</span>
-            <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-mono text-sky-400">
-              Web-Native
-            </span>
+            <FileText className="h-4 w-4 text-amber-400" />
+            <span className="font-semibold">Text Editor</span>
           </div>
 
           <div className="hidden sm:flex items-center gap-1 font-mono text-[11px] text-slate-400">
@@ -209,39 +207,34 @@ export function EditorApp({ payload }: { payload?: WindowPayload }) {
             </span>
           ) : null}
 
-          <button
-            type="button"
+          <M3Chip
+            selected={webMode}
             onClick={() => setWebMode(!webMode)}
-            className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] transition-colors ${
-              webMode
-                ? "bg-sky-600 text-white"
-                : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
-            }`}
-            title="Toggle Embedded Code-Server / Web VS Code"
+            icon="language"
+            className="!h-7 !text-[11px]"
           >
-            <Globe className="h-3 w-3" />
-            <span>Web URL</span>
-          </button>
+            Web URL
+          </M3Chip>
 
-          <button
-            type="button"
+          <M3Button
+            variant="filled"
             disabled={!activeTab || isSaving}
             onClick={() => void handleSave()}
-            className="flex items-center gap-1 rounded bg-sky-600 px-2.5 py-1 text-[11px] font-medium text-white transition-colors hover:bg-sky-500 disabled:opacity-50"
+            icon="save"
+            className="!h-7 !px-3 !text-[11px]"
           >
-            <Save className="h-3 w-3" />
-            <span>Save</span>
-          </button>
+            Save
+          </M3Button>
 
-          <button
-            type="button"
+          <M3Button
+            variant="tonal"
             onClick={() => openWindow("terminal", { cwd: currentDir })}
-            className="flex items-center gap-1 rounded border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/10"
+            icon="terminal"
+            className="!h-7 !px-2.5 !text-[11px]"
             title="Open Integrated Terminal"
           >
-            <Terminal className="h-3 w-3" />
             <span className="hidden sm:inline">Terminal</span>
-          </button>
+          </M3Button>
         </div>
       </div>
 
@@ -256,16 +249,16 @@ export function EditorApp({ payload }: { payload?: WindowPayload }) {
               className="flex-1 rounded border border-white/10 bg-slate-950 px-2 py-0.5 font-mono text-xs text-slate-200 outline-none"
               placeholder="http://localhost:8080"
             />
-            <button
-              type="button"
+            <M3Button
+              variant="filled"
               onClick={() => {
                 const iframe = document.getElementById("vscode-iframe") as HTMLIFrameElement;
                 if (iframe) iframe.src = webUrl;
               }}
-              className="rounded bg-sky-600 px-2.5 py-0.5 text-[11px] text-white"
+              className="!h-7 !text-[11px]"
             >
               Connect
-            </button>
+            </M3Button>
           </div>
           <iframe
             id="vscode-iframe"
@@ -277,7 +270,7 @@ export function EditorApp({ payload }: { payload?: WindowPayload }) {
       ) : (
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Activity Bar */}
-          <div className="flex w-12 flex-col items-center justify-between border-r border-white/10 bg-[#1e1e24] py-3 text-slate-400">
+          <div className="flex w-12 flex-col items-center justify-between border-r border-[var(--md-sys-color-outline-variant)]/20 bg-[var(--md-sys-color-surface-container-low)] py-3 text-[var(--md-sys-color-on-surface-variant)]">
             <div className="flex flex-col items-center gap-4">
               <button
                 type="button"
@@ -318,7 +311,7 @@ export function EditorApp({ payload }: { payload?: WindowPayload }) {
           </div>
 
           {/* Sidebar */}
-          <div className="flex w-60 flex-col border-r border-white/10 bg-[#18181d]">
+          <div className="flex w-60 flex-col border-r border-[var(--md-sys-color-outline-variant)]/20 bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]">
             <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <span>{activeSidebar === "explorer" ? "Explorer" : "Search"}</span>
               <button
@@ -377,9 +370,9 @@ export function EditorApp({ payload }: { payload?: WindowPayload }) {
           </div>
 
           {/* Main Code Editing Workspace */}
-          <div className="flex min-w-0 flex-1 flex-col bg-[#141416]">
+          <div className="flex min-w-0 flex-1 flex-col bg-[var(--md-sys-color-surface)]">
             {/* Tab Bar */}
-            <div className="flex h-9 items-center overflow-x-auto border-b border-white/10 bg-[#18181d] px-1 text-xs">
+            <div className="flex h-9 items-center overflow-x-auto border-b border-[var(--md-sys-color-outline-variant)]/20 bg-[var(--md-sys-color-surface-container)] px-1 text-xs">
               {openTabs.map((tab) => {
                 const isActive = tab.path === activeTabPath;
                 const isDirty = tab.content !== tab.savedContent;
@@ -389,16 +382,16 @@ export function EditorApp({ payload }: { payload?: WindowPayload }) {
                     onClick={() => setActiveTabPath(tab.path)}
                     className={`group flex items-center gap-2 border-r border-white/5 px-3 py-1.5 cursor-pointer transition-colors ${
                       isActive
-                        ? "bg-[#141416] text-white border-t-2 border-t-sky-400"
+                        ? "bg-[var(--md-sys-color-surface)] text-[var(--m3-primary)] border-t-2 border-t-[var(--m3-primary)] font-medium"
                         : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
                     }`}
                   >
-                    <FileText className="h-3.5 w-3.5 text-sky-400" />
+                    <FileText className="h-3.5 w-3.5 text-[var(--m3-primary)]" />
                     <span className="font-mono text-[11px] truncate max-w-[140px]">
                       {tab.name}
                     </span>
                     {isDirty ? (
-                      <span className="h-2 w-2 rounded-full bg-sky-400" />
+                      <span className="h-2 w-2 rounded-full bg-[var(--m3-primary)]" />
                     ) : null}
                     <button
                       type="button"
@@ -414,7 +407,7 @@ export function EditorApp({ payload }: { payload?: WindowPayload }) {
 
             {/* Editor Area */}
             {activeTab ? (
-              <div className="relative flex min-h-0 flex-1 overflow-auto bg-[#141416]">
+              <div className="relative flex min-h-0 flex-1 overflow-auto bg-[var(--md-sys-color-surface)]">
                 <textarea
                   value={activeTab.content}
                   onChange={(e) => updateContent(e.target.value)}
@@ -432,10 +425,10 @@ export function EditorApp({ payload }: { payload?: WindowPayload }) {
             )}
 
             {/* Bottom Status Bar */}
-            <div className="flex h-6 items-center justify-between border-t border-white/10 bg-[#1e1e24] px-3 font-mono text-[10px] text-slate-400">
+            <div className="flex h-6 items-center justify-between border-t border-[var(--md-sys-color-outline-variant)]/20 bg-[var(--md-sys-color-surface-container-low)] px-3 font-mono text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
               <div className="flex items-center gap-3">
-                <span className="flex items-center gap-1 text-sky-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                <span className="flex items-center gap-1 text-[var(--m3-primary)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--m3-primary)]" />
                   <span>main</span>
                 </span>
                 <span>0 errors</span>
@@ -444,7 +437,7 @@ export function EditorApp({ payload }: { payload?: WindowPayload }) {
               <div className="flex items-center gap-4">
                 <span>Spaces: 2</span>
                 <span>UTF-8</span>
-                <span className="uppercase text-sky-300 font-semibold">
+                <span className="uppercase text-[var(--m3-primary)] font-semibold">
                   {activeTab?.language || "Plain Text"}
                 </span>
               </div>

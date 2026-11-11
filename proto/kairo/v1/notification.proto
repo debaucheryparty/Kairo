@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package kairo.v1;
+
+enum NotificationUrgency {
+  NOTIFICATION_URGENCY_LOW = 0;
+  NOTIFICATION_URGENCY_NORMAL = 1;
+  NOTIFICATION_URGENCY_CRITICAL = 2;
+}
+
+message NotificationActionInfo {
+  string key = 1;
+  string label = 2;
+}
+
+message Notification {
+  string id = 1;
+  string app_name = 2;
+  string title = 3;
+  string body = 4;
+  string icon = 5;
+  string image = 6;
+  int64 timestamp = 7;
+  NotificationUrgency urgency = 8;
+  repeated NotificationActionInfo actions = 9;
+  string category = 10;
+}
+
+message ListNotificationsRequest {}
+
+message ListNotificationsResponse {
+  repeated Notification notifications = 1;
+}
+
+message NotificationEvent {
+  Notification notification = 1;
+}
+
+message CloseNotificationRequest {
+  string id = 1;
+}
+
+message CloseNotificationResponse {
+  bool success = 1;
+}
+
+message InvokeNotificationActionRequest {
+  string id = 1;
+  string action_key = 2;
+}
+
+message InvokeNotificationActionResponse {
+  bool success = 1;
+}

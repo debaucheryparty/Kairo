@@ -78,7 +78,25 @@ async function fetchStoredServers(): Promise<ServerInfo[]> {
     }
   } catch {}
 
-  return [];
+  const defaultLocalServer: ServerInfo = {
+    id: "local-wsl",
+    name: "Local Ubuntu (WSL)",
+    hostname: "127.0.0.1",
+    host: "127.0.0.1",
+    port: 9600,
+    username: "sahil",
+    authType: "token",
+    authToken: "",
+    status: "online",
+    cpuUsage: 0,
+    memoryUsage: 0,
+    diskUsage: 0,
+    uptimeSeconds: 0,
+  };
+  try {
+    await idbSaveServer(defaultLocalServer);
+  } catch {}
+  return [defaultLocalServer];
 }
 
 export async function getServer(serverId: string, init?: RequestInit): Promise<ServerInfo> {

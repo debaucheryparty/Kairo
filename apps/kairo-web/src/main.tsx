@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import './index.css';
+import './components/m3/material-web-init';
 import { platform } from "@platform";
 
 const root = document.getElementById('root');

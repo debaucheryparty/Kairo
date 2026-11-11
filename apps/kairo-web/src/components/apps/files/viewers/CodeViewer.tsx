@@ -12,7 +12,7 @@ export function CodeViewer({ file, onClose }: { file: ViewerFile; onClose: () =>
 
   if (preview.error) {
     return (
-      <div className="h-full bg-[#161616]">
+      <div className="h-full bg-[var(--md-sys-color-surface)]">
         <ViewerMessage
           tone="danger"
           title={preview.error}
@@ -25,7 +25,7 @@ export function CodeViewer({ file, onClose }: { file: ViewerFile; onClose: () =>
 
   if (preview.loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#161616] text-sm text-white/50">
+      <div className="flex h-full items-center justify-center bg-[var(--md-sys-color-surface)] text-sm text-white/50">
         Loading file…
       </div>
     );
@@ -33,7 +33,7 @@ export function CodeViewer({ file, onClose }: { file: ViewerFile; onClose: () =>
 
   if (preview.binary) {
     return (
-      <div className="h-full bg-[#161616]">
+      <div className="h-full bg-[var(--md-sys-color-surface)]">
         <ViewerMessage
           tone="danger"
           title="Unsupported format"
@@ -48,15 +48,15 @@ export function CodeViewer({ file, onClose }: { file: ViewerFile; onClose: () =>
   const width = String(Math.max(lines.length, 1)).length;
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-[#161619] text-neutral-900 dark:text-neutral-100">
+    <div className="flex h-full flex-col bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]">
       <PreviewToolbar
         truncated={preview.truncated}
         content={preview.content}
         path={file.path}
         serverId={serverId}
       />
-      <div className="min-h-0 flex-1 overflow-auto bg-neutral-50 dark:bg-[#121214]">
-        <pre className="min-w-full p-3 font-mono text-[12.5px] leading-6 text-neutral-800 dark:text-[#d7d7d7]">
+      <div className="min-h-0 flex-1 overflow-auto bg-[var(--md-sys-color-surface)]">
+        <pre className="min-w-full p-3 font-mono text-[12.5px] leading-6 text-[var(--md-sys-color-on-surface)]">
           {lines.map((line, index) => (
             <div key={index} className="flex">
               <span className="w-12 shrink-0 select-none pr-3 text-right text-white/30">

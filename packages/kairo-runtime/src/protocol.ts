@@ -1398,6 +1398,7 @@ export interface SurfaceFramePayload {
   x: number;
   y: number;
   timestampUs: number;
+  isFullFrame: boolean;
 }
 
 export function decodeSurfaceFrame(raw: Uint8Array): SurfaceFramePayload {
@@ -1411,6 +1412,7 @@ export function decodeSurfaceFrame(raw: Uint8Array): SurfaceFramePayload {
   let x = 0;
   let y = 0;
   let timestampUs = 0;
+  let isFullFrame = false;
 
   while (offset < raw.byteLength) {
     const tag = raw[offset++];
@@ -1432,6 +1434,7 @@ export function decodeSurfaceFrame(raw: Uint8Array): SurfaceFramePayload {
       else if (fieldNumber === 7) x = value | 0;
       else if (fieldNumber === 8) y = value | 0;
       else if (fieldNumber === 9) timestampUs = value;
+      else if (fieldNumber === 10) isFullFrame = value !== 0;
     } else if (wireType === 2) {
       let length = 0;
       let shift = 0;
@@ -1454,7 +1457,7 @@ export function decodeSurfaceFrame(raw: Uint8Array): SurfaceFramePayload {
     }
   }
 
-  return { surfaceId, sequence, width, height, codec, data, x, y, timestampUs };
+  return { surfaceId, sequence, width, height, codec, data, x, y, timestampUs, isFullFrame };
 }
 
 export interface SurfaceLifecycleEventPayload {
@@ -1467,6 +1470,7 @@ export interface SurfaceLifecycleEventPayload {
   height: number;
   parentId: string;
   isTransient: boolean;
+  appId?: string;
 }
 
 export function decodeSurfaceLifecycle(raw: Uint8Array): SurfaceLifecycleEventPayload {
@@ -1480,6 +1484,7 @@ export function decodeSurfaceLifecycle(raw: Uint8Array): SurfaceLifecycleEventPa
   let height = 0;
   let parentId = '';
   let isTransient = false;
+  let appId = '';
 
   while (offset < raw.byteLength) {
     const tag = raw[offset++];
@@ -1517,6 +1522,8 @@ export function decodeSurfaceLifecycle(raw: Uint8Array): SurfaceLifecycleEventPa
         title = textDecoder.decode(raw.subarray(offset, offset + length));
       } else if (fieldNumber === 8) {
         parentId = textDecoder.decode(raw.subarray(offset, offset + length));
+      } else if (fieldNumber === 10) {
+        appId = textDecoder.decode(raw.subarray(offset, offset + length));
       }
       offset += length;
     } else {
@@ -1524,7 +1531,7 @@ export function decodeSurfaceLifecycle(raw: Uint8Array): SurfaceLifecycleEventPa
     }
   }
 
-  return { surfaceId, state, title, x, y, width, height, parentId, isTransient };
+  return { surfaceId, state, title, x, y, width, height, parentId, isTransient, appId };
 }
 
 export function encodeConfigureSurfaceRequest(req: {
@@ -2107,3 +2114,584 @@ export function decodeTunnelHeartbeat(data: Uint8Array): TunnelHeartbeatPayload 
 
   return { timestamp, latencyMs };
 }
+
+export enum PlaybackState {
+  Unknown = 0,
+  Playing = 1,
+  Paused = 2,
+  Stopped = 3,
+}
+
+export interface MediaTrackPayload {
+  title: string;
+  artist: string;
+  album: string;
+  artUrl: string;
+  positionUs: number;
+  durationUs: number;
+}
+
+export interface MediaPlayerInfoPayload {
+  playerId: string;
+  name: string;
+  playbackState: PlaybackState;
+  track?: MediaTrackPayload;
+  volume: number;
+  canControl: boolean;
+  canGoNext: boolean;
+  canGoPrevious: boolean;
+  canPlay: boolean;
+  canPause: boolean;
+  canSeek: boolean;
+}
+
+export interface ListMediaPlayersResponsePayload {
+  players: MediaPlayerInfoPayload[];
+  activePlayerId: string;
+}
+
+export enum MediaControlAction {
+  Unspecified = 0,
+  Play = 1,
+  Pause = 2,
+  PlayPause = 3,
+  Next = 4,
+  Previous = 5,
+  Stop = 6,
+  Seek = 7,
+  SetVolume = 8,
+}
+
+export interface MediaControlRequestPayload {
+  playerId: string;
+  action: MediaControlAction;
+  seekOffsetUs?: number;
+  volume?: number;
+}
+
+export interface MediaControlResponsePayload {
+  success: boolean;
+  message: string;
+  player?: MediaPlayerInfoPayload;
+}
+
+export interface MediaStateChangeEventPayload {
+  player?: MediaPlayerInfoPayload;
+  isActive: boolean;
+}
+
+export enum NotificationUrgency {
+  Low = 0,
+  Normal = 1,
+  Critical = 2,
+}
+
+export interface NotificationActionPayload {
+  key: string;
+  label: string;
+}
+
+export interface NotificationPayload {
+  id: string;
+  appName: string;
+  title: string;
+  body: string;
+  icon: string;
+  image: string;
+  timestamp: number;
+  urgency: NotificationUrgency;
+  actions: NotificationActionPayload[];
+  category: string;
+}
+
+export interface ListNotificationsResponsePayload {
+  notifications: NotificationPayload[];
+}
+
+export interface NotificationEventPayload {
+  notification?: NotificationPayload;
+}
+
+export interface CloseNotificationResponsePayload {
+  success: boolean;
+}
+
+export interface InvokeNotificationActionResponsePayload {
+  success: boolean;
+}
+
+function encodeDoubleField(fieldNumber: number, val: number): Uint8Array {
+  const buf = new ArrayBuffer(9);
+  const view = new DataView(buf);
+  const tag = (fieldNumber << 3) | 1;
+  view.setUint8(0, tag);
+  view.setFloat64(1, val, true);
+  return new Uint8Array(buf);
+}
+
+function encodeInt64Field(fieldNumber: number, val: number): Uint8Array {
+  const tag = (fieldNumber << 3) | 0;
+  return concat([new Uint8Array([tag]), encodeVarint(val >= 0 ? val : 0)]);
+}
+
+export function encodeListMediaPlayersRequest(): Uint8Array {
+  return new Uint8Array(0);
+}
+
+function decodeMediaTrack(data: Uint8Array, start: number, end: number): MediaTrackPayload {
+  let offset = start;
+  let title = '';
+  let artist = '';
+  let album = '';
+  let artUrl = '';
+  let positionUs = 0;
+  let durationUs = 0;
+
+  while (offset < end) {
+    const tag = data[offset++];
+    const fn = tag >> 3;
+    const wt = tag & 0x07;
+
+    if (wt === 0) {
+      let val = 0;
+      let s = 0;
+      while (offset < end) {
+        const b = data[offset++];
+        val += (b & 0x7f) * Math.pow(2, s);
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 5) positionUs = val;
+      else if (fn === 6) durationUs = val;
+    } else if (wt === 2) {
+      let l = 0;
+      let s = 0;
+      while (offset < end) {
+        const b = data[offset++];
+        l |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      const str = textDecoder.decode(data.subarray(offset, offset + l));
+      offset += l;
+      if (fn === 1) title = str;
+      else if (fn === 2) artist = str;
+      else if (fn === 3) album = str;
+      else if (fn === 4) artUrl = str;
+    } else {
+      break;
+    }
+  }
+
+  return { title, artist, album, artUrl, positionUs, durationUs };
+}
+
+function decodeMediaPlayer(data: Uint8Array, start: number, end: number): MediaPlayerInfoPayload {
+  let offset = start;
+  let playerId = '';
+  let name = '';
+  let playbackState = PlaybackState.Unknown;
+  let track: MediaTrackPayload | undefined;
+  let volume = 1.0;
+  let canControl = false;
+  let canGoNext = false;
+  let canGoPrevious = false;
+  let canPlay = false;
+  let canPause = false;
+  let canSeek = false;
+
+  while (offset < end) {
+    const tag = data[offset++];
+    const fn = tag >> 3;
+    const wt = tag & 0x07;
+
+    if (wt === 0) {
+      let val = 0;
+      let s = 0;
+      while (offset < end) {
+        const b = data[offset++];
+        val |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 3) playbackState = val as PlaybackState;
+      else if (fn === 6) canControl = val !== 0;
+      else if (fn === 7) canGoNext = val !== 0;
+      else if (fn === 8) canGoPrevious = val !== 0;
+      else if (fn === 9) canPlay = val !== 0;
+      else if (fn === 10) canPause = val !== 0;
+      else if (fn === 11) canSeek = val !== 0;
+    } else if (wt === 1) {
+      if (offset + 8 <= end) {
+        const view = new DataView(data.buffer, data.byteOffset + offset, 8);
+        const val = view.getFloat64(0, true);
+        offset += 8;
+        if (fn === 5) volume = val;
+      } else {
+        break;
+      }
+    } else if (wt === 2) {
+      let l = 0;
+      let s = 0;
+      while (offset < end) {
+        const b = data[offset++];
+        l |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 1) playerId = textDecoder.decode(data.subarray(offset, offset + l));
+      else if (fn === 2) name = textDecoder.decode(data.subarray(offset, offset + l));
+      else if (fn === 4) track = decodeMediaTrack(data, offset, offset + l);
+      offset += l;
+    } else {
+      break;
+    }
+  }
+
+  return {
+    playerId,
+    name,
+    playbackState,
+    track,
+    volume,
+    canControl,
+    canGoNext,
+    canGoPrevious,
+    canPlay,
+    canPause,
+    canSeek,
+  };
+}
+
+export function decodeListMediaPlayersResponse(data: Uint8Array): ListMediaPlayersResponsePayload {
+  let offset = 0;
+  const players: MediaPlayerInfoPayload[] = [];
+  let activePlayerId = '';
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fn = tag >> 3;
+    const wt = tag & 0x07;
+
+    if (wt === 2) {
+      let l = 0;
+      let s = 0;
+      while (offset < data.byteLength) {
+        const b = data[offset++];
+        l |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 1) {
+        players.push(decodeMediaPlayer(data, offset, offset + l));
+      } else if (fn === 2) {
+        activePlayerId = textDecoder.decode(data.subarray(offset, offset + l));
+      }
+      offset += l;
+    } else {
+      break;
+    }
+  }
+
+  return { players, activePlayerId };
+}
+
+export function encodeMediaControlRequest(req: MediaControlRequestPayload): Uint8Array {
+  const parts: Uint8Array[] = [
+    encodeStringField(1, req.playerId),
+    encodeUintField(2, req.action),
+  ];
+  if (req.seekOffsetUs !== undefined) {
+    parts.push(encodeInt64Field(3, req.seekOffsetUs));
+  }
+  if (req.volume !== undefined) {
+    parts.push(encodeDoubleField(4, req.volume));
+  }
+  return concat(parts);
+}
+
+export function decodeMediaControlResponse(data: Uint8Array): MediaControlResponsePayload {
+  let offset = 0;
+  let success = false;
+  let message = '';
+  let player: MediaPlayerInfoPayload | undefined;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fn = tag >> 3;
+    const wt = tag & 0x07;
+
+    if (wt === 0) {
+      let val = 0;
+      let s = 0;
+      while (offset < data.byteLength) {
+        const b = data[offset++];
+        val |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 1) success = val !== 0;
+    } else if (wt === 2) {
+      let l = 0;
+      let s = 0;
+      while (offset < data.byteLength) {
+        const b = data[offset++];
+        l |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 2) message = textDecoder.decode(data.subarray(offset, offset + l));
+      else if (fn === 3) player = decodeMediaPlayer(data, offset, offset + l);
+      offset += l;
+    } else {
+      break;
+    }
+  }
+
+  return { success, message, player };
+}
+
+export function decodeMediaStateChangeEvent(data: Uint8Array): MediaStateChangeEventPayload {
+  let offset = 0;
+  let player: MediaPlayerInfoPayload | undefined;
+  let isActive = false;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fn = tag >> 3;
+    const wt = tag & 0x07;
+
+    if (wt === 0) {
+      let val = 0;
+      let s = 0;
+      while (offset < data.byteLength) {
+        const b = data[offset++];
+        val |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 2) isActive = val !== 0;
+    } else if (wt === 2) {
+      let l = 0;
+      let s = 0;
+      while (offset < data.byteLength) {
+        const b = data[offset++];
+        l |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 1) player = decodeMediaPlayer(data, offset, offset + l);
+      offset += l;
+    } else {
+      break;
+    }
+  }
+
+  return { player, isActive };
+}
+
+export function encodeListNotificationsRequest(): Uint8Array {
+  return new Uint8Array(0);
+}
+
+function decodeNotification(data: Uint8Array, start: number, end: number): NotificationPayload {
+  let offset = start;
+  let id = '';
+  let appName = '';
+  let title = '';
+  let body = '';
+  let icon = '';
+  let image = '';
+  let timestamp = 0;
+  let urgency = NotificationUrgency.Normal;
+  const actions: NotificationActionPayload[] = [];
+  let category = '';
+
+  while (offset < end) {
+    const tag = data[offset++];
+    const fn = tag >> 3;
+    const wt = tag & 0x07;
+
+    if (wt === 0) {
+      let val = 0;
+      let s = 0;
+      while (offset < end) {
+        const b = data[offset++];
+        val += (b & 0x7f) * Math.pow(2, s);
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 7) timestamp = val;
+      else if (fn === 8) urgency = val as NotificationUrgency;
+    } else if (wt === 2) {
+      let l = 0;
+      let s = 0;
+      while (offset < end) {
+        const b = data[offset++];
+        l |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      const str = textDecoder.decode(data.subarray(offset, offset + l));
+      if (fn === 1) id = str;
+      else if (fn === 2) appName = str;
+      else if (fn === 3) title = str;
+      else if (fn === 4) body = str;
+      else if (fn === 5) icon = str;
+      else if (fn === 6) image = str;
+      else if (fn === 9) {
+        let actionKey = '';
+        let actionLabel = '';
+        let aOff = offset;
+        const aEnd = offset + l;
+        while (aOff < aEnd) {
+          const aTag = data[aOff++];
+          const aFn = aTag >> 3;
+          if ((aTag & 0x07) === 2) {
+            let al = 0;
+            let as = 0;
+            while (aOff < aEnd) {
+              const ab = data[aOff++];
+              al |= (ab & 0x7f) << as;
+              if ((ab & 0x80) === 0) break;
+              as += 7;
+            }
+            const aStr = textDecoder.decode(data.subarray(aOff, aOff + al));
+            if (aFn === 1) actionKey = aStr;
+            else if (aFn === 2) actionLabel = aStr;
+            aOff += al;
+          }
+        }
+        actions.push({ key: actionKey, label: actionLabel });
+      } else if (fn === 10) category = str;
+      offset += l;
+    } else {
+      break;
+    }
+  }
+
+  return { id, appName, title, body, icon, image, timestamp, urgency, actions, category };
+}
+
+export function decodeListNotificationsResponse(data: Uint8Array): ListNotificationsResponsePayload {
+  let offset = 0;
+  const notifications: NotificationPayload[] = [];
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fn = tag >> 3;
+    const wt = tag & 0x07;
+
+    if (wt === 2) {
+      let l = 0;
+      let s = 0;
+      while (offset < data.byteLength) {
+        const b = data[offset++];
+        l |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 1) {
+        notifications.push(decodeNotification(data, offset, offset + l));
+      }
+      offset += l;
+    } else {
+      break;
+    }
+  }
+
+  return { notifications };
+}
+
+export function decodeNotificationEvent(data: Uint8Array): NotificationEventPayload {
+  let offset = 0;
+  let notification: NotificationPayload | undefined;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fn = tag >> 3;
+    const wt = tag & 0x07;
+
+    if (wt === 2) {
+      let l = 0;
+      let s = 0;
+      while (offset < data.byteLength) {
+        const b = data[offset++];
+        l |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 1) {
+        notification = decodeNotification(data, offset, offset + l);
+      }
+      offset += l;
+    } else {
+      break;
+    }
+  }
+
+  return { notification };
+}
+
+export function encodeCloseNotificationRequest(id: string): Uint8Array {
+  return encodeStringField(1, id);
+}
+
+export function decodeCloseNotificationResponse(data: Uint8Array): CloseNotificationResponsePayload {
+  let offset = 0;
+  let success = false;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fn = tag >> 3;
+    const wt = tag & 0x07;
+
+    if (wt === 0) {
+      let val = 0;
+      let s = 0;
+      while (offset < data.byteLength) {
+        const b = data[offset++];
+        val |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 1) success = val !== 0;
+    } else {
+      break;
+    }
+  }
+
+  return { success };
+}
+
+export function encodeInvokeNotificationActionRequest(id: string, actionKey: string): Uint8Array {
+  return concat([encodeStringField(1, id), encodeStringField(2, actionKey)]);
+}
+
+export function decodeInvokeNotificationActionResponse(data: Uint8Array): InvokeNotificationActionResponsePayload {
+  let offset = 0;
+  let success = false;
+
+  while (offset < data.byteLength) {
+    const tag = data[offset++];
+    const fn = tag >> 3;
+    const wt = tag & 0x07;
+
+    if (wt === 0) {
+      let val = 0;
+      let s = 0;
+      while (offset < data.byteLength) {
+        const b = data[offset++];
+        val |= (b & 0x7f) << s;
+        if ((b & 0x80) === 0) break;
+        s += 7;
+      }
+      if (fn === 1) success = val !== 0;
+    } else {
+      break;
+    }
+  }
+
+  return { success };
+}
+

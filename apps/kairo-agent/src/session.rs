@@ -5,24 +5,31 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
+use kairo_bridge::PlatformBridge;
 use kairo_common::KairoId;
+use kairo_core::{AuthContext, CoreConfig, ExecutionTarget, KairoCore};
+use kairo_discovery;
 use kairo_protocol::v1::{
-    AttachPtyRequest, AttachPtyResponse, ClosePtyRequest, CloseSurfaceRequest,
-    CloseSurfaceResponse, ConfigureSurfaceRequest, ConfigureSurfaceResponse, ContainerAction,
-    ContainerLogsRequest, CreatePtyRequest, CreatePtyResponse, ErrorCode, FocusSurfaceRequest,
-    FocusSurfaceResponse, GetGpuInfoRequest, GetMetricsRequest, GetMetricsResponse,
-    HandshakeAck, HandshakeInit, KairoError, KillProcessRequest, LaunchAppRequest, ListAppsRequest,
-    ListAppsResponse, ListContainersRequest, ListDirectoryRequest, ListProcessesRequest,
-    ListProcessesResponse, ListPtysRequest, ListPtysResponse, ListServicesRequest,
-    ListSurfacesRequest, ListSurfacesResponse, ManageContainerRequest, ManageServiceRequest,
-    PtyInput, PtyOutput, ReadFileRequest, ResizePtyRequest, ServiceAction, StartGpuStreamRequest,
-    StopGpuStreamRequest, StopGpuStreamResponse, SurfaceInputEvent, WatchRequest, WatchResponse,
-    WriteFileRequest,
+    AttachPtyRequest, AttachPtyResponse, CloseNotificationRequest, CloseNotificationResponse,
+    ClosePtyRequest, CloseSurfaceRequest, CloseSurfaceResponse, ConfigureSurfaceRequest,
+    ConfigureSurfaceResponse, ContainerAction, ContainerLogsRequest, CreatePtyRequest,
+    CreatePtyResponse, ErrorCode, FocusSurfaceRequest, FocusSurfaceResponse, GetGpuInfoRequest,
+    GetMetricsRequest, GetMetricsResponse, HandshakeAck, HandshakeInit, InstallPackagesRequest,
+    InstallPackagesResponse, InvokeNotificationActionRequest, InvokeNotificationActionResponse,
+    KairoError, KillProcessRequest, LaunchAppRequest, ListAppsRequest, ListAppsResponse,
+    ListContainersRequest, ListDirectoryRequest, ListNotificationsResponse, ListPackagesRequest,
+    ListPackagesResponse, ListProcessesRequest, ListProcessesResponse, ListPtysRequest,
+    ListPtysResponse, ListServicesRequest, ListServicesResponse, ListSurfacesRequest,
+    ListSurfacesResponse, ManageContainerRequest, ManageServiceRequest, ManageServiceResponse,
+    MediaControlRequest, MediaControlResponse, PtyInput, PtyOutput, ReadFileRequest,
+    RemovePackagesRequest, RemovePackagesResponse, ResizePtyRequest, ServiceAction,
+    StartGpuStreamRequest, StopGpuStreamRequest, StopGpuStreamResponse, SurfaceInputEvent,
+    WatchRequest, WatchResponse, WriteFileRequest,
 };
 use kairo_protocol::{KairoMessage, MessageKind, Opcode, ProtocolError};
 use prost::Message as ProstMessage;
 use thiserror::Error;
-use tokio::sync::{mpsc, Mutex, Notify};
+use tokio::sync::{Mutex, Notify, mpsc};
 use tokio::time::timeout;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
@@ -32,7 +39,9 @@ use crate::app_manager::AppManager;
 use crate::config::AgentConfig;
 use crate::fs::{FilesystemHandler, FsError};
 use crate::gpu::{GpuError, GpuManager};
+use crate::media::MediaManager;
 use crate::metrics::MetricsCollector;
+use crate::notification::NotificationManager;
 use crate::process::ProcessManager;
 use crate::pty::{PtyError, PtyManager};
 use crate::system::{SystemError, SystemManager};
@@ -116,8 +125,12 @@ pub struct Session {
     metrics: Arc<MetricsCollector>,
     process: Arc<ProcessManager>,
     system: Arc<SystemManager>,
+    bridge: Arc<PlatformBridge>,
+    core: Arc<KairoCore>,
     app: Arc<AppManager>,
     gpu: Arc<GpuManager>,
+    media: Arc<MediaManager>,
+    notification: Arc<NotificationManager>,
     watcher: Option<ActiveWatcher>,
 }
 
@@ -129,6 +142,8 @@ impl Session {
             pty,
             Arc::new(AppManager::new()),
             Arc::new(GpuManager::new()),
+            Arc::new(MediaManager::new()),
+            Arc::new(NotificationManager::new()),
         )
     }
 
@@ -138,8 +153,12 @@ impl Session {
         pty: Arc<PtyManager>,
         app: Arc<AppManager>,
         gpu: Arc<GpuManager>,
+        media: Arc<MediaManager>,
+        notification: Arc<NotificationManager>,
     ) -> Self {
-        let fs_root = if cfg!(windows) {
+        let fs_root = if !config.data_dir.is_empty() {
+            config.data_dir.clone()
+        } else if cfg!(windows) {
             std::env::var("SystemDrive")
                 .map(|d| format!("{d}\\"))
                 .unwrap_or_else(|_| "C:\\".to_string())
@@ -165,6 +184,16 @@ impl Session {
         let metrics = Arc::new(MetricsCollector::new());
         let process = Arc::new(ProcessManager::new());
         let system = Arc::new(SystemManager::new());
+        let profile = kairo_discovery::discover();
+        let bridge = Arc::new(PlatformBridge::from_profile(&profile));
+        let core = Arc::new(KairoCore::new(
+            bridge.clone(),
+            profile,
+            CoreConfig {
+                data_dir: config.data_dir.clone(),
+                audit_capacity: 1000,
+            },
+        ));
         Self {
             session_id: KairoId::new(),
             config,
@@ -174,8 +203,12 @@ impl Session {
             metrics,
             process,
             system,
+            bridge,
+            core,
             app,
             gpu,
+            media,
+            notification,
             watcher: None,
         }
     }
@@ -221,7 +254,8 @@ impl Session {
 
         let (mut ws_tx, mut ws_rx) = stream.split();
         let (high_tx, mut high_rx) = mpsc::channel::<WsMessage>(512);
-        let latest_frames: Arc<Mutex<HashMap<String, WsMessage>>> = Arc::new(Mutex::new(HashMap::new()));
+        let latest_frames: Arc<Mutex<HashMap<String, WsMessage>>> =
+            Arc::new(Mutex::new(HashMap::new()));
         let frame_notify = Arc::new(Notify::new());
 
         let pending_frames_writer = latest_frames.clone();
@@ -273,7 +307,46 @@ impl Session {
         });
 
         // Attach this session to the AppManager event stream
-        self.app.attach_session(high_tx.clone(), latest_frames.clone(), frame_notify.clone());
+        self.app
+            .attach_session(high_tx.clone(), latest_frames.clone(), frame_notify.clone());
+
+        let mut media_rx = self.media.subscribe();
+        let high_tx_media = high_tx.clone();
+        let media_handle = tokio::spawn(async move {
+            while let Ok(event) = media_rx.recv().await {
+                let mut buf = Vec::new();
+                if event.encode(&mut buf).is_ok() {
+                    let msg = KairoMessage::with_opcode(
+                        MessageKind::Event,
+                        Opcode::MediaStateEvent,
+                        0,
+                        Bytes::from(buf),
+                    );
+                    if let Ok(encoded) = msg.encode() {
+                        let _ = high_tx_media.send(WsMessage::Binary(encoded)).await;
+                    }
+                }
+            }
+        });
+
+        let mut notif_rx = self.notification.subscribe();
+        let high_tx_notif = high_tx.clone();
+        let notif_handle = tokio::spawn(async move {
+            while let Ok(event) = notif_rx.recv().await {
+                let mut buf = Vec::new();
+                if event.encode(&mut buf).is_ok() {
+                    let msg = KairoMessage::with_opcode(
+                        MessageKind::Event,
+                        Opcode::NotificationEvent,
+                        0,
+                        Bytes::from(buf),
+                    );
+                    if let Ok(encoded) = msg.encode() {
+                        let _ = high_tx_notif.send(WsMessage::Binary(encoded)).await;
+                    }
+                }
+            }
+        });
 
         while let Some(msg_res) = ws_rx.next().await {
             let ws_msg = msg_res.map_err(|e| SessionError::ConnectionClosed(e.to_string()))?;
@@ -295,7 +368,9 @@ impl Session {
 
         self.state = SessionState::Terminated;
         self.watcher = None;
-        drop(high_tx);
+        media_handle.abort();
+        notif_handle.abort();
+        writer_handle.abort();
         let _ = writer_handle.await;
 
         Ok(())
@@ -364,6 +439,7 @@ impl Session {
                     authenticated: false,
                     error_message: "authentication failed: invalid or missing auth token"
                         .to_string(),
+                    system_profile: None,
                 };
                 let mut payload_buf = Vec::new();
                 let _ = ack.encode(&mut payload_buf);
@@ -382,6 +458,10 @@ impl Session {
             .map(|h| format!("home:{h}"))
             .unwrap_or_else(|_| "home:/".to_string());
 
+        let mut system_profile = kairo_discovery::discover();
+        system_profile.native_adapter_available =
+            self.bridge.adapter().name() != "unsupported-platform";
+
         let ack = HandshakeAck {
             protocol_version: 1,
             agent_id: self.config.agent_id.to_string(),
@@ -393,12 +473,19 @@ impl Session {
                 "metrics.v1".to_string(),
                 "docker.v1".to_string(),
                 "system.v1".to_string(),
+                "bridge.v1".to_string(),
+                "package.v1".to_string(),
+                "core.v1".to_string(),
                 "app.v1".to_string(),
                 "gpu.v1".to_string(),
+                "media.v1".to_string(),
+                "notification.v1".to_string(),
+                "discovery.v1".to_string(),
                 home_capability,
             ],
             authenticated: true,
             error_message: String::new(),
+            system_profile: Some(system_profile),
         };
 
         let mut payload_buf = Vec::new();
@@ -769,7 +856,21 @@ impl Session {
             }
             Opcode::SystemListServices => {
                 let _req = ListServicesRequest::decode(message.payload)?;
-                let resp = self.system.list_services();
+                let caps = self.core.system().capabilities();
+                let services = match self.core.services().list_services(ExecutionTarget::Host) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        warn!("Failed to list services: {e}");
+                        Vec::new()
+                    }
+                };
+                let is_systemd = caps.service_manager_name == "systemd" && caps.can_manage_services;
+                let resp = ListServicesResponse {
+                    services,
+                    systemd_available: is_systemd,
+                    service_manager_available: caps.can_manage_services,
+                    manager_name: caps.service_manager_name,
+                };
                 let mut buf = Vec::new();
                 resp.encode(&mut buf)?;
                 let msg = KairoMessage::with_opcode(
@@ -784,12 +885,127 @@ impl Session {
                 let req = ManageServiceRequest::decode(message.payload)?;
                 let action =
                     ServiceAction::try_from(req.action).unwrap_or(ServiceAction::Unspecified);
-                let resp = self.system.manage_service(&req.service_name, action)?;
+                let auth = AuthContext::new(
+                    self.session_id.to_string(),
+                    self.core.system().profile().is_elevated,
+                    self.core.system().profile().has_sudo,
+                )
+                .with_confirmed(true);
+                let resp = match self.core.services().manage_service(
+                    &req.service_name,
+                    action,
+                    ExecutionTarget::Host,
+                    &auth,
+                ) {
+                    Ok(resp) => resp,
+                    Err(e) => ManageServiceResponse {
+                        success: false,
+                        message: e.to_string(),
+                    },
+                };
                 let mut buf = Vec::new();
                 resp.encode(&mut buf)?;
                 let msg = KairoMessage::with_opcode(
                     MessageKind::Response,
                     Opcode::SystemManageService,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::PackageList => {
+                let req = ListPackagesRequest::decode(message.payload)?;
+                let caps = self.core.system().capabilities();
+                let filter = if req.filter.trim().is_empty() {
+                    None
+                } else {
+                    Some(req.filter.as_str())
+                };
+                let packages = match self
+                    .core
+                    .packages()
+                    .list_installed(filter, ExecutionTarget::Host)
+                {
+                    Ok(pkgs) => pkgs,
+                    Err(e) => {
+                        warn!("Failed to list packages: {e}");
+                        Vec::new()
+                    }
+                };
+                let resp = ListPackagesResponse {
+                    packages,
+                    package_manager_available: caps.can_query_packages,
+                    manager_name: caps.package_manager_name,
+                };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::PackageList,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::PackageInstall => {
+                let req = InstallPackagesRequest::decode(message.payload)?;
+                let names: Vec<&str> = req.package_names.iter().map(|s| s.as_str()).collect();
+                let auth = AuthContext::new(
+                    self.session_id.to_string(),
+                    self.core.system().profile().is_elevated,
+                    self.core.system().profile().has_sudo,
+                )
+                .with_confirmed(true);
+                let resp = match self
+                    .core
+                    .packages()
+                    .install(&names, ExecutionTarget::Host, &auth)
+                {
+                    Ok(resp) => resp,
+                    Err(e) => InstallPackagesResponse {
+                        success: false,
+                        message: e.to_string(),
+                        installed_packages: Vec::new(),
+                        failed_packages: req.package_names,
+                    },
+                };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::PackageInstall,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::PackageRemove => {
+                let req = RemovePackagesRequest::decode(message.payload)?;
+                let names: Vec<&str> = req.package_names.iter().map(|s| s.as_str()).collect();
+                let auth = AuthContext::new(
+                    self.session_id.to_string(),
+                    self.core.system().profile().is_elevated,
+                    self.core.system().profile().has_sudo,
+                )
+                .with_confirmed(true);
+                let resp = match self
+                    .core
+                    .packages()
+                    .remove(&names, ExecutionTarget::Host, &auth)
+                {
+                    Ok(resp) => resp,
+                    Err(e) => RemovePackagesResponse {
+                        success: false,
+                        message: e.to_string(),
+                        removed_packages: Vec::new(),
+                        failed_packages: req.package_names,
+                    },
+                };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::PackageRemove,
                     request_id,
                     Bytes::from(buf),
                 );
@@ -987,6 +1203,83 @@ impl Session {
                     );
                     self.send_frame(out_tx, msg).await?;
                 }
+            }
+            Opcode::MediaGetPlayers => {
+                let resp = self.media.get_players().await;
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::MediaGetPlayers,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::MediaControl => {
+                let req = MediaControlRequest::decode(message.payload)?;
+                let resp = self
+                    .media
+                    .control(req)
+                    .await
+                    .unwrap_or_else(|e| MediaControlResponse {
+                        success: false,
+                        message: e.to_string(),
+                        player: None,
+                    });
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::MediaControl,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::NotificationList => {
+                let notifications = self.notification.list().await;
+                let resp = ListNotificationsResponse { notifications };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::NotificationList,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::NotificationClose => {
+                let req = CloseNotificationRequest::decode(message.payload)?;
+                let success = self.notification.close(&req.id).await;
+                let resp = CloseNotificationResponse { success };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::NotificationClose,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
+            }
+            Opcode::NotificationAction => {
+                let req = InvokeNotificationActionRequest::decode(message.payload)?;
+                let success = self
+                    .notification
+                    .invoke_action(&req.id, &req.action_key)
+                    .await;
+                let resp = InvokeNotificationActionResponse { success };
+                let mut buf = Vec::new();
+                resp.encode(&mut buf)?;
+                let msg = KairoMessage::with_opcode(
+                    MessageKind::Response,
+                    Opcode::NotificationAction,
+                    request_id,
+                    Bytes::from(buf),
+                );
+                self.send_frame(out_tx, msg).await?;
             }
             _ => {
                 warn!(?opcode, "unsupported request opcode");

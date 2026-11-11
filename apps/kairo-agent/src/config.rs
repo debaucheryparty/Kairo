@@ -1,8 +1,8 @@
+use kairo_common::KairoId;
+use serde::Deserialize;
 use std::fmt;
 use std::fs;
 use std::path::Path;
-use kairo_common::KairoId;
-use serde::Deserialize;
 
 #[derive(Clone, Deserialize)]
 pub struct AgentConfig {
@@ -75,11 +75,17 @@ impl fmt::Debug for AgentConfig {
             .field("bind_address", &self.bind_address)
             .field("data_dir", &self.data_dir)
             .field("agent_id", &self.agent_id)
-            .field("auth_token", &self.auth_token.as_ref().map(|_| "[REDACTED]"))
+            .field(
+                "auth_token",
+                &self.auth_token.as_ref().map(|_| "[REDACTED]"),
+            )
             .field("tls_cert", &self.tls_cert)
             .field("tls_key", &self.tls_key.as_ref().map(|_| "[REDACTED]"))
             .field("tunnel_url", &self.tunnel_url)
-            .field("tunnel_token", &self.tunnel_token.as_ref().map(|_| "[REDACTED]"))
+            .field(
+                "tunnel_token",
+                &self.tunnel_token.as_ref().map(|_| "[REDACTED]"),
+            )
             .finish()
     }
 }

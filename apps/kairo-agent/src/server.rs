@@ -9,6 +9,8 @@ use tracing::{error, info, warn};
 use crate::app_manager::AppManager;
 use crate::config::AgentConfig;
 use crate::gpu::GpuManager;
+use crate::media::MediaManager;
+use crate::notification::NotificationManager;
 use crate::pty::PtyManager;
 use crate::session::{Session, SessionError};
 use kairo_transport::tunnel::{ReverseTunnelClient, TunnelConfig, VirtualStream};
@@ -71,6 +73,8 @@ pub struct Server {
     pty: Arc<PtyManager>,
     app: Arc<AppManager>,
     gpu: Arc<GpuManager>,
+    media: Arc<MediaManager>,
+    notification: Arc<NotificationManager>,
     limiter: Arc<RateLimiter>,
 }
 
@@ -85,6 +89,8 @@ impl Server {
             pty: Arc::new(PtyManager::new()),
             app: Arc::new(AppManager::new()),
             gpu: Arc::new(GpuManager::new()),
+            media: Arc::new(MediaManager::new()),
+            notification: Arc::new(NotificationManager::new()),
             limiter: Arc::new(RateLimiter::new(
                 5,
                 Duration::from_secs(60),
@@ -103,7 +109,8 @@ impl Server {
             "kairo-agent listener started"
         );
 
-        let (tunnel_stream_tx, mut tunnel_stream_rx) = tokio::sync::mpsc::channel::<VirtualStream>(32);
+        let (tunnel_stream_tx, mut tunnel_stream_rx) =
+            tokio::sync::mpsc::channel::<VirtualStream>(32);
 
         if let Some(tunnel_url) = &self.config.tunnel_url {
             let token = self
@@ -112,7 +119,8 @@ impl Server {
                 .clone()
                 .or_else(|| self.config.auth_token.clone())
                 .unwrap_or_default();
-            let hostname = sysinfo::System::host_name().unwrap_or_else(|| "kairo-agent".to_string());
+            let hostname =
+                sysinfo::System::host_name().unwrap_or_else(|| "kairo-agent".to_string());
             let tunnel_cfg = TunnelConfig {
                 relay_url: tunnel_url.clone(),
                 agent_id: self.config.agent_id.to_string(),
@@ -155,6 +163,8 @@ impl Server {
                     let pty = Arc::clone(&self.pty);
                     let app = Arc::clone(&self.app);
                     let gpu = Arc::clone(&self.gpu);
+                    let media = Arc::clone(&self.media);
+                    let notification = Arc::clone(&self.notification);
                     let limiter = Arc::clone(&self.limiter);
                     tokio::spawn(async move {
                         let ws_stream = match accept_async(tcp_stream).await {
@@ -167,7 +177,7 @@ impl Server {
 
                         info!(peer = %peer_addr, "websocket connection established");
 
-                        let mut session = Session::with_components(config, pty, app, gpu);
+                        let mut session = Session::with_components(config, pty, app, gpu, media, notification);
                         match session.run(ws_stream).await {
                             Ok(()) => {
                                 limiter.record_success(&peer_addr.ip());
@@ -193,6 +203,8 @@ impl Server {
                     let pty = Arc::clone(&self.pty);
                     let app = Arc::clone(&self.app);
                     let gpu = Arc::clone(&self.gpu);
+                    let media = Arc::clone(&self.media);
+                    let notification = Arc::clone(&self.notification);
 
                     tokio::spawn(async move {
                         let (v_sender, mut v_rx) = vstream.split();
@@ -235,7 +247,7 @@ impl Server {
                             }
                         };
 
-                        let mut session = Session::with_components(config, pty, app, gpu);
+                        let mut session = Session::with_components(config, pty, app, gpu, media, notification);
                         let _ = session.run(ws_stream).await;
                         pipe_to_vstream.abort();
                         pipe_from_vstream.abort();

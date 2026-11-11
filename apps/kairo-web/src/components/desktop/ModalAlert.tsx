@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { M3Button } from "@/src/components/m3/M3Button";
 
 type ModalAlertProps = {
   open: boolean;
@@ -15,6 +16,13 @@ type ModalAlertProps = {
   children?: ReactNode;
 };
 
+/**
+ * Official Material 3 Dialog Component
+ * Source: https://m3.material.io/components/dialogs/specs
+ * - Shape: Extra Large (28dp radius)
+ * - Container: surfaceContainerHigh
+ * - Buttons: M3 Filled/Tonal/Text
+ */
 export function ModalAlert({
   open,
   title,
@@ -33,66 +41,62 @@ export function ModalAlert({
     <div
       role="alertdialog"
       aria-modal="true"
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/25 backdrop-blur-[3px] select-none animate-fade-in"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-[4px] select-none animate-fade-in"
       onClick={onCancel}
     >
       <div
-        className="w-[280px] rounded-[20px] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur-3xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-[#242428]/92 text-neutral-900 dark:text-neutral-100 animate-scale-in"
+        className="w-[320px] rounded-[28px] p-6 shadow-[0_24px_60px_rgba(0,0,0,0.55)] border border-white/10 bg-[#2b2930] text-[#e6e0e9] animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-center text-[13px] font-semibold tracking-tight mb-1.5">
-          {title}
-        </h3>
-        <p className="text-center text-[11px] opacity-70 mb-4 leading-relaxed">
+        <div className="flex items-center gap-3 mb-3">
+          <span className="material-symbol text-[24px] text-[#cfbcff]">
+            {confirmDestructive ? "warning" : "info"}
+          </span>
+          <h3 className="text-base font-bold tracking-tight text-white">
+            {title}
+          </h3>
+        </div>
+
+        <p className="text-xs text-white/70 mb-5 leading-relaxed">
           {message}
         </p>
 
         {children}
 
         {layout === "stacked" ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             {onConfirm && (
-              <button
-                type="button"
+              <M3Button
+                variant="filled"
                 onClick={onConfirm}
-                className={`w-full rounded-full py-1.5 text-[12px] font-medium transition-colors shadow-sm outline-none ${
-                  confirmDestructive
-                    ? "bg-rose-500/15 hover:bg-rose-500/25 text-rose-500 dark:text-rose-400"
-                    : "bg-[#007aff] hover:bg-[#0071eb] text-white"
-                }`}
+                className={confirmDestructive ? "!bg-rose-500 hover:!bg-rose-600 !text-white" : ""}
               >
                 {confirmLabel}
-              </button>
+              </M3Button>
             )}
-            <button
-              type="button"
+            <M3Button
+              variant="tonal"
               onClick={onCancel}
-              className="w-full rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 py-1.5 text-[12px] font-medium text-neutral-800 dark:text-neutral-200 transition-colors outline-none"
             >
               {cancelLabel}
-            </button>
+            </M3Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2.5">
-            <button
-              type="button"
+          <div className="flex items-center justify-end gap-2.5 pt-2">
+            <M3Button
+              variant="text"
               onClick={onCancel}
-              className="flex-1 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 py-1.5 text-[12px] font-medium text-neutral-800 dark:text-neutral-200 transition-colors outline-none"
             >
               {cancelLabel}
-            </button>
+            </M3Button>
             {onConfirm && (
-              <button
-                type="button"
+              <M3Button
+                variant="filled"
                 onClick={onConfirm}
-                className={`flex-1 rounded-full py-1.5 text-[12px] font-medium transition-colors shadow-sm outline-none ${
-                  confirmDestructive
-                    ? "bg-rose-500/15 hover:bg-rose-500/25 text-rose-500 dark:text-rose-400"
-                    : "bg-[#007aff] hover:bg-[#0071eb] text-white"
-                }`}
+                className={confirmDestructive ? "!bg-rose-500 hover:!bg-rose-600 !text-white" : ""}
               >
                 {confirmLabel}
-              </button>
+              </M3Button>
             )}
           </div>
         )}
@@ -100,3 +104,4 @@ export function ModalAlert({
     </div>
   );
 }
+

@@ -195,6 +195,8 @@ impl SystemManager {
                 ListServicesResponse {
                     services,
                     systemd_available: true,
+                    service_manager_available: true,
+                    manager_name: "systemd".to_string(),
                 }
             }
             _ => {
@@ -202,6 +204,8 @@ impl SystemManager {
                 ListServicesResponse {
                     services: Vec::new(),
                     systemd_available: false,
+                    service_manager_available: false,
+                    manager_name: String::new(),
                 }
             }
         }

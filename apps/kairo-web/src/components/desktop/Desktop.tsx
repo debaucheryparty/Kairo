@@ -53,8 +53,13 @@ function DesktopShell() {
 
   useEffect(() => {
     const onToggle = () => setSpotlightOpen((prev) => !prev);
+    const onLeave = () => setLogoutAlertOpen(true);
     window.addEventListener("kairo:toggle-spotlight", onToggle);
-    return () => window.removeEventListener("kairo:toggle-spotlight", onToggle);
+    window.addEventListener("kairo:leave-server", onLeave);
+    return () => {
+      window.removeEventListener("kairo:toggle-spotlight", onToggle);
+      window.removeEventListener("kairo:leave-server", onLeave);
+    };
   }, []);
 
   useEffect(() => {
@@ -266,18 +271,17 @@ function DesktopShell() {
       />
       <TopBar />
       <div
-        className={`absolute inset-x-0 top-8 bottom-0 ${fullscreen ? "z-40" : "z-20"}`}
+        className={`absolute inset-x-0 top-[56px] bottom-0 ${fullscreen ? "z-40" : "z-20"}`}
         aria-label="Server desktop"
         role="application"
       >
         <WindowManager />
       </div>
-      {fullscreen ? null : (
-        <Dock
-          onComingSoon={showComingSoon}
-          onOpenSpotlight={() => setSpotlightOpen(true)}
-        />
-      )}
+      <Dock
+        fullscreen={fullscreen}
+        onComingSoon={showComingSoon}
+        onOpenSpotlight={() => setSpotlightOpen(true)}
+      />
       {menu ? (
         <DesktopContextMenu
           x={menu.x}

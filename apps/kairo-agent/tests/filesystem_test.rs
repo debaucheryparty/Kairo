@@ -8,7 +8,7 @@ use futures_util::{SinkExt, StreamExt};
 use kairo_agent::{AgentConfig, Session};
 use kairo_common::KairoId;
 use kairo_protocol::v1::{
-    FileEvent, HandshakeAck, HandshakeInit, ListDirectoryRequest, ListDirectoryResponse,
+    FileEvent, FileType, HandshakeAck, HandshakeInit, ListDirectoryRequest, ListDirectoryResponse,
     ReadFileRequest, ReadFileResponse, WatchRequest, WatchResponse, WriteFileRequest,
     WriteFileResponse,
 };
@@ -135,8 +135,14 @@ async fn test_filesystem_e2e_over_websocket() {
     };
     assert_eq!(list_resp_msg.kind, MessageKind::Response);
     let list_resp = ListDirectoryResponse::decode(list_resp_msg.payload).expect("decode list resp");
-    assert_eq!(list_resp.entries.len(), 1);
-    assert_eq!(list_resp.entries[0].path, "hello.txt");
+    // The session also creates the managed environment root under data_dir,
+    // so assert on the written file rather than an exact entry count.
+    let hello_entry = list_resp
+        .entries
+        .iter()
+        .find(|e| e.path == "hello.txt")
+        .expect("hello.txt present in listing");
+    assert_eq!(hello_entry.file_type, FileType::File as i32);
 
     let read_req = ReadFileRequest {
         path: "hello.txt".to_string(),

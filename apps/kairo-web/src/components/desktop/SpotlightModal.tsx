@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { Search, MoreHorizontal, X, Pin, Loader2, AlertCircle } from "lucide-react";
+import { Search, X, Pin, Loader2, AlertCircle, Sparkles, Terminal, Calculator, HelpCircle } from "lucide-react";
 import {
   BUILTIN_VPS_APPS,
   mergeVpsApplications,
@@ -9,10 +9,11 @@ import {
   APP_CATEGORIES,
   type AppCategory,
 } from "@/src/lib/api/applications";
-import { MacAppIcon } from "@/src/components/brand/MacAppIcon";
+import { AppIcon } from "@/src/components/brand/AppIcon";
 import { useWindowManager } from "@/src/components/window/window-context";
 import { useSession, useRuntimeClient } from "@/src/lib/session";
 import { useDockStore } from "@/src/lib/dock/dock-store";
+import { HyprSearchIcon, HyprAppsIcon } from "@/src/components/desktop/HyprIcons";
 import type { AppId } from "@/src/data/apps";
 
 interface SpotlightModalProps {
@@ -105,9 +106,17 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
       setLaunchingId(app.id);
       setError(null);
       try {
+        const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+        const effectiveDpr = Math.min(Math.max(dpr, 1), 2);
+        const args =
+          app.id.includes("chrome") || (app.exec && app.exec.includes("chrome"))
+            ? [`--force-device-scale-factor=${effectiveDpr}`]
+            : undefined;
+
         await runtimeClient.launchApplication({
           appId: app.id,
           exec: app.exec,
+          args,
         });
 
         onClose();
@@ -142,10 +151,10 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
         setSelectedIndex((prev) => (prev - 1 + filteredApps.length) % filteredApps.length);
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((prev) => Math.min(filteredApps.length - 1, prev + 6));
+        setSelectedIndex((prev) => Math.min(filteredApps.length - 1, prev + 4));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSelectedIndex((prev) => Math.max(0, prev - 6));
+        setSelectedIndex((prev) => Math.max(0, prev - 4));
       } else if (e.key === "Enter") {
         e.preventDefault();
         const selected = filteredApps[selectedIndex];
@@ -157,7 +166,7 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, filteredApps, selectedIndex, launchApp]);
+  }, [open, filteredApps, selectedIndex, launchApp, onClose]);
 
   if (!open) return null;
 
@@ -167,61 +176,67 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Spotlight Search"
-      className="fixed inset-0 z-[150] flex items-start justify-center pt-[10vh] sm:pt-[12vh] bg-black/35 backdrop-blur-[4px] select-none animate-fade-in"
+      aria-label="Application Launcher"
+      className="fixed inset-0 z-[150] flex items-start justify-center pt-[10vh] sm:pt-[12vh] bg-black/45 backdrop-blur-md select-none animate-hypr-pop"
       onClick={onClose}
     >
       <div
-        className="relative flex w-[700px] max-w-[94vw] max-h-[82vh] flex-col rounded-[24px] border border-white/20 dark:border-white/12 bg-[#1e1e24]/92 dark:bg-[#141418]/94 text-white shadow-[0_32px_100px_rgba(0,0,0,0.65)] backdrop-blur-3xl overflow-hidden animate-scale-in"
+        className="relative flex w-[720px] max-w-[94vw] max-h-[82vh] flex-col rounded-[28px] border border-white/12 bg-[#141318]/96 text-white shadow-[0_32px_100px_rgba(0,0,0,0.7)] backdrop-blur-3xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
-          <Search className="size-5 text-white/50 shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Spotlight Search"
-            className="flex-1 bg-transparent text-[17px] font-normal text-white placeholder-white/40 outline-none"
-          />
-          {launchingId && (
-            <div className="flex items-center gap-1.5 text-xs text-sky-400 shrink-0 font-medium">
-              <Loader2 className="size-3.5 animate-spin" />
-              <span>Launching...</span>
-            </div>
-          )}
-          {query ? (
-            <button
-              type="button"
-              onClick={() => {
-                setQuery("");
-                inputRef.current?.focus();
-              }}
-              className="rounded-full p-1 text-white/40 hover:text-white transition-colors"
-            >
-              <X className="size-4" />
-            </button>
-          ) : null}
-          <div className="flex items-center gap-2 text-white/40">
-            <button
-              type="button"
-              className="rounded-full p-1 hover:text-white hover:bg-white/10 transition-colors"
-              title="Options"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
+        {/* Search header with M3 Pill Container */}
+        <div className="p-4 border-b border-white/10">
+          <div className="flex items-center gap-3 px-4 py-2.5 rounded-full bg-white/[0.04] border border-white/10 focus-within:border-[var(--m3-primary)]/60 focus-within:ring-2 focus-within:ring-[var(--m3-primary)]/20 transition-all">
+            {query.startsWith(">") ? (
+              <Terminal className="size-5 text-[var(--m3-primary)] shrink-0 animate-hypr-pop" />
+            ) : query.startsWith("=") ? (
+              <Calculator className="size-5 text-emerald-400 shrink-0 animate-hypr-pop" />
+            ) : query.startsWith("?") ? (
+              <HelpCircle className="size-5 text-amber-400 shrink-0 animate-hypr-pop" />
+            ) : (
+              <HyprSearchIcon className="size-5 text-[var(--m3-primary)]/80 shrink-0" />
+            )}
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search, calculate or run (use > for shell, = for math, ? for search)..."
+              className="flex-1 bg-transparent text-[16px] font-medium text-white placeholder-white/40 outline-none"
+            />
+            {launchingId && (
+              <div className="flex items-center gap-1.5 text-xs text-[var(--m3-primary)] shrink-0 font-medium animate-pulse">
+                <Loader2 className="size-3.5 animate-spin" />
+                <span>Launching...</span>
+              </div>
+            )}
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  inputRef.current?.focus();
+                }}
+                className="rounded-full p-1 text-white/40 hover:text-white transition-colors"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+            <kbd className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/10 text-white/60">
+              ESC
+            </kbd>
           </div>
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 px-5 py-2.5 bg-red-500/15 border-b border-red-500/20 text-red-300 text-xs animate-fade-in">
-            <AlertCircle className="size-4 shrink-0 text-red-400" />
+          <div className="flex items-center gap-2 px-5 py-2.5 bg-rose-500/15 border-b border-rose-500/20 text-rose-300 text-xs animate-hypr-pop">
+            <AlertCircle className="size-4 shrink-0 text-rose-400" />
             <span className="truncate flex-1">{error}</span>
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 overflow-x-auto px-5 py-2.5 border-b border-white/8 scrollbar-none">
+        {/* Category Pills (Material 3) */}
+        <div className="flex items-center gap-2 overflow-x-auto px-5 py-2.5 border-b border-white/8 scrollbar-none">
           {APP_CATEGORIES.map((cat) => {
             const active = category === cat;
             return (
@@ -229,10 +244,10 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
                 key={cat}
                 type="button"
                 onClick={() => setCategory(cat)}
-                className={`rounded-full px-3 py-1 text-[12px] font-medium transition-all shrink-0 ${
+                className={`rounded-full px-3.5 py-1 text-xs font-semibold transition-all shrink-0 ${
                   active
-                    ? "bg-white/20 text-white shadow-sm border border-white/15"
-                    : "bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border border-transparent"
+                    ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-[0_0_12px_var(--m3-primary)]"
+                    : "bg-white/5 text-white/60 hover:text-white hover:bg-white/10"
                 }`}
               >
                 {cat}
@@ -241,45 +256,44 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
           })}
         </div>
 
+        {/* Apps Scroll Area */}
         <div className="flex-1 overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-white/15">
           {!query && category === "All" && (
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3 px-1">
-                <span className="text-[11px] font-medium tracking-wide uppercase text-white/40">
+                <span className="text-[11px] font-bold tracking-wider uppercase text-white/40">
                   Quick Access
                 </span>
-                <span className="text-[11px] text-white/30">
-                  {selectedServer?.hostname || "VPS"}
+                <span className="text-[11px] text-white/30 font-mono">
+                  {selectedServer?.hostname || "VPS Local"}
                 </span>
               </div>
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                {recentApps.map((app) => {
-                  return (
-                    <button
-                      key={`recent-${app.id}`}
-                      type="button"
-                      onClick={() => void launchApp(app)}
-                      className="group flex flex-col items-center rounded-2xl p-2.5 hover:bg-white/10 transition-all outline-none"
-                    >
-                      <div className="size-13 p-1 transition-transform group-hover:scale-105 group-active:scale-95 flex items-center justify-center">
-                        <MacAppIcon icon={app.icon} name={app.name} className="size-full" />
-                      </div>
-                      <span className="mt-2 text-center text-[12px] font-normal text-white/90 truncate w-full group-hover:text-white">
-                        {app.name}
-                      </span>
-                    </button>
-                  );
-                })}
+                {recentApps.map((app) => (
+                  <button
+                    key={`recent-${app.id}`}
+                    type="button"
+                    onClick={() => void launchApp(app)}
+                    className="group flex flex-col items-center rounded-2xl p-2.5 hover:bg-white/8 transition-all outline-none"
+                  >
+                    <div className="size-13 p-1 transition-transform group-hover:scale-110 group-active:scale-95 flex items-center justify-center">
+                      <AppIcon icon={app.icon} name={app.name} className="size-full" />
+                    </div>
+                    <span className="mt-2 text-center text-xs font-medium text-white/90 truncate w-full group-hover:text-white">
+                      {app.name}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
           <div>
             <div className="flex items-center justify-between mb-3 px-1">
-              <span className="text-[11px] font-medium tracking-wide uppercase text-white/40">
-                {query ? "Search Results" : "Installed VPS Applications"}
+              <span className="text-[11px] font-bold tracking-wider uppercase text-white/40">
+                {query ? "Search Results" : "Applications on VPS"}
               </span>
-              <span className="text-[11px] text-white/40">
+              <span className="text-[11px] text-white/40 font-mono">
                 {filteredApps.length} {filteredApps.length === 1 ? "app" : "apps"}
               </span>
             </div>
@@ -287,37 +301,37 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
             {filteredApps.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Search className="size-8 text-white/20 mb-2" />
-                <p className="text-[13px] text-white/60">
-                  No applications found on VPS matching &ldquo;{query}&rdquo;
+                <p className="text-sm text-white/60">
+                  No applications found matching &ldquo;{query}&rdquo;
                 </p>
-                <p className="text-[11px] text-white/40 mt-1">
-                  Try searching for bash, files, htop, python, or docker
+                <p className="text-xs text-white/40 mt-1">
+                  Try searching for Chrome, Text Editor, Terminal, GIMP, or Python
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 {filteredApps.map((app, index) => {
-                  const selected = index === selectedIndex;
+                  const isSelected = index === selectedIndex;
                   const pinned = isPinned(app.id);
                   return (
                     <button
                       key={app.id}
                       type="button"
                       onClick={() => void launchApp(app)}
-                      className={`group flex items-start gap-3 rounded-[16px] p-3 text-left transition-all outline-none border ${
+                      className={`group flex items-start gap-3 rounded-[20px] p-3 text-left transition-all outline-none border ${
                         launchingId === app.id
-                          ? "bg-sky-500/10 border-sky-500/25"
-                          : selected
-                          ? "bg-white/15 border-white/25 shadow-md"
-                          : "border-transparent hover:bg-white/8 hover:border-white/10"
+                          ? "bg-[var(--m3-primary)]/20 border-[var(--m3-primary)]/50"
+                          : isSelected
+                          ? "bg-[var(--m3-primary)]/12 border-[var(--m3-primary)]/55 shadow-[0_0_18px_-3px_var(--m3-primary)]"
+                          : "border-white/5 bg-white/[0.02] hover:bg-white/[0.06] hover:border-white/15"
                       }`}
                     >
                       <div className="size-11 shrink-0 p-0.5 transition-transform group-hover:scale-105 group-active:scale-95 flex items-center justify-center">
-                        <MacAppIcon icon={app.icon} name={app.name} className="size-full" />
+                        <AppIcon icon={app.icon} name={app.name} className="size-full" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
-                          <span className="text-[13px] font-medium text-white truncate group-hover:text-white">
+                          <span className="text-sm font-semibold text-white truncate group-hover:text-[#c4b5fd]">
                             {app.name}
                           </span>
                           <button
@@ -339,19 +353,30 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
                             }}
                             className={`rounded-md p-1 transition-all ${
                               pinned
-                                ? "text-sky-400 bg-sky-500/20 opacity-100"
+                                ? "text-[var(--m3-primary)] bg-[var(--m3-primary)]/20 opacity-100"
                                 : "text-white/40 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100"
                             }`}
                           >
                             <Pin className="size-3" />
                           </button>
                         </div>
-                        <p className="text-[11px] text-white/50 truncate mt-0.5 leading-snug">
+                        <p className="text-xs text-white/50 truncate mt-0.5 leading-snug">
                           {app.description}
                         </p>
-                        <span className="inline-block mt-1 text-[10px] text-white/35 font-mono">
-                          {app.exec}
-                        </span>
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <span className="text-[10px] font-mono text-white/40 truncate">
+                            {app.exec}
+                          </span>
+                          {app.builtinAppId ? (
+                            <span className="ml-auto text-[9px] px-1.5 py-0.2 rounded-full bg-white/10 text-white/60">
+                              Built-in
+                            </span>
+                          ) : (
+                            <span className="ml-auto text-[9px] px-1.5 py-0.2 rounded-full bg-[var(--m3-primary)]/20 text-[var(--m3-primary)] font-medium">
+                              VPS
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </button>
                   );
@@ -361,26 +386,27 @@ export function SpotlightModal({ open, onClose }: SpotlightModalProps) {
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-white/8 px-5 py-2.5 text-[11px] text-white/40 bg-black/20">
+        {/* Footer shortcuts */}
+        <div className="flex items-center justify-between border-t border-white/10 px-5 py-2.5 text-xs text-white/50 bg-black/30">
           <div className="flex items-center gap-3">
             <span>
-              <kbd className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/70">
-                ↑↓
+              <kbd className="rounded px-1.5 py-0.5 font-mono text-[10px] bg-white/10 text-white/80">
+                ↑↓←→
               </kbd>{" "}
               Navigate
             </span>
             <span>
-              <kbd className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/70">
+              <kbd className="rounded px-1.5 py-0.5 font-mono text-[10px] bg-white/10 text-white/80">
                 ↵
               </kbd>{" "}
-              Open
+              Launch
             </span>
           </div>
           <span>
-            <kbd className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/70">
+            <kbd className="rounded px-1.5 py-0.5 font-mono text-[10px] bg-white/10 text-white/80">
               ESC
             </kbd>{" "}
-            Close
+            Dismiss
           </span>
         </div>
       </div>

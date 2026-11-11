@@ -1,0 +1,19 @@
+[package]
+name = "kairo-bridge"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+kairo-protocol = { path = "../kairo-protocol" }
+kairo-discovery = { path = "../kairo-discovery" }
+sysinfo = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true
+

@@ -2,16 +2,18 @@ export const APP_IDS = [
   "dashboard",
   "files",
   "terminal",
+  "browser",
   "settings",
 ] as const;
 
 export type DockAppId = (typeof APP_IDS)[number];
-export type AppId = DockAppId | "about" | "viewer" | "surface" | "trash" | "editor";
+export type BuiltinAppId = DockAppId | "about" | "viewer" | "trash" | "editor";
+export type AppId = BuiltinAppId | (string & {});
 
 export type WindowChrome = "light" | "dark";
 
 export const APP_META: Record<
-  AppId,
+  string,
   {
     title: string;
     width: number;
@@ -25,7 +27,7 @@ export const APP_META: Record<
     width: 900,
     height: 600,
     available: true,
-    chrome: "light",
+    chrome: "dark",
   },
   files: {
     title: "Files",
@@ -37,23 +39,23 @@ export const APP_META: Record<
   terminal: {
     title: "Terminal",
     width: 800,
-    height: 480,
+    height: 520,
     available: true,
     chrome: "dark",
   },
-  surface: {
-    title: "Remote Surface",
-    width: 960,
-    height: 640,
+  browser: {
+    title: "Web Browser",
+    width: 1040,
+    height: 680,
     available: true,
     chrome: "dark",
   },
   settings: {
     title: "Settings",
-    width: 750,
-    height: 550,
+    width: 820,
+    height: 580,
     available: true,
-    chrome: "light",
+    chrome: "dark",
   },
   about: {
     title: "About",
@@ -77,9 +79,9 @@ export const APP_META: Record<
     chrome: "light",
   },
   editor: {
-    title: "Visual Studio Code",
-    width: 1024,
-    height: 680,
+    title: "Text Editor",
+    width: 800,
+    height: 560,
     available: true,
     chrome: "dark",
   },

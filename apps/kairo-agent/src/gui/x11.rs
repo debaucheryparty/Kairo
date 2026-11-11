@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
-use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, broadcast, mpsc};
 use tracing::{debug, info};
 use x11rb::connection::{Connection, RequestConnection};
 use x11rb::protocol::composite::{self, Redirect};
@@ -13,8 +13,8 @@ use x11rb::protocol::xproto::*;
 use x11rb::protocol::xtest;
 
 use super::{
-    GuiError, GuiInputEvent, RemoteGuiBackend, RemoteSurface, SurfaceDamageFrame,
-    SurfaceLifecycleNotification, SurfaceLifecycleState,
+    ApplicationProcess, GuiError, GuiInputEvent, RemoteGuiBackend, RemoteSurface,
+    SurfaceDamageFrame, SurfaceLifecycleNotification, SurfaceLifecycleState,
 };
 
 enum X11Command {
@@ -60,6 +60,8 @@ struct X11TrackedWindow {
     parent_surface_id: Option<String>,
     sequence: u64,
     pending_damage: Option<(i32, i32, u32, u32)>,
+    needs_full_frame: bool,
+    has_sent_initial_frame: bool,
 }
 
 #[inline]
@@ -156,6 +158,7 @@ pub struct X11Backend {
     lifecycle_tx: broadcast::Sender<SurfaceLifecycleNotification>,
     surfaces: Arc<RwLock<HashMap<String, RemoteSurface>>>,
     pid_to_app: Arc<std::sync::RwLock<HashMap<u32, String>>>,
+    processes: Arc<std::sync::RwLock<HashMap<u32, ApplicationProcess>>>,
     xvfb_child: Arc<RwLock<Option<tokio::process::Child>>>,
 }
 
@@ -170,6 +173,7 @@ impl X11Backend {
         let running = Arc::new(AtomicBool::new(false));
         let surfaces = Arc::new(RwLock::new(HashMap::new()));
         let pid_to_app = Arc::new(std::sync::RwLock::new(HashMap::new()));
+        let processes = Arc::new(std::sync::RwLock::new(HashMap::new()));
 
         Self {
             display: display_str,
@@ -180,6 +184,7 @@ impl X11Backend {
             lifecycle_tx,
             surfaces,
             pid_to_app,
+            processes,
             xvfb_child: Arc::new(RwLock::new(None)),
         }
     }
@@ -226,7 +231,6 @@ impl X11Backend {
         let lock_path = format!("/tmp/.X{display_num}-lock");
         let sock_path = format!("/tmp/.X11-unix/X{display_num}");
 
-        // Clean stale lock if process is dead
         if let Ok(content) = std::fs::read_to_string(&lock_path) {
             let pid = content.trim().parse::<u32>().unwrap_or(0);
             let is_alive = pid > 0 && std::path::Path::new(&format!("/proc/{pid}")).exists();
@@ -261,13 +265,11 @@ impl RemoteGuiBackend for X11Backend {
             return Ok(());
         }
 
-        // Spawn Xvfb if not already running
         if let Some(xvfb) = self.ensure_xvfb_running()? {
             let mut lock = self.xvfb_child.write().await;
             *lock = Some(xvfb);
         }
 
-        // Connect pure-Rust x11rb with retry loop (waiting for socket readiness)
         let mut conn_opt = None;
         for _ in 0..50 {
             match x11rb::connect(Some(&self.display)) {
@@ -281,8 +283,9 @@ impl RemoteGuiBackend for X11Backend {
             }
         }
 
-        let (conn, screen_num) = conn_opt
-            .ok_or_else(|| GuiError::ConnectionError(format!("{}: connection timed out", self.display)))?;
+        let (conn, screen_num) = conn_opt.ok_or_else(|| {
+            GuiError::ConnectionError(format!("{}: connection timed out", self.display))
+        })?;
 
         let screen = &conn.setup().roots[screen_num];
         let root = screen.root;
@@ -313,6 +316,23 @@ impl RemoteGuiBackend for X11Backend {
 
         let keymapper = Arc::new(KeycodeMapper::new(&conn)?);
 
+        // Initialize standard Xft antialiasing and hinting resources on the display
+        let xrdb_res = "Xft.antialias: 1\nXft.hinting: 1\nXft.hintstyle: hintslight\nXft.rgba: rgb\nXft.dpi: 96\n";
+        let _ = tokio::process::Command::new("xrdb")
+            .arg("-merge")
+            .env("DISPLAY", &self.display)
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .and_then(|mut child| {
+                if let Some(mut stdin) = child.stdin.take() {
+                    use tokio::io::AsyncWriteExt;
+                    tokio::spawn(async move {
+                        let _ = stdin.write_all(xrdb_res.as_bytes()).await;
+                    });
+                }
+                Ok(())
+            });
+
         let cmd_rx_opt = self.cmd_rx.lock().await.take();
         let Some(mut cmd_rx) = cmd_rx_opt else {
             return Ok(());
@@ -324,6 +344,7 @@ impl RemoteGuiBackend for X11Backend {
         let lifecycle_tx = self.lifecycle_tx.clone();
         let surfaces_store = self.surfaces.clone();
         let pid_to_app_clone = self.pid_to_app.clone();
+        let processes_clone = self.processes.clone();
 
         let _ = conn.flush();
 
@@ -368,73 +389,65 @@ impl RemoteGuiBackend for X11Backend {
                         }
                         X11Command::Input { surface_id, event } => {
                             if let Some(&xid) = surface_id_to_xid.get(&surface_id) {
+                                let (win_x, win_y) = tracked_windows
+                                    .get(&xid)
+                                    .map(|w| (w.x, w.y))
+                                    .unwrap_or((0, 0));
                                 match event {
                                     GuiInputEvent::MouseMove { x, y } => {
-                                        if let Ok(coords) =
-                                            translate_coordinates(&conn, xid, root, x as i16, y as i16)
-                                        {
-                                            if let Ok(reply) = coords.reply() {
-                                                let _ = xtest::fake_input(
-                                                    &conn,
-                                                    6, // MotionNotify
-                                                    0,
-                                                    x11rb::CURRENT_TIME,
-                                                    root,
-                                                    reply.dst_x,
-                                                    reply.dst_y,
-                                                    0,
-                                                );
-                                                let _ = conn.flush();
-                                            }
-                                        }
+                                        let root_x = (win_x + x).max(0) as i16;
+                                        let root_y = (win_y + y).max(0) as i16;
+                                        let _ = xtest::fake_input(
+                                            &conn,
+                                            6, // MotionNotify
+                                            0,
+                                            x11rb::CURRENT_TIME,
+                                            root,
+                                            root_x,
+                                            root_y,
+                                            0,
+                                        );
+                                        let _ = conn.flush();
                                     }
                                     GuiInputEvent::MouseDown { button, x, y } => {
-                                        if let Ok(coords) =
-                                            translate_coordinates(&conn, xid, root, x as i16, y as i16)
-                                        {
-                                            if let Ok(reply) = coords.reply() {
-                                                let _ = xtest::fake_input(
-                                                    &conn,
-                                                    6,
-                                                    0,
-                                                    x11rb::CURRENT_TIME,
-                                                    root,
-                                                    reply.dst_x,
-                                                    reply.dst_y,
-                                                    0,
-                                                );
-                                                let _ = xtest::fake_input(
-                                                    &conn,
-                                                    4, // ButtonPress
-                                                    (button + 1) as u8,
-                                                    x11rb::CURRENT_TIME,
-                                                    root,
-                                                    reply.dst_x,
-                                                    reply.dst_y,
-                                                    0,
-                                                );
-                                                let _ = conn.flush();
-                                            }
-                                        }
+                                        let root_x = (win_x + x).max(0) as i16;
+                                        let root_y = (win_y + y).max(0) as i16;
+                                        let _ = xtest::fake_input(
+                                            &conn,
+                                            6,
+                                            0,
+                                            x11rb::CURRENT_TIME,
+                                            root,
+                                            root_x,
+                                            root_y,
+                                            0,
+                                        );
+                                        let _ = xtest::fake_input(
+                                            &conn,
+                                            4, // ButtonPress
+                                            (button + 1) as u8,
+                                            x11rb::CURRENT_TIME,
+                                            root,
+                                            root_x,
+                                            root_y,
+                                            0,
+                                        );
+                                        let _ = conn.flush();
                                     }
                                     GuiInputEvent::MouseUp { button, x, y } => {
-                                        if let Ok(coords) =
-                                            translate_coordinates(&conn, xid, root, x as i16, y as i16)
-                                        {
-                                            if let Ok(reply) = coords.reply() {
-                                                let _ = xtest::fake_input(
-                                                    &conn,
-                                                    5, // ButtonRelease
-                                                    (button + 1) as u8,
-                                                    x11rb::CURRENT_TIME,
-                                                    root,
-                                                    reply.dst_x,
-                                                    reply.dst_y,
-                                                    0,
-                                                );
-                                                let _ = conn.flush();
-                                            }
-                                        }
+                                        let root_x = (win_x + x).max(0) as i16;
+                                        let root_y = (win_y + y).max(0) as i16;
+                                        let _ = xtest::fake_input(
+                                            &conn,
+                                            5, // ButtonRelease
+                                            (button + 1) as u8,
+                                            x11rb::CURRENT_TIME,
+                                            root,
+                                            root_x,
+                                            root_y,
+                                            0,
+                                        );
+                                        let _ = conn.flush();
                                     }
                                     GuiInputEvent::KeyDown { key, code } => {
                                         let t0 = std::time::Instant::now();
@@ -452,7 +465,11 @@ impl RemoteGuiBackend for X11Backend {
                                                 0,
                                             );
                                             let _ = conn.flush();
-                                            info!("[AGENT XTEST] completed keydown key={} in {:?}", key, t0.elapsed());
+                                            info!(
+                                                "[AGENT XTEST] completed keydown key={} in {:?}",
+                                                key,
+                                                t0.elapsed()
+                                            );
                                         }
                                     }
                                     GuiInputEvent::KeyUp { key, code } => {
@@ -552,6 +569,7 @@ impl RemoteGuiBackend for X11Backend {
                                                     codec: "raw_rgba".to_string(),
                                                     data,
                                                     timestamp_us,
+                                                    is_full_frame: true,
                                                 };
 
                                                 let _ = frame_tx.send(frame);
@@ -640,6 +658,7 @@ impl RemoteGuiBackend for X11Backend {
                                         &mut surface_id_to_xid,
                                         &lifecycle_tx,
                                         &pid_to_app_clone,
+                                        &processes_clone,
                                     );
                                 }
                                 if let Some(win) = tracked_windows.get(&m.window) {
@@ -654,15 +673,18 @@ impl RemoteGuiBackend for X11Backend {
                                             win.height as u16,
                                             !0,
                                         )
-                                        .map(|c| c.reply()) {
-                                            let expected_len = (win.width as usize) * (win.height as usize) * 4;
+                                        .map(|c| c.reply())
+                                        {
+                                            let expected_len =
+                                                (win.width as usize) * (win.height as usize) * 4;
                                             if reply.data.len() >= expected_len {
                                                 let mut data = reply.data;
                                                 bgra_to_rgba_inplace(&mut data);
                                                 let timestamp_us = SystemTime::now()
                                                     .duration_since(UNIX_EPOCH)
                                                     .unwrap_or_default()
-                                                    .as_micros() as u64;
+                                                    .as_micros()
+                                                    as u64;
                                                 let frame = SurfaceDamageFrame {
                                                     surface_id: win.surface_id.clone(),
                                                     sequence: win.sequence,
@@ -673,6 +695,7 @@ impl RemoteGuiBackend for X11Backend {
                                                     codec: "raw_rgba".to_string(),
                                                     data,
                                                     timestamp_us,
+                                                    is_full_frame: true,
                                                 };
                                                 let _ = frame_tx.send(frame);
                                             }
@@ -683,6 +706,9 @@ impl RemoteGuiBackend for X11Backend {
                         }
                         x11rb::protocol::Event::ConfigureNotify(c) => {
                             if let Some(win) = tracked_windows.get_mut(&c.window) {
+                                if win.width != c.width as u32 || win.height != c.height as u32 {
+                                    win.needs_full_frame = true;
+                                }
                                 win.x = c.x as i32;
                                 win.y = c.y as i32;
                                 win.width = c.width as u32;
@@ -801,12 +827,7 @@ impl RemoteGuiBackend for X11Backend {
                         x11rb::protocol::Event::DamageNotify(d) => {
                             if let Some(&xid) = damage_to_xid.get(&d.damage) {
                                 // Always subtract reported damage to clear server state
-                                let _ = damage::subtract(
-                                    &conn,
-                                    d.damage,
-                                    x11rb::NONE,
-                                    x11rb::NONE,
-                                );
+                                let _ = damage::subtract(&conn, d.damage, x11rb::NONE, x11rb::NONE);
 
                                 if let Some(win) = tracked_windows.get_mut(&xid) {
                                     let win_w = win.width as i32;
@@ -837,8 +858,10 @@ impl RemoteGuiBackend for X11Backend {
                                             Some((cur_x, cur_y, cur_w, cur_h)) => {
                                                 let x0 = cur_x.min(new_x);
                                                 let y0 = cur_y.min(new_y);
-                                                let x1 = (cur_x + cur_w as i32).max(new_x + new_w as i32);
-                                                let y1 = (cur_y + cur_h as i32).max(new_y + new_h as i32);
+                                                let x1 = (cur_x + cur_w as i32)
+                                                    .max(new_x + new_w as i32);
+                                                let y1 = (cur_y + cur_h as i32)
+                                                    .max(new_y + new_h as i32);
                                                 Some((x0, y0, (x1 - x0) as u32, (y1 - y0) as u32))
                                             }
                                             None => Some((new_x, new_y, new_w, new_h)),
@@ -851,73 +874,77 @@ impl RemoteGuiBackend for X11Backend {
                     }
                 }
 
-                // Flush coalesced damage for all tracked windows after event drain
                 for (&xid, win) in tracked_windows.iter_mut() {
-                    if let Some((dmg_x, dmg_y, dmg_w, dmg_h)) = win.pending_damage.take() {
-                        if dmg_w == 0 || dmg_h == 0 || win.width == 0 || win.height == 0 {
-                            continue;
-                        }
+                    let should_capture = win.needs_full_frame
+                        || (win.has_sent_initial_frame && win.pending_damage.is_some());
+                    if !should_capture || win.width == 0 || win.height == 0 {
+                        continue;
+                    }
 
+                    let is_full = win.needs_full_frame;
+                    let (capture_x, capture_y, capture_w, capture_h) = if is_full {
+                        win.pending_damage = None;
+                        (0i16, 0i16, win.width as u16, win.height as u16)
+                    } else if let Some((dmg_x, dmg_y, dmg_w, dmg_h)) = win.pending_damage.take() {
                         let damage_area = (dmg_w as u64) * (dmg_h as u64);
                         let win_area = (win.width as u64) * (win.height as u64);
 
-                        // Adaptive rule: If damage covers more than 65% of the window, capture full window
-                        let (capture_x, capture_y, capture_w, capture_h) =
-                            if win_area > 0 && (damage_area as f64 / win_area as f64) > 0.65 {
-                                (0i16, 0i16, win.width as u16, win.height as u16)
-                            } else {
-                                (dmg_x as i16, dmg_y as i16, dmg_w as u16, dmg_h as u16)
-                            };
-
-                        if let Ok(Ok(reply)) = get_image(
-                            &conn,
-                            ImageFormat::Z_PIXMAP,
-                            xid,
-                            capture_x,
-                            capture_y,
-                            capture_w,
-                            capture_h,
-                            !0,
-                        )
-                        .map(|c| c.reply())
-                        {
-                            let expected_len = (capture_w as usize) * (capture_h as usize) * 4;
-                            if reply.data.len() < expected_len {
-                                continue;
-                            }
-
-                            let mut data = reply.data;
-                            bgra_to_rgba_inplace(&mut data);
-
-                            win.sequence += 1;
-                            let seq = win.sequence;
-                            let sid = win.surface_id.clone();
-
-                            let timestamp_us = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_micros()
-                                as u64;
-
-                            info!(
-                                "[AGENT FRAME] captured sid={} seq={} area={}x{}+{}+{} bytes={}",
-                                sid, seq, capture_w, capture_h, capture_x, capture_y, data.len()
-                            );
-
-                            let frame = SurfaceDamageFrame {
-                                surface_id: sid,
-                                sequence: seq,
-                                x: capture_x as i32,
-                                y: capture_y as i32,
-                                width: capture_w as u32,
-                                height: capture_h as u32,
-                                codec: "raw_rgba".to_string(),
-                                data,
-                                timestamp_us,
-                            };
-
-                            let _ = frame_tx.send(frame);
+                        if win_area > 0 && (damage_area as f64 / win_area as f64) > 0.65 {
+                            (0i16, 0i16, win.width as u16, win.height as u16)
+                        } else {
+                            (dmg_x as i16, dmg_y as i16, dmg_w as u16, dmg_h as u16)
                         }
+                    } else {
+                        continue;
+                    };
+
+                    if let Ok(Ok(reply)) = get_image(
+                        &conn,
+                        ImageFormat::Z_PIXMAP,
+                        xid,
+                        capture_x,
+                        capture_y,
+                        capture_w,
+                        capture_h,
+                        !0,
+                    )
+                    .map(|c| c.reply())
+                    {
+                        let expected_len = (capture_w as usize) * (capture_h as usize) * 4;
+                        if reply.data.len() < expected_len {
+                            continue;
+                        }
+
+                        let mut data = reply.data;
+                        bgra_to_rgba_inplace(&mut data);
+
+                        win.sequence += 1;
+                        let seq = win.sequence;
+                        let sid = win.surface_id.clone();
+                        if is_full {
+                            win.needs_full_frame = false;
+                            win.has_sent_initial_frame = true;
+                        }
+
+                        let timestamp_us = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_micros() as u64;
+
+                        let frame = SurfaceDamageFrame {
+                            surface_id: sid,
+                            sequence: seq,
+                            x: capture_x as i32,
+                            y: capture_y as i32,
+                            width: capture_w as u32,
+                            height: capture_h as u32,
+                            codec: "raw_rgba".to_string(),
+                            data,
+                            timestamp_us,
+                            is_full_frame: is_full,
+                        };
+
+                        let _ = frame_tx.send(frame);
                     }
                 }
 
@@ -951,7 +978,7 @@ impl RemoteGuiBackend for X11Backend {
                     *lock = current_surfaces;
                 }
 
-                std::thread::sleep(Duration::from_millis(5));
+                std::thread::sleep(Duration::from_millis(1));
             }
         });
 
@@ -966,6 +993,28 @@ impl RemoteGuiBackend for X11Backend {
         args: &[String],
         working_directory: &str,
     ) -> Result<u32, GuiError> {
+        let existing_target = {
+            if let Ok(procs) = self.processes.read() {
+                procs
+                    .values()
+                    .find(|p| p.app_id == app_id && p.state == "running")
+                    .and_then(|p| p.surface_ids.first().map(|s| (p.pid, s.clone())))
+            } else {
+                None
+            }
+        };
+
+        if let Some((pid, surface_id)) = existing_target {
+            let _ = self.focus_surface(&surface_id).await;
+            info!(
+                pid,
+                app = %app_id,
+                surface = %surface_id,
+                "Reusing existing running process and focusing surface"
+            );
+            return Ok(pid);
+        }
+
         let mut parts = exec.split_whitespace();
         let binary = parts.next().unwrap_or(app_id);
         let mut cmd = tokio::process::Command::new(binary);
@@ -976,8 +1025,16 @@ impl RemoteGuiBackend for X11Backend {
             }
         }
 
+        let mut has_scale = false;
         for arg in args {
+            if arg.starts_with("--force-device-scale-factor") {
+                has_scale = true;
+            }
             cmd.arg(arg);
+        }
+
+        if !has_scale && (binary.contains("chrome") || app_id.contains("chrome")) {
+            cmd.arg("--force-device-scale-factor=1.25");
         }
 
         if !working_directory.is_empty() {
@@ -995,16 +1052,41 @@ impl RemoteGuiBackend for X11Backend {
             .map_err(|e| GuiError::SpawnError(format!("Failed to spawn {exec}: {e}")))?;
 
         let pid = child.id().unwrap_or(0);
+        let start_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        let app_proc = ApplicationProcess {
+            pid,
+            app_id: app_id.to_string(),
+            state: "running".to_string(),
+            start_time,
+            exit_code: None,
+            surface_ids: Vec::new(),
+        };
+
+        if let Ok(mut procs) = self.processes.write() {
+            procs.insert(pid, app_proc);
+        }
         if let Ok(mut map) = self.pid_to_app.write() {
             map.insert(pid, app_id.to_string());
         }
 
         let cmd_tx_clone = self.cmd_tx.clone();
         let pid_to_app_clone = self.pid_to_app.clone();
+        let processes_clone = self.processes.clone();
         tokio::spawn(async move {
-            let _ = child.wait().await;
+            let status = child.wait().await;
+            let exit_code = status.ok().and_then(|s| s.code());
             if let Ok(mut map) = pid_to_app_clone.write() {
                 map.remove(&pid);
+            }
+            if let Ok(mut procs) = processes_clone.write() {
+                if let Some(p) = procs.get_mut(&pid) {
+                    p.state = "exited".to_string();
+                    p.exit_code = exit_code;
+                }
             }
             let _ = cmd_tx_clone.send(X11Command::ProcessExited { pid }).await;
         });
@@ -1057,20 +1139,6 @@ impl RemoteGuiBackend for X11Backend {
             let map = self.surfaces.read().await;
             if map.contains_key(surface_id) {
                 vec![surface_id.to_string()]
-            } else if let Some(pid_str) = surface_id.strip_prefix("app-") {
-                if let Ok(pid) = pid_str.parse::<u32>() {
-                    let app_opt = self.pid_to_app.read().ok().and_then(|m| m.get(&pid).cloned());
-                    if let Some(app) = app_opt {
-                        map.values()
-                            .filter(|s| s.app_id == app)
-                            .map(|s| s.surface_id.clone())
-                            .collect()
-                    } else {
-                        vec![]
-                    }
-                } else {
-                    vec![]
-                }
             } else {
                 vec![]
             }
@@ -1078,22 +1146,13 @@ impl RemoteGuiBackend for X11Backend {
 
         let mut closed_any = false;
         for sid in matching_surfaces {
-            let _ = self.cmd_tx.send(X11Command::Close { surface_id: sid }).await;
+            let _ = self
+                .cmd_tx
+                .send(X11Command::Close { surface_id: sid })
+                .await;
             closed_any = true;
         }
 
-        // If surface_id is app-<pid>, also terminate the spawned process if still running
-        if let Some(pid_str) = surface_id.strip_prefix("app-") {
-            if let Ok(pid) = pid_str.parse::<u32>() {
-                let _ = tokio::process::Command::new("kill")
-                    .args(["-TERM", &pid.to_string()])
-                    .status()
-                    .await;
-                closed_any = true;
-            }
-        }
-
-        // If direct surface_id wasn't in surfaces map yet, still forward Close command
         if !closed_any && surface_id.starts_with("x11-win-") {
             let _ = self
                 .cmd_tx
@@ -1105,6 +1164,14 @@ impl RemoteGuiBackend for X11Backend {
         }
 
         Ok(closed_any)
+    }
+
+    async fn list_processes(&self) -> Vec<ApplicationProcess> {
+        if let Ok(map) = self.processes.read() {
+            map.values().cloned().collect()
+        } else {
+            Vec::new()
+        }
     }
 
     async fn list_surfaces(&self) -> Vec<RemoteSurface> {
@@ -1131,6 +1198,35 @@ impl RemoteGuiBackend for X11Backend {
 }
 
 impl X11Backend {
+    fn get_parent_pid(pid: u32) -> Option<u32> {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+        let rparen = stat.rfind(')')?;
+        let rest = stat.get(rparen + 1..)?.trim_start();
+        let mut fields = rest.split_whitespace();
+        let _state = fields.next()?;
+        let ppid_str = fields.next()?;
+        ppid_str.parse::<u32>().ok()
+    }
+
+    fn find_matching_process(win_pid: u32, map: &HashMap<u32, String>) -> Option<(u32, String)> {
+        if let Some(app) = map.get(&win_pid) {
+            return Some((win_pid, app.clone()));
+        }
+        let mut cur = win_pid;
+        for _ in 0..10 {
+            match Self::get_parent_pid(cur) {
+                Some(ppid) if ppid > 1 && ppid != cur => {
+                    if let Some(app) = map.get(&ppid) {
+                        return Some((ppid, app.clone()));
+                    }
+                    cur = ppid;
+                }
+                _ => break,
+            }
+        }
+        None
+    }
+
     fn register_window(
         conn: &impl Connection,
         win: u32,
@@ -1140,12 +1236,12 @@ impl X11Backend {
         surface_id_to_xid: &mut HashMap<String, u32>,
         lifecycle_tx: &broadcast::Sender<SurfaceLifecycleNotification>,
         pid_to_app: &Arc<std::sync::RwLock<HashMap<u32, String>>>,
+        processes: &Arc<std::sync::RwLock<HashMap<u32, ApplicationProcess>>>,
     ) {
         if tracked_windows.contains_key(&win) {
             return;
         }
 
-        // Check if window is transient (dialog, popup, modal)
         let mut is_transient = false;
         let mut parent_surface_id = None;
         if let Ok(prop) = get_property(
@@ -1176,23 +1272,29 @@ impl X11Backend {
             _ => return,
         };
 
-        // Ignore invisible IPC/clipboard/message helper windows (e.g. 1x1 or 10x10)
         if geom.width < 32 || geom.height < 32 {
             return;
         }
 
         let title = Self::get_window_title(conn, win);
         let pid = Self::get_window_pid(conn, win);
-        let app_id = if let Some(p) = pid {
-            if let Ok(map) = pid_to_app.read() {
-                map.get(&p).cloned().unwrap_or_else(|| {
-                    Self::get_window_wm_class(conn, win).unwrap_or_else(|| "x11-app".to_string())
-                })
+        let (matched_pid, app_id) = if let Some(p) = pid {
+            let matched_opt = if let Ok(map) = pid_to_app.read() {
+                Self::find_matching_process(p, &map)
             } else {
-                Self::get_window_wm_class(conn, win).unwrap_or_else(|| "x11-app".to_string())
+                None
+            };
+            if let Some((mpid, mapp)) = matched_opt {
+                (Some(mpid), mapp)
+            } else {
+                let wm_class =
+                    Self::get_window_wm_class(conn, win).unwrap_or_else(|| "x11-app".to_string());
+                (Some(p), wm_class)
             }
         } else {
-            Self::get_window_wm_class(conn, win).unwrap_or_else(|| "x11-app".to_string())
+            let wm_class =
+                Self::get_window_wm_class(conn, win).unwrap_or_else(|| "x11-app".to_string());
+            (None, wm_class)
         };
 
         let dmg_id = match conn.generate_id() {
@@ -1211,9 +1313,7 @@ impl X11Backend {
             conn,
             win,
             &ChangeWindowAttributesAux::new().event_mask(
-                EventMask::STRUCTURE_NOTIFY
-                    | EventMask::FOCUS_CHANGE
-                    | EventMask::PROPERTY_CHANGE,
+                EventMask::STRUCTURE_NOTIFY | EventMask::FOCUS_CHANGE | EventMask::PROPERTY_CHANGE,
             ),
         );
 
@@ -1224,12 +1324,22 @@ impl X11Backend {
             SurfaceLifecycleState::Created
         };
 
+        if let Some(mpid) = matched_pid {
+            if let Ok(mut procs) = processes.write() {
+                if let Some(proc) = procs.get_mut(&mpid) {
+                    if !proc.surface_ids.contains(&surface_id) {
+                        proc.surface_ids.push(surface_id.clone());
+                    }
+                }
+            }
+        }
+
         let tracked = X11TrackedWindow {
             surface_id: surface_id.clone(),
             xid: win,
             damage_id: dmg_id,
             app_id: app_id.clone(),
-            pid,
+            pid: matched_pid,
             title: title.clone(),
             x: geom.x as i32,
             y: geom.y as i32,
@@ -1239,6 +1349,8 @@ impl X11Backend {
             parent_surface_id: parent_surface_id.clone(),
             sequence: 0,
             pending_damage: None,
+            needs_full_frame: true,
+            has_sent_initial_frame: false,
         };
 
         tracked_windows.insert(win, tracked);
@@ -1269,26 +1381,14 @@ impl X11Backend {
             .reply()
             .ok()?
             .atom;
-        let prop = get_property(
-            conn,
-            false,
-            win,
-            net_wm_pid_atom,
-            AtomEnum::CARDINAL,
-            0,
-            1,
-        )
-        .ok()?
-        .reply()
-        .ok()?;
+        let prop = get_property(conn, false, win, net_wm_pid_atom, AtomEnum::CARDINAL, 0, 1)
+            .ok()?
+            .reply()
+            .ok()?;
 
         if prop.format == 32 && prop.value.len() >= 4 {
-            let pid = u32::from_ne_bytes([
-                prop.value[0],
-                prop.value[1],
-                prop.value[2],
-                prop.value[3],
-            ]);
+            let pid =
+                u32::from_ne_bytes([prop.value[0], prop.value[1], prop.value[2], prop.value[3]]);
             if pid > 0 {
                 return Some(pid);
             }
@@ -1311,7 +1411,11 @@ impl X11Backend {
         .ok()?;
 
         if !prop.value.is_empty() {
-            let parts: Vec<&[u8]> = prop.value.split(|&b| b == 0).filter(|p| !p.is_empty()).collect();
+            let parts: Vec<&[u8]> = prop
+                .value
+                .split(|&b| b == 0)
+                .filter(|p| !p.is_empty())
+                .collect();
             if let Some(first) = parts.first() {
                 return Some(String::from_utf8_lossy(first).to_string());
             }
@@ -1320,7 +1424,6 @@ impl X11Backend {
     }
 
     fn get_window_title(conn: &impl RequestConnection, win: u32) -> String {
-        // Try _NET_WM_NAME first (UTF-8)
         let net_wm_name_atom = conn
             .intern_atom(false, b"_NET_WM_NAME")
             .ok()
@@ -1342,8 +1445,15 @@ impl X11Backend {
             }
         }
 
-        // Fallback to WM_NAME (STRING)
-        if let Ok(prop) = get_property(conn, false, win, AtomEnum::WM_NAME, AtomEnum::STRING, 0, 256) {
+        if let Ok(prop) = get_property(
+            conn,
+            false,
+            win,
+            AtomEnum::WM_NAME,
+            AtomEnum::STRING,
+            0,
+            256,
+        ) {
             if let Ok(reply) = prop.reply() {
                 if !reply.value.is_empty() {
                     return String::from_utf8_lossy(&reply.value).to_string();
@@ -1369,7 +1479,8 @@ impl X11Backend {
         if let (Some(protocols), Some(delete_atom)) = (wm_protocols_atom, wm_delete_window_atom) {
             if let Ok(prop) = get_property(conn, false, win, protocols, AtomEnum::ATOM, 0, 32) {
                 if let Ok(reply) = prop.reply() {
-                    let atoms: Vec<u32> = reply.value32().map(|it| it.collect()).unwrap_or_default();
+                    let atoms: Vec<u32> =
+                        reply.value32().map(|it| it.collect()).unwrap_or_default();
                     if atoms.contains(&delete_atom) {
                         supports_delete = true;
                         let event = ClientMessageEvent {
@@ -1378,7 +1489,13 @@ impl X11Backend {
                             sequence: 0,
                             window: win,
                             type_: protocols,
-                            data: ClientMessageData::from([delete_atom, x11rb::CURRENT_TIME, 0, 0, 0]),
+                            data: ClientMessageData::from([
+                                delete_atom,
+                                x11rb::CURRENT_TIME,
+                                0,
+                                0,
+                                0,
+                            ]),
                         };
                         let _ = conn.send_event(false, win, EventMask::NO_EVENT, event);
                     }

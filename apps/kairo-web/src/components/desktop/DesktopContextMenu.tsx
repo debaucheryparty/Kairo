@@ -63,21 +63,14 @@ export function DesktopContextMenu({
         }}
       />
       <MenuItem
-        label="Linux Applications"
-        shortcut="⌘Space"
+        label="Search Applications"
+        shortcut="Space"
         onSelect={() => {
           window.dispatchEvent(new Event("kairo:toggle-spotlight"));
           onClose();
         }}
       />
       <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
-      <MenuItem
-        label="About Kairo"
-        onSelect={() => {
-          openWindow("about");
-          onClose();
-        }}
-      />
       <MenuItem
         label="Server Dashboard"
         onSelect={() => {
@@ -86,7 +79,7 @@ export function DesktopContextMenu({
         }}
       />
       <MenuItem
-        label="Settings"
+        label="Settings & Wallpaper"
         shortcut="⌘,"
         onSelect={() => {
           openWindow("settings");

@@ -95,10 +95,10 @@ export function FileList({
             onOpen(entry);
           }}
           onContextMenu={(event) => onContextMenu(event, entry)}
-          className={`grid grid-cols-12 gap-2 items-center rounded-[8px] px-3 py-1.5 text-[12px] cursor-default transition-colors ${
+          className={`m3-state-layer grid grid-cols-12 gap-2 items-center rounded-[10px] px-3.5 py-2 text-[12px] cursor-pointer transition-all ${
             isSelected
-              ? "bg-[#007aff] text-white shadow-sm font-medium"
-              : "text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+              ? "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] font-bold shadow-sm"
+              : "text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)]"
           }`}
         >
           <div
@@ -197,7 +197,7 @@ export function FileList({
       }}
     >
       <div className="w-full min-w-[540px]">
-        <div className="sticky top-0 z-10 grid grid-cols-12 gap-2 border-b border-black/[0.08] dark:border-white/[0.08] bg-[#f2f2f4] dark:bg-[#202024] px-4 py-1.5 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+        <div className="sticky top-0 z-10 grid grid-cols-12 gap-2 border-b border-[var(--md-sys-color-outline-variant)]/20 bg-[var(--md-sys-color-surface-container)] px-4 py-2 text-[11px] font-semibold text-[var(--md-sys-color-on-surface-variant)] font-google-sans">
           <button
             type="button"
             onClick={() => handleSort("name")}
@@ -261,27 +261,50 @@ export function FileList({
 
 function EntryIcon({ entry, isSelected }: { entry: FileEntry; isSelected: boolean }) {
   if (entry.type === "dir") {
-    return <MacFolderIcon name={entry.name} className="size-4.5 shrink-0" />;
+    return <MacFolderIcon name={entry.name} className="size-5 shrink-0 text-current" />;
   }
 
   const kind = getFileType({ name: entry.name, mime: entry.mime });
-  const className = `size-4 shrink-0 ${isSelected ? "text-white" : "text-neutral-500 dark:text-neutral-400"}`;
+  let symbol = "draft";
 
   switch (kind) {
     case "image":
-      return <FileImage aria-hidden className={className} />;
+      symbol = "image";
+      break;
     case "video":
-      return <FileVideo aria-hidden className={className} />;
+      symbol = "movie";
+      break;
     case "audio":
-      return <FileAudio aria-hidden className={className} />;
+      symbol = "audiotrack";
+      break;
     case "pdf":
+      symbol = "picture_as_pdf";
+      break;
     case "text":
-      return <FileText aria-hidden className={className} />;
+      symbol = "description";
+      break;
     case "code":
-      return <FileCode aria-hidden className={className} />;
+      symbol = "code";
+      break;
     case "archive":
-      return <FileArchive aria-hidden className={className} />;
+      symbol = "folder_zip";
+      break;
     default:
-      return <FileIcon aria-hidden className={className} />;
+      symbol = "draft";
+      break;
   }
+
+  return (
+    <span
+      className={`material-symbol text-[19px] shrink-0 select-none ${
+        isSelected
+          ? "text-[var(--md-sys-color-on-primary-container)]"
+          : "text-[var(--md-sys-color-on-surface-variant)] opacity-80"
+      }`}
+      data-fill="1"
+      aria-hidden="true"
+    >
+      {symbol}
+    </span>
+  );
 }

@@ -19,6 +19,7 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
   const lastSequenceRef = useRef<number>(0);
   const lastConfiguredSize = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
   const mousePosRef = useRef<{ x: number; y: number }>({ x: 640, y: 360 });
+  const hasInitializedFramebufferRef = useRef<boolean>(false);
 
   const [isFocused, setIsFocused] = useState(true);
   const [activeSurfaceId, setActiveSurfaceId] = useState(payload?.surfaceId || "surface-default");
@@ -39,14 +40,16 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
-        const targetW = Math.round(width);
-        const targetH = Math.round(height);
+        const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+        const effectiveDpr = Math.min(Math.max(dpr, 1), 2);
+        const targetW = Math.round(width * effectiveDpr);
+        const targetH = Math.round(height * effectiveDpr);
 
         if (targetW < 64 || targetH < 64) continue;
 
         if (
-          Math.abs(lastConfiguredSize.current.width - targetW) > 4 ||
-          Math.abs(lastConfiguredSize.current.height - targetH) > 4
+          Math.abs(lastConfiguredSize.current.width - targetW) > 8 ||
+          Math.abs(lastConfiguredSize.current.height - targetH) > 8
         ) {
           clearTimeout(resizeTimer);
           resizeTimer = setTimeout(() => {
@@ -79,12 +82,10 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
       deltaY?: number;
     }) => {
       if (!runtimeClient?.getSession()) return;
-      void runtimeClient
-        .sendSurfaceInput({
-          surfaceId: activeSurfaceId,
-          ...event,
-        })
-        .catch(() => undefined);
+      runtimeClient.sendSurfaceInputFast({
+        surfaceId: activeSurfaceId,
+        ...event,
+      });
     },
     [runtimeClient, activeSurfaceId]
   );
@@ -126,18 +127,11 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
       const coords = getCanvasCoords(e);
       if (!coords) return;
 
-      const t0 = performance.now();
-      console.log(`[CLIENT INPUT] type=mousedown button=${e.button} x=${coords.x} y=${coords.y} timestamp=${t0.toFixed(2)}ms`);
-
       const target = e.currentTarget;
       try {
         target.setPointerCapture(e.pointerId);
       } catch {
         // Ignore
-      }
-
-      if (runtimeClient?.getSession()) {
-        void runtimeClient.focusSurface(activeSurfaceId).catch(() => undefined);
       }
 
       sendInput({
@@ -146,11 +140,8 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
         x: coords.x,
         y: coords.y,
       });
-
-      const t1 = performance.now();
-      console.log(`[CLIENT WS] sent input mousedown timestamp=${t1.toFixed(2)}ms (prep: ${(t1 - t0).toFixed(2)}ms)`);
     },
-    [activeSurfaceId, getCanvasCoords, runtimeClient, sendInput]
+    [getCanvasCoords, sendInput]
   );
 
   const handlePointerUp = useCallback(
@@ -193,11 +184,7 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (!isFocused) return;
-      const t0 = performance.now();
-      console.log(`[CLIENT INPUT] type=keydown key=${e.key} timestamp=${t0.toFixed(2)}ms`);
       sendInput({ eventType: "keydown", key: e.key });
-      const t1 = performance.now();
-      console.log(`[CLIENT WS] sent input keydown key=${e.key} timestamp=${t1.toFixed(2)}ms (prep: ${(t1 - t0).toFixed(2)}ms)`);
     },
     [isFocused, sendInput]
   );
@@ -218,9 +205,11 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
 
-    let hasReceivedFrame = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
     const drawWaiting = () => {
+      if (hasInitializedFramebufferRef.current) return;
       const w = canvas.width;
       const h = canvas.height;
       const grad = ctx.createLinearGradient(0, 0, w, h);
@@ -232,43 +221,33 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
       ctx.fillStyle = "#94a3b8";
       ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("Waiting for display frames...", w / 2, h / 2 - 10);
-      ctx.fillStyle = "#475569";
-      ctx.font = "12px monospace";
-      ctx.fillText(`Surface: ${activeSurfaceId}`, w / 2, h / 2 + 16);
+      ctx.fillText("Connecting to display...", w / 2, h / 2);
     };
 
     drawWaiting();
 
     const unsubLifecycle = runtimeClient.onSurfaceLifecycle((event) => {
-      if (event.surfaceId === activeSurfaceId || (activeSurfaceId.startsWith("app-") && !hasReceivedFrame)) {
-        if (activeSurfaceId !== event.surfaceId) {
-          setActiveSurfaceId(event.surfaceId);
-        }
-        if (event.title && windowId) {
-          updateWindowTitle(windowId, event.title);
-        }
-        if (event.state === "destroyed" && windowId) {
-          closeWindow(windowId);
-          return;
-        }
-        if (event.width > 0 && event.height > 0) {
+      if (event.surfaceId !== activeSurfaceId) {
+        return;
+      }
+      if (event.title && windowId) {
+        updateWindowTitle(windowId, event.title);
+      }
+      if (event.state === "destroyed" && windowId) {
+        closeWindow(windowId);
+        return;
+      }
+      if (event.width > 0 && event.height > 0) {
+        if (canvas.width !== event.width || canvas.height !== event.height) {
+          hasInitializedFramebufferRef.current = false;
           setSurfaceSize({ width: event.width, height: event.height });
-          if (canvas.width !== event.width || canvas.height !== event.height) {
-            canvas.width = event.width;
-            canvas.height = event.height;
-          }
         }
       }
     });
 
     const unsubscribe = runtimeClient.onSurfaceFrame((frame) => {
       if (frame.surfaceId !== activeSurfaceId) {
-        if (activeSurfaceId.startsWith("app-") && !hasReceivedFrame) {
-          setActiveSurfaceId(frame.surfaceId);
-        } else {
-          return;
-        }
+        return;
       }
 
       if (frame.sequence && frame.sequence < lastSequenceRef.current) {
@@ -278,75 +257,52 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
         lastSequenceRef.current = frame.sequence;
       }
 
-      hasReceivedFrame = true;
+      const isFull = Boolean(frame.isFullFrame) || (!hasInitializedFramebufferRef.current && frame.x === 0 && frame.y === 0);
 
-      const renderX = Math.max(0, frame.x || 0);
-      const renderY = Math.max(0, frame.y || 0);
-
-      if (renderX === 0 && renderY === 0 && frame.width > 0 && frame.height > 0) {
+      if (isFull) {
         if (canvas.width !== frame.width || canvas.height !== frame.height) {
           canvas.width = frame.width;
           canvas.height = frame.height;
           setSurfaceSize({ width: frame.width, height: frame.height });
         }
-      } else {
-        const targetW = Math.max(canvas.width, renderX + frame.width);
-        const targetH = Math.max(canvas.height, renderY + frame.height);
-        if (canvas.width !== targetW || canvas.height !== targetH) {
-          const prev = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          canvas.width = targetW;
-          canvas.height = targetH;
-          ctx.putImageData(prev, 0, 0);
-          setSurfaceSize({ width: targetW, height: targetH });
-        }
-      }
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        hasInitializedFramebufferRef.current = true;
 
-      const t_recv = performance.now();
-      console.log(`[CLIENT FRAME] received surfaceId=${frame.surfaceId} seq=${frame.sequence} w=${frame.width} h=${frame.height} codec=${frame.codec} size=${frame.data.byteLength} timestamp=${t_recv.toFixed(2)}ms`);
-
-      if (frame.codec === "raw_rgba") {
         const totalPixels = frame.width * frame.height;
         const src = frame.data instanceof Uint8Array ? frame.data : new Uint8Array(frame.data);
-        if (src.length < totalPixels * 4) {
-          return;
+        if (src.length >= totalPixels * 4) {
+          const imgData = new ImageData(
+            new Uint8ClampedArray(src.buffer as ArrayBuffer, src.byteOffset, totalPixels * 4),
+            frame.width,
+            frame.height
+          );
+          ctx.putImageData(imgData, 0, 0);
         }
-        const imgData = ctx.createImageData(frame.width, frame.height);
-        imgData.data.set(src.subarray(0, totalPixels * 4));
-        ctx.putImageData(imgData, renderX, renderY);
-        const t_paint = performance.now();
-        console.log(`[CLIENT CANVAS] painted seq=${frame.sequence} timestamp=${t_paint.toFixed(2)}ms (render: ${(t_paint - t_recv).toFixed(2)}ms)`);
-      } else if (frame.codec === "raw_bgra") {
-        const totalPixels = frame.width * frame.height;
-        const src = frame.data instanceof Uint8Array ? frame.data : new Uint8Array(frame.data);
-        if (src.length < totalPixels * 4) {
-          return; // Drop truncated / malformed frame
+      } else {
+        // Incremental dirty rectangle update:
+        // Must preserve existing framebuffer. Never reset canvas dimensions or clear.
+        if (!hasInitializedFramebufferRef.current) {
+          return; // Suppress partial dirty updates prior to full initial frame
         }
 
-        const imgData = ctx.createImageData(frame.width, frame.height);
-        const dst = imgData.data;
-        for (let i = 0; i < totalPixels; i++) {
-          const s = i * 4;
-          const d = i * 4;
-          dst[d] = src[s + 2];     // Red
-          dst[d + 1] = src[s + 1]; // Green
-          dst[d + 2] = src[s];     // Blue
-          dst[d + 3] = 255;        // Alpha
+        const renderX = Math.max(0, frame.x || 0);
+        const renderY = Math.max(0, frame.y || 0);
+
+        if (renderX + frame.width > canvas.width || renderY + frame.height > canvas.height) {
+          return; // Discard out-of-bounds dirty rectangle
         }
-        ctx.putImageData(imgData, renderX, renderY);
-        const t_paint = performance.now();
-        console.log(`[CLIENT CANVAS] painted seq=${frame.sequence} timestamp=${t_paint.toFixed(2)}ms (render: ${(t_paint - t_recv).toFixed(2)}ms)`);
-      } else {
-        const blob = new Blob([new Uint8Array(frame.data)], {
-          type: frame.codec === "png" ? "image/png" : "image/jpeg",
-        });
-        createImageBitmap(blob)
-          .then((bitmap) => {
-            ctx.drawImage(bitmap, renderX, renderY, frame.width, frame.height);
-            bitmap.close();
-            const t_paint = performance.now();
-            console.log(`[CLIENT CANVAS] painted seq=${frame.sequence} timestamp=${t_paint.toFixed(2)}ms (render: ${(t_paint - t_recv).toFixed(2)}ms)`);
-          })
-          .catch(() => undefined);
+
+        const totalPixels = frame.width * frame.height;
+        const src = frame.data instanceof Uint8Array ? frame.data : new Uint8Array(frame.data);
+        if (src.length >= totalPixels * 4) {
+          const imgData = new ImageData(
+            new Uint8ClampedArray(src.buffer as ArrayBuffer, src.byteOffset, totalPixels * 4),
+            frame.width,
+            frame.height
+          );
+          ctx.putImageData(imgData, renderX, renderY);
+        }
       }
     });
 
@@ -355,6 +311,11 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
       unsubscribe();
     };
   }, [runtimeClient, activeSurfaceId, windowId, closeWindow, updateWindowTitle]);
+
+  const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  const effectiveDpr = Math.min(Math.max(dpr, 1), 2);
+  const displayW = Math.round(surfaceSize.width / effectiveDpr);
+  const displayH = Math.round(surfaceSize.height / effectiveDpr);
 
   return (
     <div
@@ -375,8 +336,11 @@ export function RemoteSurfaceViewer({ payload, windowId }: RemoteSurfaceViewerPr
           width={surfaceSize.width}
           height={surfaceSize.height}
           style={{
-            width: `${surfaceSize.width}px`,
-            height: `${surfaceSize.height}px`,
+            width: `${displayW}px`,
+            height: `${displayH}px`,
+            maxWidth: "100%",
+            maxHeight: "100%",
+            imageRendering: "auto",
           }}
           onPointerMove={handlePointerMove}
           onPointerDown={handlePointerDown}

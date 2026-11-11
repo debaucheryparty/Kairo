@@ -2080,7 +2080,10 @@ dependencies = [
  "bytes",
  "clap",
  "futures-util",
+ "kairo-bridge",
  "kairo-common",
+ "kairo-core",
+ "kairo-discovery",
  "kairo-protocol",
  "kairo-transport",
  "notify",
@@ -2100,6 +2103,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "kairo-bridge"
+version = "0.1.0"
+dependencies = [
+ "kairo-discovery",
+ "kairo-protocol",
+ "serde",
+ "sysinfo",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
 name = "kairo-common"
 version = "0.1.0"
 dependencies = [
@@ -2107,6 +2123,35 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "kairo-core"
+version = "0.1.0"
+dependencies = [
+ "kairo-bridge",
+ "kairo-common",
+ "kairo-discovery",
+ "kairo-protocol",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "kairo-discovery"
+version = "0.1.0"
+dependencies = [
+ "kairo-protocol",
+ "serde",
+ "sysinfo",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]

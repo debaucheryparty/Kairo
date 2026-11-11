@@ -35,7 +35,7 @@ import { moveToTrash, useTrash } from "@/src/lib/files/trash";
 import { MacFolderIcon } from "@/src/components/brand/MacFolderIcon";
 import { FileContextMenu } from "@/src/components/apps/files/FileContextMenu";
 import { FileList } from "@/src/components/apps/files/FileList";
-import { ModalAlert } from "@/src/components/desktop/ModalAlert";
+import { M3IconButton, M3Button, M3Dialog, M3TextField } from "@/src/components/m3";
 
 type Dialog =
   | { type: "file"; value: string }
@@ -421,22 +421,22 @@ export function FilesApp() {
 
   return (
     <div
-      className="relative flex h-full min-h-0 overflow-hidden bg-white dark:bg-[#161619] text-neutral-900 dark:text-neutral-100 select-none"
+      className="relative flex h-full min-h-0 overflow-hidden bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] select-none"
       onClick={() => setMenu(null)}
       onKeyDown={(event) => {
         if (event.key === "Enter") openSelected();
       }}
     >
       {sidebarOpen && (
-        <aside className="flex w-[210px] shrink-0 flex-col overflow-y-auto border-r border-black/[0.08] dark:border-white/[0.08] bg-[#f5f5f7] dark:bg-[#1a1a1d] p-2.5 text-[13px]">
+        <aside className="flex w-[215px] shrink-0 flex-col overflow-y-auto border-r border-[var(--md-sys-color-outline-variant)]/20 bg-[var(--md-sys-color-surface-container-low)] p-2.5 text-[13px] font-google-sans">
           <div className="flex items-center justify-between px-2 py-1.5 mb-1">
-            <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 dark:text-neutral-500">
+            <span className="text-[11px] font-bold tracking-wider uppercase text-[var(--md-sys-color-outline)]">
               Favorites
             </span>
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="rounded p-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-white transition-colors"
+              className="m3-state-layer rounded-full p-1 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
               title="Hide Sidebar"
             >
               <PanelLeft className="size-3.5" />
@@ -450,10 +450,10 @@ export function FilesApp() {
                 <button
                   key={fav.path}
                   type="button"
-                  className={`flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-[13px] outline-none transition-colors ${
+                  className={`m3-state-layer m3-focus-ring flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2 text-left text-[13px] outline-none transition-all ${
                     active
-                      ? "bg-black/[0.08] dark:bg-white/[0.12] font-medium text-neutral-900 dark:text-white shadow-sm"
-                      : "text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                      ? "bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)] font-bold shadow-sm"
+                      : "text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] hover:text-[var(--md-sys-color-on-surface)]"
                   }`}
                   onClick={() => goTo(fav.path)}
                 >
@@ -464,11 +464,11 @@ export function FilesApp() {
             })}
           </div>
 
-          <div className="mt-4 pt-3 border-t border-black/[0.06] dark:border-white/[0.08]">
+          <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)]/20">
             <button
               type="button"
               onClick={() => setSectionOpen((prev) => !prev)}
-              className="flex w-full items-center justify-between px-2 py-1 mb-1 text-[11px] font-semibold tracking-wider uppercase text-neutral-400 dark:text-neutral-500 outline-none"
+              className="flex w-full items-center justify-between px-2 py-1 mb-1 text-[11px] font-bold tracking-wider uppercase text-[var(--md-sys-color-outline)] outline-none"
             >
               <span>Locations</span>
               <ChevronDown
@@ -482,10 +482,10 @@ export function FilesApp() {
               <div className="space-y-0.5">
                 <button
                   type="button"
-                  className={`flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-[13px] outline-none transition-colors ${
+                  className={`m3-state-layer m3-focus-ring flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2 text-left text-[13px] outline-none transition-all ${
                     path === "/"
-                      ? "bg-black/[0.08] dark:bg-white/[0.12] font-medium text-neutral-900 dark:text-white shadow-sm"
-                      : "text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                      ? "bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)] font-bold shadow-sm"
+                      : "text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] hover:text-[var(--md-sys-color-on-surface)]"
                   }`}
                   onClick={() => goTo("/")}
                 >
@@ -494,10 +494,10 @@ export function FilesApp() {
                 </button>
                 <button
                   type="button"
-                  className={`flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-[13px] outline-none transition-colors ${
+                  className={`m3-state-layer m3-focus-ring flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2 text-left text-[13px] outline-none transition-all ${
                     path === homePath
-                      ? "bg-black/[0.08] dark:bg-white/[0.12] font-medium text-neutral-900 dark:text-white shadow-sm"
-                      : "text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                      ? "bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)] font-bold shadow-sm"
+                      : "text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] hover:text-[var(--md-sys-color-on-surface)]"
                   }`}
                   onClick={() => goTo(homePath)}
                 >
@@ -506,15 +506,15 @@ export function FilesApp() {
                 </button>
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between rounded-[8px] px-2.5 py-1.5 text-left text-[13px] outline-none text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors"
+                  className="m3-state-layer m3-focus-ring flex w-full items-center justify-between rounded-[12px] px-3 py-2 text-left text-[13px] outline-none text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] hover:text-[var(--md-sys-color-on-surface)] transition-all"
                   onClick={() => openWindow("trash")}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Trash2 aria-hidden className="size-4 shrink-0 text-neutral-500" />
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <MacFolderIcon name="trash" className="size-4 shrink-0" />
                     <span className="truncate">Trash</span>
                   </div>
                   {trashCount > 0 && (
-                    <span className="rounded-full bg-black/10 dark:bg-white/10 px-1.5 py-0.2 text-[10px] font-medium text-neutral-500">
+                    <span className="rounded-full bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] px-2 py-0.5 text-[10px] font-bold">
                       {trashCount}
                     </span>
                   )}
@@ -525,112 +525,100 @@ export function FilesApp() {
         </aside>
       )}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white dark:bg-[#161619]">
-        <header className="flex h-11 shrink-0 items-center justify-between border-b border-black/[0.08] dark:border-white/[0.08] px-3.5 bg-[#fafafa] dark:bg-[#1f1f23]">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] font-google-sans">
+        <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--md-sys-color-outline-variant)]/20 px-3 bg-[var(--md-sys-color-surface-container)]">
           <div className="flex items-center gap-2 min-w-0">
             {!sidebarOpen && (
-              <button
-                type="button"
+              <M3IconButton
+                variant="standard"
+                icon="dock_to_right"
                 onClick={() => setSidebarOpen(true)}
-                className="rounded p-1 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors"
                 title="Show Sidebar"
-              >
-                <PanelLeft className="size-4" />
-              </button>
+                className="!size-8"
+              />
             )}
 
             <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                aria-label="Back"
-                className="rounded-full p-1 text-neutral-600 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
+              <M3IconButton
+                variant="standard"
+                icon="chevron_left"
                 onClick={back}
                 disabled={historyIndex <= 0}
-              >
-                <ChevronLeft className="size-4" />
-              </button>
-              <button
-                type="button"
-                aria-label="Forward"
-                className="rounded-full p-1 text-neutral-600 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
+                title="Back"
+                className="!size-8"
+              />
+              <M3IconButton
+                variant="standard"
+                icon="chevron_right"
                 onClick={forward}
                 disabled={historyIndex >= history.length - 1}
-              >
-                <ChevronRight className="size-4" />
-              </button>
+                title="Forward"
+                className="!size-8"
+              />
             </div>
 
-            <h2 className="ml-1 text-[14px] font-semibold text-neutral-900 dark:text-neutral-100 truncate">
+            <h2 className="ml-1 text-[14px] font-bold text-[var(--md-sys-color-on-surface)] truncate">
               {currentFolderTitle}
             </h2>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
+            <M3IconButton
+              variant="tonal"
+              icon="create_new_folder"
               onClick={() => setDialog({ type: "dir", value: "" })}
-              className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 transition-colors"
               title="New Folder"
-            >
-              <FolderPlus className="size-4" />
-            </button>
-
-            <button
-              type="button"
+              className="!size-9"
+            />
+            <M3IconButton
+              variant="outlined"
+              icon="note_add"
               onClick={() => setDialog({ type: "file", value: "" })}
-              className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 transition-colors"
               title="New File"
-            >
-              <FilePlus className="size-4" />
-            </button>
-
-            <button
-              type="button"
+              className="!size-9"
+            />
+            <M3IconButton
+              variant="standard"
+              icon="delete"
               disabled={!selectedEntry}
               onClick={() => handleMoveToTrash(selectedEntry)}
-              className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
               title="Move to Trash"
-            >
-              <Trash2 className="size-4" />
-            </button>
-
-            <button
-              type="button"
+              className="!size-9"
+            />
+            <M3IconButton
+              variant="outlined"
+              icon="download"
               disabled={!selectedEntry || selectedEntry.type !== "file"}
               onClick={() => {
                 if (selectedEntry?.type === "file") {
                   platform.downloadFile(serverId, selectedEntry.path, downloadUrl(serverId, selectedEntry.path));
                 }
               }}
-              className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
               title="Download File"
-            >
-              <Download className="size-4" />
-            </button>
-
-            <button
-              type="button"
+              className="!size-9"
+            />
+            <M3IconButton
+              variant="standard"
+              icon="info"
               disabled={!selectedEntry}
               onClick={() => openInfo(selectedEntry)}
-              className="rounded-lg p-1.5 text-neutral-600 dark:text-neutral-300 hover:bg-black/8 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
               title="Get Info"
-            >
-              <Info className="size-4" />
-            </button>
+              className="!size-9"
+            />
 
-            <div className="relative ml-1">
-              <Search className="pointer-events-none absolute left-2.5 top-2 size-3.5 text-neutral-400" />
+            <div className="relative ml-2">
+              <Search className="pointer-events-none absolute left-3 top-2.5 size-3.5 text-[var(--md-sys-color-outline)]" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search"
-                className="w-36 rounded-full border border-black/10 dark:border-white/15 bg-black/[0.04] dark:bg-white/[0.08] py-1 pl-8 pr-6 text-[12px] text-neutral-800 dark:text-neutral-200 placeholder-neutral-400 outline-none focus:w-44 focus:ring-2 focus:ring-[#007aff]/50 transition-all"
+                placeholder="Search..."
+                className="w-36 rounded-full border border-[var(--md-sys-color-outline-variant)]/40 bg-[var(--md-sys-color-surface-container-highest)] py-1.5 pl-8 pr-6 text-[12px] text-[var(--md-sys-color-on-surface)] placeholder-[var(--md-sys-color-outline)] outline-none focus:w-48 focus:border-[var(--md-sys-color-primary)] transition-all font-google-sans"
               />
               {query ? (
                 <button
                   type="button"
                   onClick={() => setQuery("")}
-                  className="absolute right-2 top-2 text-neutral-400 hover:text-neutral-700 dark:hover:text-white"
+                  className="absolute right-2 top-2.5 text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface)]"
                 >
                   <X className="size-3" />
                 </button>
@@ -663,9 +651,12 @@ export function FilesApp() {
             Loading files…
           </div>
         ) : visible.length === 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-[13px] text-neutral-400">
-            <MacFolderIcon className="size-12 mb-2 opacity-50" />
-            <span>This folder is empty</span>
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-sm text-[var(--md-sys-color-on-surface-variant)] gap-1 select-none font-google-sans">
+            <div className="size-16 rounded-[24px] bg-[var(--md-sys-color-surface-container-high)] border border-[var(--md-sys-color-outline-variant)]/20 flex items-center justify-center text-[var(--md-sys-color-primary)] mb-2 shadow-sm">
+              <span className="material-symbol text-[36px]" data-fill="1">folder_open</span>
+            </div>
+            <span className="font-medium text-[var(--md-sys-color-on-surface)]">This folder is empty</span>
+            <span className="text-xs text-[var(--md-sys-color-outline)]">Drop files here or click + to create one</span>
           </div>
         ) : (
           <FileList
@@ -683,7 +674,7 @@ export function FilesApp() {
           />
         )}
 
-        <footer className="flex h-7 shrink-0 items-center justify-between border-t border-black/[0.08] dark:border-white/[0.08] px-4 text-[11px] text-neutral-500 dark:text-neutral-400 bg-[#fafafa] dark:bg-[#1f1f23]">
+        <footer className="flex h-8 shrink-0 items-center justify-between border-t border-[var(--md-sys-color-outline-variant)]/20 px-4 text-[11px] font-medium text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container)] font-google-sans">
           <span>
             {visible.length} {visible.length === 1 ? "item" : "items"}
           </span>
@@ -692,58 +683,42 @@ export function FilesApp() {
       </div>
 
       {dialog && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="absolute inset-0 z-50 flex items-center justify-center bg-black/25 backdrop-blur-[3px] animate-fade-in"
-          onClick={() => setDialog(null)}
+        <M3Dialog
+          open={Boolean(dialog)}
+          onClose={() => setDialog(null)}
+          icon={dialog.type === "dir" ? "folder" : "description"}
+          headline={
+            dialog.type === "dir"
+              ? "New Folder"
+              : dialog.type === "file"
+              ? "New File"
+              : "Rename Item"
+          }
+          supportingText={
+            dialog.type === "rename"
+              ? "Enter a new name for this item."
+              : `Enter a name for this ${dialog.type === "dir" ? "folder" : "file"}.`
+          }
+          confirmLabel={dialog.type === "rename" ? "Rename" : "Create"}
+          cancelLabel="Cancel"
+          onConfirm={() => void submitDialog()}
         >
-          <div
-            className="w-[320px] rounded-[20px] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur-3xl border border-black/10 dark:border-white/15 bg-white/95 dark:bg-[#242428]/95 text-neutral-900 dark:text-neutral-100 animate-scale-in"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-center text-[13px] font-semibold mb-1">
-              {dialog.type === "dir"
-                ? "New Folder"
-                : dialog.type === "file"
-                  ? "New File"
-                  : "Rename Item"}
-            </h3>
-            <p className="text-center text-[11px] opacity-70 mb-3.5">
-              Enter a name for this {dialog.type === "dir" ? "folder" : "file"}.
-            </p>
-
-            <form
-              onSubmit={(e) => {
+          <M3TextField
+            autoFocus
+            variant="outlined"
+            label={dialog.type === "dir" ? "Folder name" : dialog.type === "file" ? "File name" : "New name"}
+            value={dialog.value}
+            onChange={(e) => setDialog({ ...dialog, value: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
                 e.preventDefault();
                 void submitDialog();
-              }}
-            >
-              <input
-                autoFocus
-                className="w-full rounded-lg border border-black/15 dark:border-white/20 bg-black/[0.03] dark:bg-white/[0.08] px-3 py-1.5 text-[13px] text-neutral-900 dark:text-neutral-100 outline-none focus:border-[#007aff] focus:ring-1 focus:ring-[#007aff]"
-                value={dialog.value}
-                onChange={(e) => setDialog({ ...dialog, value: e.target.value })}
-              />
-
-              <div className="flex items-center gap-2 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setDialog(null)}
-                  className="flex-1 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 py-1.5 text-[12px] font-medium text-neutral-800 dark:text-neutral-200 transition-colors outline-none"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 rounded-full bg-[#007aff] hover:bg-[#0071eb] py-1.5 text-[12px] font-medium text-white shadow-sm transition-colors outline-none"
-                >
-                  {dialog.type === "rename" ? "Rename" : "Create"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+              }
+            }}
+            clearable
+            className="w-full mt-2"
+          />
+        </M3Dialog>
       )}
 
       {menu && (

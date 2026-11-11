@@ -16,7 +16,7 @@ import { useSelectedServer } from "@/src/lib/session";
 import { useTrash, type TrashItem } from "@/src/lib/files/trash";
 import { formatModified, formatSize } from "@/src/lib/files/format";
 import { MacFolderIcon } from "@/src/components/brand/MacFolderIcon";
-import { ModalAlert } from "@/src/components/desktop/ModalAlert";
+import { M3Button, M3IconButton, M3Dialog } from "@/src/components/m3";
 
 export function TrashApp() {
   const selectedServer = useSelectedServer();
@@ -64,10 +64,10 @@ export function TrashApp() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col bg-white dark:bg-[#161619] text-neutral-900 dark:text-neutral-100 select-none">
-      <header className="flex h-11 shrink-0 items-center justify-between border-b border-black/[0.08] dark:border-white/[0.08] px-4 bg-[#fafafa] dark:bg-[#1f1f23]">
+    <div className="flex h-full w-full flex-col bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] select-none font-google-sans">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--md-sys-color-outline-variant)]/20 px-4 bg-[var(--md-sys-color-surface-container)]">
         <div className="flex items-center gap-3">
-          <span className="text-[13px] font-medium text-neutral-700 dark:text-neutral-300">
+          <span className="text-[13px] font-semibold text-[var(--md-sys-color-on-surface-variant)]">
             {items.length} {items.length === 1 ? "item" : "items"}
             {items.length > 0 && ` (${formatSize(totalBytes)})`}
           </span>
@@ -76,55 +76,55 @@ export function TrashApp() {
         <div className="flex items-center gap-2">
           {selectedItem && (
             <>
-              <button
-                type="button"
+              <M3Button
+                variant="tonal"
                 disabled={isProcessing}
                 onClick={() => handleRestore(selectedItem)}
-                className="flex items-center gap-1.5 rounded-lg border border-black/10 dark:border-white/10 bg-white/80 dark:bg-white/10 px-2.5 py-1 text-[12px] font-medium text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/15 transition-colors shadow-sm"
+                icon="restore"
+                className="!h-8 !px-3 !text-xs"
               >
-                <RotateCcw className="size-3.5" />
-                <span>Put Back</span>
-              </button>
-              <button
-                type="button"
+                Put Back
+              </M3Button>
+              <M3Button
+                variant="outlined"
                 disabled={isProcessing}
                 onClick={() => setDeleteAlertItem(selectedItem)}
-                className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[12px] font-medium text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors shadow-sm"
+                icon="delete_forever"
+                className="!h-8 !px-3 !text-xs !text-[var(--md-sys-color-error)] !border-[var(--md-sys-color-error)]/40"
               >
-                <Trash2 className="size-3.5" />
-                <span>Delete Immediately</span>
-              </button>
+                Delete
+              </M3Button>
             </>
           )}
 
-          <button
-            type="button"
+          <M3Button
+            variant="filled"
             disabled={items.length === 0 || isProcessing}
             onClick={() => setEmptyAlertOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-black/10 dark:border-white/10 bg-white/80 dark:bg-white/10 px-2.5 py-1 text-[12px] font-medium text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/15 disabled:opacity-40 transition-colors shadow-sm"
+            icon="delete_sweep"
+            className="!h-8 !px-3.5 !text-xs"
           >
-            <Trash2 className="size-3.5 text-neutral-500" />
-            <span>Empty Trash</span>
-          </button>
+            Empty Trash
+          </M3Button>
         </div>
       </header>
 
       {items.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
-          <div className="size-16 rounded-full bg-black/[0.04] dark:bg-white/[0.06] flex items-center justify-center mb-3">
-            <Trash2 className="size-8 text-neutral-400 dark:text-neutral-500" />
+          <div className="size-16 rounded-full bg-[var(--md-sys-color-surface-container-highest)] flex items-center justify-center mb-3 text-[var(--md-sys-color-outline)]">
+            <span className="material-symbol text-[32px]">delete</span>
           </div>
-          <h3 className="text-[15px] font-semibold text-neutral-800 dark:text-neutral-200">
+          <h3 className="text-[16px] font-bold text-[var(--md-sys-color-on-surface)]">
             Trash is Empty
           </h3>
-          <p className="text-[12px] text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm leading-relaxed">
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] mt-1 max-w-sm leading-relaxed">
             Items moved to the Trash from the File Manager will appear here before being permanently erased.
           </p>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
           <div className="min-w-[600px]">
-            <div className="sticky top-0 z-10 grid grid-cols-12 gap-2 border-b border-black/[0.08] dark:border-white/[0.08] bg-[#f2f2f4] dark:bg-[#202024] px-4 py-1.5 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+            <div className="sticky top-0 z-10 grid grid-cols-12 gap-2 border-b border-[var(--md-sys-color-outline-variant)]/20 bg-[var(--md-sys-color-surface-container)] px-4 py-2 text-[11px] font-bold text-[var(--md-sys-color-on-surface-variant)]">
               <span className="col-span-5">Name</span>
               <span className="col-span-3">Original Location</span>
               <span className="col-span-2">Date Deleted</span>
@@ -139,13 +139,13 @@ export function TrashApp() {
                     key={item.id}
                     onClick={() => setSelectedId(item.id)}
                     onDoubleClick={() => handleRestore(item)}
-                    className={`grid grid-cols-12 gap-2 items-center rounded-lg px-3 py-1.5 text-[12px] cursor-default transition-colors ${
+                    className={`m3-state-layer grid grid-cols-12 gap-2 items-center rounded-[10px] px-3.5 py-2 text-[12px] cursor-pointer transition-all ${
                       isSelected
-                        ? "bg-[#007aff] text-white shadow-sm font-medium"
-                        : "text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                        ? "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] font-bold shadow-sm"
+                        : "text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)]"
                     }`}
                   >
-                    <div className="col-span-5 flex items-center gap-2 min-w-0">
+                    <div className="col-span-5 flex items-center gap-2.5 min-w-0">
                       {item.isDir ? (
                         <MacFolderIcon name={item.name} className="size-4.5 shrink-0" />
                       ) : (
@@ -156,7 +156,7 @@ export function TrashApp() {
 
                     <div
                       className={`col-span-3 truncate text-[11px] font-mono ${
-                        isSelected ? "text-white/85" : "text-neutral-500 dark:text-neutral-400"
+                        isSelected ? "text-inherit opacity-90" : "text-[var(--md-sys-color-on-surface-variant)]"
                       }`}
                     >
                       {item.originalPath}
@@ -164,7 +164,7 @@ export function TrashApp() {
 
                     <div
                       className={`col-span-2 truncate text-[11px] ${
-                        isSelected ? "text-white/85" : "text-neutral-500 dark:text-neutral-400"
+                        isSelected ? "text-inherit opacity-90" : "text-[var(--md-sys-color-on-surface-variant)]"
                       }`}
                     >
                       {formatModified(item.deletedAt)}
@@ -172,7 +172,7 @@ export function TrashApp() {
 
                     <div
                       className={`col-span-2 truncate text-right text-[11px] ${
-                        isSelected ? "text-white/85" : "text-neutral-500 dark:text-neutral-400"
+                        isSelected ? "text-inherit opacity-90" : "text-[var(--md-sys-color-on-surface-variant)]"
                       }`}
                     >
                       {item.isDir ? "—" : formatSize(item.size)}
@@ -185,28 +185,26 @@ export function TrashApp() {
         </div>
       )}
 
-      <ModalAlert
+      <M3Dialog
         open={emptyAlertOpen}
-        title="Empty Trash?"
-        message="Are you sure you want to permanently erase all items in the Trash? You cannot undo this action."
+        onClose={() => setEmptyAlertOpen(false)}
+        icon="delete_sweep"
+        headline="Empty Trash?"
+        supportingText="Are you sure you want to permanently erase all items in the Trash? You cannot undo this action."
         confirmLabel="Empty Trash"
-        confirmDestructive={true}
         cancelLabel="Cancel"
         onConfirm={handleEmptyTrash}
-        onCancel={() => setEmptyAlertOpen(false)}
-        layout="stacked"
       />
 
-      <ModalAlert
+      <M3Dialog
         open={Boolean(deleteAlertItem)}
-        title="Delete Immediately?"
-        message={`Are you sure you want to permanently delete "${deleteAlertItem?.name}"? You cannot undo this action.`}
+        onClose={() => setDeleteAlertItem(null)}
+        icon="delete_forever"
+        headline="Delete Immediately?"
+        supportingText={`Are you sure you want to permanently delete "${deleteAlertItem?.name}"? You cannot undo this action.`}
         confirmLabel="Delete"
-        confirmDestructive={true}
         cancelLabel="Cancel"
         onConfirm={() => deleteAlertItem && handlePermanentDelete(deleteAlertItem)}
-        onCancel={() => setDeleteAlertItem(null)}
-        layout="stacked"
       />
     </div>
   );
@@ -214,22 +212,35 @@ export function TrashApp() {
 
 function TrashFileIcon({ name, isSelected }: { name: string; isSelected: boolean }) {
   const ext = name.split(".").pop()?.toLowerCase();
-  const cls = `size-4 shrink-0 ${isSelected ? "text-white" : "text-neutral-500 dark:text-neutral-400"}`;
+  let symbol = "draft";
 
   if (["jpg", "jpeg", "png", "webp", "gif", "svg"].includes(ext || "")) {
-    return <FileImage className={cls} />;
+    symbol = "image";
+  } else if (["mp4", "mov", "webm", "mkv"].includes(ext || "")) {
+    symbol = "movie";
+  } else if (["mp3", "wav", "ogg", "flac"].includes(ext || "")) {
+    symbol = "audiotrack";
+  } else if (["pdf"].includes(ext || "")) {
+    symbol = "picture_as_pdf";
+  } else if (["js", "ts", "tsx", "jsx", "rs", "py", "json", "sh", "yaml", "yml"].includes(ext || "")) {
+    symbol = "code";
+  } else if (["txt", "md", "csv", "log"].includes(ext || "")) {
+    symbol = "description";
+  } else if (["zip", "tar", "gz", "7z"].includes(ext || "")) {
+    symbol = "folder_zip";
   }
-  if (["mp4", "mov", "webm", "mkv"].includes(ext || "")) {
-    return <FileVideo className={cls} />;
-  }
-  if (["mp3", "wav", "ogg", "flac"].includes(ext || "")) {
-    return <FileAudio className={cls} />;
-  }
-  if (["js", "ts", "tsx", "jsx", "rs", "py", "json", "sh", "yaml", "yml"].includes(ext || "")) {
-    return <FileCode className={cls} />;
-  }
-  if (["txt", "md", "csv", "log"].includes(ext || "")) {
-    return <FileText className={cls} />;
-  }
-  return <FileIcon className={cls} />;
+
+  return (
+    <span
+      className={`material-symbol text-[19px] shrink-0 select-none ${
+        isSelected
+          ? "text-[var(--md-sys-color-on-primary-container)]"
+          : "text-[var(--md-sys-color-on-surface-variant)] opacity-80"
+      }`}
+      data-fill="1"
+      aria-hidden="true"
+    >
+      {symbol}
+    </span>
+  );
 }

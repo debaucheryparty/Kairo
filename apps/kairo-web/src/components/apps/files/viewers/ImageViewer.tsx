@@ -108,7 +108,7 @@ export function ImageViewer({ file, onClose }: { file: ViewerFile; onClose: () =
 
   if (error) {
     return (
-      <div className="flex h-full w-full flex-col bg-white dark:bg-[#161619] text-neutral-900 dark:text-neutral-100 select-none">
+      <div className="flex h-full w-full flex-col bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] select-none">
         <header className="flex h-11 shrink-0 items-center justify-between border-b border-black/[0.08] dark:border-white/[0.08] px-4 bg-[#fafafa] dark:bg-[#1f1f23]">
           <span className="text-[13px] font-medium truncate">{file.name}</span>
           <button
@@ -154,8 +154,8 @@ export function ImageViewer({ file, onClose }: { file: ViewerFile; onClose: () =
   }
 
   return (
-    <div className="flex h-full w-full flex-col bg-white dark:bg-[#161619] text-neutral-900 dark:text-neutral-100 select-none">
-      <header className="flex h-11 shrink-0 items-center justify-between border-b border-black/[0.08] dark:border-white/[0.08] px-3.5 bg-[#fafafa] dark:bg-[#1f1f23]">
+    <div className="flex h-full w-full flex-col bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] select-none">
+      <header className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--md-sys-color-outline-variant)]/20 px-3.5 bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[13px] font-medium truncate max-w-[200px]">{file.name}</span>
           {dimensions && (
@@ -228,7 +228,7 @@ export function ImageViewer({ file, onClose }: { file: ViewerFile; onClose: () =
       </header>
 
       <div
-        className={`relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#f0f0f3] dark:bg-[#141416] p-6 ${
+        className={`relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[var(--md-sys-color-surface)] p-6 ${
           zoom > 1 ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
         }`}
         onWheel={handleWheel}
@@ -253,7 +253,7 @@ export function ImageViewer({ file, onClose }: { file: ViewerFile; onClose: () =
         />
       </div>
 
-      <footer className="flex h-7 shrink-0 items-center justify-between border-t border-black/[0.08] dark:border-white/[0.08] px-4 text-[11px] text-neutral-500 dark:text-neutral-400 bg-[#fafafa] dark:bg-[#1f1f23]">
+      <footer className="flex h-7 shrink-0 items-center justify-between border-t border-[var(--md-sys-color-outline-variant)]/20 px-4 text-[11px] text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container)]">
         <span className="truncate">{file.path}</span>
         <div className="flex items-center gap-3 shrink-0">
           {dimensions && <span>{dimensions.width} × {dimensions.height} px</span>}

@@ -1,6 +1,7 @@
 "use client";
 
 import { AboutApp } from "@/src/components/apps/AboutApp";
+import { BrowserApp } from "@/src/components/apps/BrowserApp";
 import { DashboardApp } from "@/src/components/apps/DashboardApp";
 import { EditorApp } from "@/src/components/apps/EditorApp";
 import { FileViewer } from "@/src/components/apps/files/viewers/FileViewer";
@@ -49,6 +50,10 @@ function AppBody({
   payload?: WindowPayload;
   windowId: string;
 }) {
+  if (payload?.surfaceId) {
+    return <RemoteSurfaceViewer payload={payload} windowId={windowId} />;
+  }
+
   switch (app) {
     case "dashboard":
       return <DashboardApp />;
@@ -56,10 +61,10 @@ function AppBody({
       return <FilesApp />;
     case "terminal":
       return <TerminalApp payload={payload} />;
+    case "browser":
+      return <BrowserApp payload={payload} />;
     case "viewer":
       return <FileViewer payload={payload} windowId={windowId} />;
-    case "surface":
-      return <RemoteSurfaceViewer payload={payload} windowId={windowId} />;
     case "settings":
       return <SettingsApp />;
     case "about":
@@ -68,5 +73,7 @@ function AppBody({
       return <TrashApp />;
     case "editor":
       return <EditorApp payload={payload} />;
+    default:
+      return <RemoteSurfaceViewer payload={payload} windowId={windowId} />;
   }
 }

@@ -62,6 +62,34 @@ pub struct RemoteSurface {
     pub parent_surface_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProcessPolicy {
+    SingleInstance,
+    MultiInstance,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApplicationDefinition {
+    pub app_id: String,
+    pub executable: String,
+    pub arguments: Vec<String>,
+    pub environment: std::collections::HashMap<String, String>,
+    pub working_directory: String,
+    pub display: String,
+    pub policy: ProcessPolicy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApplicationProcess {
+    pub pid: u32,
+    pub app_id: String,
+    pub state: String,
+    pub start_time: u64,
+    pub exit_code: Option<i32>,
+    pub surface_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct SurfaceLifecycleNotification {
     pub surface: RemoteSurface,
@@ -79,6 +107,7 @@ pub struct SurfaceDamageFrame {
     pub codec: String,
     pub data: Vec<u8>,
     pub timestamp_us: u64,
+    pub is_full_frame: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -126,6 +155,9 @@ pub trait RemoteGuiBackend: Send + Sync {
 
     /// List all currently known remote surfaces
     async fn list_surfaces(&self) -> Vec<RemoteSurface>;
+
+    /// List all currently tracked application processes
+    async fn list_processes(&self) -> Vec<ApplicationProcess>;
 
     /// Refresh and resend full frames for a specific surface or all surfaces
     async fn refresh_surface(&self, surface_id: Option<&str>) -> Result<(), GuiError>;

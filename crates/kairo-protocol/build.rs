@@ -1,6 +1,7 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=../../proto/kairo/v1/common.proto");
     println!("cargo:rerun-if-changed=../../proto/kairo/v1/handshake.proto");
+    println!("cargo:rerun-if-changed=../../proto/kairo/v1/discovery.proto");
     println!("cargo:rerun-if-changed=../../proto/kairo/v1/filesystem.proto");
     println!("cargo:rerun-if-changed=../../proto/kairo/v1/terminal.proto");
     println!("cargo:rerun-if-changed=../../proto/kairo/v1/process.proto");
@@ -9,11 +10,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=../../proto/kairo/v1/app.proto");
     println!("cargo:rerun-if-changed=../../proto/kairo/v1/gpu.proto");
     println!("cargo:rerun-if-changed=../../proto/kairo/v1/tunnel.proto");
+    println!("cargo:rerun-if-changed=../../proto/kairo/v1/media.proto");
+    println!("cargo:rerun-if-changed=../../proto/kairo/v1/notification.proto");
 
     prost_build::compile_protos(
         &[
             "../../proto/kairo/v1/common.proto",
             "../../proto/kairo/v1/handshake.proto",
+            "../../proto/kairo/v1/discovery.proto",
             "../../proto/kairo/v1/filesystem.proto",
             "../../proto/kairo/v1/terminal.proto",
             "../../proto/kairo/v1/process.proto",
@@ -22,6 +26,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "../../proto/kairo/v1/app.proto",
             "../../proto/kairo/v1/gpu.proto",
             "../../proto/kairo/v1/tunnel.proto",
+            "../../proto/kairo/v1/media.proto",
+            "../../proto/kairo/v1/notification.proto",
         ],
         &["../../proto"],
     )?;

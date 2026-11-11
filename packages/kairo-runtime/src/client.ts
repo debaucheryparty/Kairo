@@ -52,6 +52,28 @@ import {
   decodeStopGpuStreamResponse,
   encodeGpuStreamStatsRequest,
   decodeGpuStreamStats,
+  encodeListMediaPlayersRequest,
+  decodeListMediaPlayersResponse,
+  encodeMediaControlRequest,
+  decodeMediaControlResponse,
+  decodeMediaStateChangeEvent,
+  encodeListNotificationsRequest,
+  decodeListNotificationsResponse,
+  decodeNotificationEvent,
+  encodeCloseNotificationRequest,
+  decodeCloseNotificationResponse,
+  encodeInvokeNotificationActionRequest,
+  decodeInvokeNotificationActionResponse,
+  type MediaPlayerInfoPayload,
+  type ListMediaPlayersResponsePayload,
+  type MediaControlRequestPayload,
+  type MediaControlResponsePayload,
+  type MediaStateChangeEventPayload,
+  type NotificationPayload,
+  type ListNotificationsResponsePayload,
+  type NotificationEventPayload,
+  type CloseNotificationResponsePayload,
+  type InvokeNotificationActionResponsePayload,
   type FileEntry,
   type FileEventPayload,
   type HandshakeAckPayload,
@@ -482,7 +504,20 @@ export class KairoClient {
     return decodeCloseSurfaceResponse(respBytes);
   }
 
+  sendSurfaceInputFast(event: SurfaceInputEventPayload): void {
+    if (!this.currentSession || !this.transport.isConnected()) {
+      return;
+    }
+    const payload = encodeSurfaceInputEvent(event);
+    const frame = encodeEnvelope(MessageKind.Request, 0n, payload, Opcode.SurfaceInput);
+    void this.transport.send(frame.buffer as ArrayBuffer).catch(() => undefined);
+  }
+
   async sendSurfaceInput(event: SurfaceInputEventPayload): Promise<void> {
+    if (this.currentSession && this.transport.isConnected()) {
+      this.sendSurfaceInputFast(event);
+      return;
+    }
     const payload = encodeSurfaceInputEvent(event);
     await this.sendNotification(Opcode.SurfaceInput, payload);
   }
@@ -553,6 +588,78 @@ export class KairoClient {
     const payload = encodeGpuStreamStatsRequest(streamId);
     const respBytes = await this.sendRequest(Opcode.GpuStreamStats, payload);
     return decodeGpuStreamStats(respBytes);
+  }
+
+  async listMediaPlayers(): Promise<ListMediaPlayersResponsePayload> {
+    const payload = encodeListMediaPlayersRequest();
+    const respBytes = await this.sendRequest(Opcode.MediaGetPlayers, payload);
+    return decodeListMediaPlayersResponse(respBytes);
+  }
+
+  async controlMedia(req: MediaControlRequestPayload): Promise<MediaControlResponsePayload> {
+    const payload = encodeMediaControlRequest(req);
+    const respBytes = await this.sendRequest(Opcode.MediaControl, payload);
+    return decodeMediaControlResponse(respBytes);
+  }
+
+  onMediaState(listener: (event: MediaStateChangeEventPayload) => void): () => void {
+    return this.onEvent(Opcode.MediaStateEvent, (payload) => {
+      try {
+        const decoded = decodeMediaStateChangeEvent(payload);
+        listener(decoded);
+      } catch (err) {
+        console.error('Failed to decode MediaStateChangeEvent:', err);
+      }
+    });
+  }
+
+  async listNotifications(): Promise<NotificationPayload[]> {
+    const payload = encodeListNotificationsRequest();
+    const respBytes = await this.sendRequest(Opcode.NotificationList, payload);
+    const res = decodeListNotificationsResponse(respBytes);
+    return res.notifications;
+  }
+
+  async closeNotification(id: string): Promise<boolean> {
+    const payload = encodeCloseNotificationRequest(id);
+    const respBytes = await this.sendRequest(Opcode.NotificationClose, payload);
+    const res = decodeCloseNotificationResponse(respBytes);
+    return res.success;
+  }
+
+  async invokeNotificationAction(id: string, actionKey: string): Promise<boolean> {
+    const payload = encodeInvokeNotificationActionRequest(id, actionKey);
+    const respBytes = await this.sendRequest(Opcode.NotificationAction, payload);
+    const res = decodeInvokeNotificationActionResponse(respBytes);
+    return res.success;
+  }
+
+  onNotification(listener: (notification: NotificationPayload) => void): () => void {
+    return this.onEvent(Opcode.NotificationEvent, (payload) => {
+      try {
+        const decoded = decodeNotificationEvent(payload);
+        if (decoded.notification) {
+          listener(decoded.notification);
+        }
+      } catch (err) {
+        console.error('Failed to decode NotificationEvent:', err);
+      }
+    });
+  }
+
+  isAiAvailable(): boolean {
+    return Boolean(this.currentSession?.capabilities.includes('ai.v1'));
+  }
+
+  async requestAiCompletion(prompt: string, model = 'gemini-2.5-flash'): Promise<string> {
+    if (!this.isAiAvailable()) {
+      throw new Error(
+        'Host Kairo Agent currently lacks the "ai.v1" capability. Local reactive assistant fallback will be utilized.'
+      );
+    }
+    const payload = new TextEncoder().encode(JSON.stringify({ prompt, model }));
+    const respBytes = await this.sendRequest(Opcode.AiGenerate, payload);
+    return new TextDecoder().decode(respBytes);
   }
 
   private handleIncomingMessage(data: Uint8Array): void {

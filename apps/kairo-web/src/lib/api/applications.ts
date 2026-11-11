@@ -11,7 +11,7 @@ export interface VpsApp {
   description: string;
   icon: string;
   exec: string;
-  builtinAppId?: "terminal" | "files" | "dashboard" | "settings" | "remote-apps" | "about" | "editor";
+  builtinAppId?: "terminal" | "files" | "dashboard" | "settings" | "remote-apps" | "about" | "editor" | "browser";
   isTerminal?: boolean;
 }
 
@@ -25,13 +25,23 @@ export const APP_CATEGORIES: AppCategory[] = [
 
 export const BUILTIN_VPS_APPS: VpsApp[] = [
   {
+    id: "browser",
+    name: "Web Browser",
+    genericName: "Web Navigator",
+    category: "Utilities",
+    description: "Browse web apps, test local ports, and launch native Chrome on the host",
+    icon: "browser",
+    exec: "browser",
+    builtinAppId: "browser",
+  },
+  {
     id: "editor",
-    name: "Visual Studio Code",
-    genericName: "Web Code Editor",
-    category: "Developer Tools",
-    description: "Fast web-native code editor with syntax highlighting, explorer, and tabs",
-    icon: "vscode",
-    exec: "code",
+    name: "Text Editor",
+    genericName: "Text Editor",
+    category: "Utilities",
+    description: "Fast text editor with syntax highlighting, explorer, and tabs",
+    icon: "textedit",
+    exec: "text-editor",
     builtinAppId: "editor",
   },
   {
@@ -103,12 +113,6 @@ export function mapLinuxApp(app: LinuxApp): VpsApp {
 
   let builtinAppId: VpsApp["builtinAppId"] | undefined;
   if (
-    appIdLower.includes("code") ||
-    execLower.startsWith("code") ||
-    appIdLower.includes("vscode")
-  ) {
-    builtinAppId = "editor";
-  } else if (
     app.isTerminal ||
     appIdLower.includes("terminal") ||
     execLower === "bash" ||
@@ -129,7 +133,7 @@ export function mapLinuxApp(app: LinuxApp): VpsApp {
     genericName: app.genericName,
     category,
     description: app.comment || app.genericName || `Launch ${app.exec} on remote computer`,
-    icon: app.icon || (builtinAppId === "editor" ? "vscode" : app.isTerminal ? "terminal" : "files"),
+    icon: app.icon || (builtinAppId === "editor" ? "textedit" : app.isTerminal ? "terminal" : "files"),
     exec: app.exec,
     builtinAppId,
     isTerminal: app.isTerminal,

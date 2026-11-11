@@ -94,6 +94,21 @@ export {
   type StartGpuStreamRequestPayload,
   type StartGpuStreamResponsePayload,
   type GpuStreamStatsPayload,
+  PlaybackState,
+  MediaControlAction,
+  NotificationUrgency,
+  type MediaTrackPayload,
+  type MediaPlayerInfoPayload,
+  type ListMediaPlayersResponsePayload,
+  type MediaControlRequestPayload,
+  type MediaControlResponsePayload,
+  type MediaStateChangeEventPayload,
+  type NotificationActionPayload,
+  type NotificationPayload,
+  type ListNotificationsResponsePayload,
+  type NotificationEventPayload,
+  type CloseNotificationResponsePayload,
+  type InvokeNotificationActionResponsePayload,
 } from './protocol';
 
 

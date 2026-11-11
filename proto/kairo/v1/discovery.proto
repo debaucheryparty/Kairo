@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package kairo.v1;
+
+enum OsFamily {
+  OS_FAMILY_UNKNOWN = 0;
+  OS_FAMILY_LINUX = 1;
+  OS_FAMILY_WINDOWS = 2;
+  OS_FAMILY_MACOS = 3;
+}
+
+enum Architecture {
+  ARCHITECTURE_UNKNOWN = 0;
+  ARCHITECTURE_X86_64 = 1;
+  ARCHITECTURE_AARCH64 = 2;
+  ARCHITECTURE_X86 = 3;
+  ARCHITECTURE_ARM = 4;
+  ARCHITECTURE_RISCV64 = 5;
+}
+
+enum InitSystem {
+  INIT_SYSTEM_UNKNOWN = 0;
+  INIT_SYSTEM_SYSTEMD = 1;
+  INIT_SYSTEM_OPENRC = 2;
+  INIT_SYSTEM_RUNIT = 3;
+  INIT_SYSTEM_SYSVINIT = 4;
+  INIT_SYSTEM_LAUNCHD = 5;
+  INIT_SYSTEM_WINSVC = 6;
+  INIT_SYSTEM_UPSTART = 7;
+}
+
+enum DisplayServer {
+  DISPLAY_SERVER_NONE = 0;
+  DISPLAY_SERVER_X11 = 1;
+  DISPLAY_SERVER_WAYLAND = 2;
+  DISPLAY_SERVER_BOTH = 3;
+}
+
+enum PrivilegeLevel {
+  PRIVILEGE_LEVEL_USER = 0;
+  PRIVILEGE_LEVEL_ROOT = 1;
+  PRIVILEGE_LEVEL_SUDO = 2;
+}
+
+enum PlatformSupportTier {
+  PLATFORM_SUPPORT_TIER_UNSPECIFIED = 0;
+  PLATFORM_SUPPORT_TIER_TIER1 = 1;
+  PLATFORM_SUPPORT_TIER_TIER2 = 2;
+  PLATFORM_SUPPORT_TIER_TIER3 = 3;
+}
+
+message PackageManager {
+  string name = 1;
+  string version = 2;
+  bool is_usable = 3;
+  string path = 4;
+}
+
+message GpuInfo {
+  bool available = 1;
+  repeated string devices = 2;
+  bool has_hardware_encoder = 3;
+  string encoder_type = 4;
+}
+
+message IsolationCapabilities {
+  bool cgroup_v2 = 1;
+  bool cgroup_v1 = 2;
+  repeated string cgroup_controllers = 3;
+  bool user_namespaces = 4;
+  bool pid_namespaces = 5;
+  bool mount_namespaces = 6;
+  bool network_namespaces = 7;
+  bool unprivileged_user_namespaces_allowed = 8;
+  string restriction_reason = 9;
+}
+
+message SystemProfile {
+  uint32 profile_version = 1;
+
+  OsFamily os_family = 2;
+  string os_id = 3;
+  string os_name = 4;
+  string os_version = 5;
+  string os_version_id = 6;
+  string os_pretty_name = 7;
+  string kernel_version = 8;
+  Architecture architecture = 9;
+
+  uint32 cpu_cores = 10;
+  uint64 memory_total_bytes = 11;
+  uint64 disk_total_bytes = 12;
+
+  repeated PackageManager package_managers = 13;
+  InitSystem init_system = 14;
+  DisplayServer display_server = 15;
+  PrivilegeLevel privilege_level = 16;
+
+  GpuInfo gpu = 17;
+
+  bool has_sudo = 18;
+  string username = 19;
+  string hostname = 20;
+
+  bool is_elevated = 21;
+  bool sudo_available = 22;
+  bool sudo_passwordless = 23;
+
+  IsolationCapabilities isolation = 24;
+  PlatformSupportTier support_tier = 25;
+  bool native_adapter_available = 26;
+}
+

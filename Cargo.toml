@@ -6,6 +6,9 @@ members = [
     "crates/kairo-protocol",
     "crates/kairo-transport",
     "crates/kairo-common",
+    "crates/kairo-discovery",
+    "crates/kairo-bridge",
+    "crates/kairo-core",
 ]
 
 [workspace.package]

@@ -4,7 +4,7 @@ use prost::Message;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tracing::{info, warn};
@@ -278,7 +278,8 @@ impl ReverseTunnelClient {
 
             if frame.flags & 1 != 0 {
                 let (stream_in_tx, stream_in_rx) = mpsc::channel::<Bytes>(64);
-                let vstream = VirtualStream::new(frame.stream_id, stream_in_rx, outbound_tx.clone());
+                let vstream =
+                    VirtualStream::new(frame.stream_id, stream_in_rx, outbound_tx.clone());
 
                 let mut streams = active_streams.lock().await;
                 streams.insert(frame.stream_id, stream_in_tx.clone());
@@ -327,11 +328,17 @@ mod tests {
 
         let mut stream = VirtualStream::new(42, in_rx, out_tx);
 
-        in_tx.send(Bytes::from_static(b"hello virtual stream")).await.unwrap();
+        in_tx
+            .send(Bytes::from_static(b"hello virtual stream"))
+            .await
+            .unwrap();
         let received = stream.recv().await.unwrap();
         assert_eq!(&received[..], b"hello virtual stream");
 
-        stream.send(Bytes::from_static(b"response data")).await.unwrap();
+        stream
+            .send(Bytes::from_static(b"response data"))
+            .await
+            .unwrap();
         let out_frame = out_rx.recv().await.unwrap();
         assert_eq!(out_frame.stream_id, 42);
         assert_eq!(out_frame.flags, 2);

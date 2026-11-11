@@ -50,6 +50,14 @@ export enum Opcode {
   TunnelRegister = 90,
   TunnelFrame = 91,
   TunnelHeartbeat = 92,
+  MediaGetPlayers = 100,
+  MediaControl = 101,
+  MediaStateEvent = 102,
+  NotificationList = 110,
+  NotificationEvent = 111,
+  NotificationClose = 112,
+  NotificationAction = 113,
+  AiGenerate = 120,
 }
 
 export interface KairoEnvelope {

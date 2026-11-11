@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package kairo.v1;
 
+import "kairo/v1/discovery.proto";
+
 message HandshakeInit {
   uint32 protocol_version = 1;
   string client_id = 2;
@@ -16,4 +18,5 @@ message HandshakeAck {
   repeated string capabilities = 4;
   bool authenticated = 5;
   string error_message = 6;
+  SystemProfile system_profile = 7;
 }

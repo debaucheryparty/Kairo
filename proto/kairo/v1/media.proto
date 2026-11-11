@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package kairo.v1;
+
+enum PlaybackState {
+  PLAYBACK_STATE_UNKNOWN = 0;
+  PLAYBACK_STATE_PLAYING = 1;
+  PLAYBACK_STATE_PAUSED = 2;
+  PLAYBACK_STATE_STOPPED = 3;
+}
+
+message MediaTrack {
+  string title = 1;
+  string artist = 2;
+  string album = 3;
+  string art_url = 4;
+  int64 position_us = 5;
+  int64 duration_us = 6;
+}
+
+message MediaPlayerInfo {
+  string player_id = 1;
+  string name = 2;
+  PlaybackState playback_state = 3;
+  MediaTrack track = 4;
+  double volume = 5;
+  bool can_control = 6;
+  bool can_go_next = 7;
+  bool can_go_previous = 8;
+  bool can_play = 9;
+  bool can_pause = 10;
+  bool can_seek = 11;
+}
+
+message ListMediaPlayersRequest {}
+
+message ListMediaPlayersResponse {
+  repeated MediaPlayerInfo players = 1;
+  string active_player_id = 2;
+}
+
+enum MediaControlAction {
+  MEDIA_CONTROL_ACTION_UNSPECIFIED = 0;
+  MEDIA_CONTROL_ACTION_PLAY = 1;
+  MEDIA_CONTROL_ACTION_PAUSE = 2;
+  MEDIA_CONTROL_ACTION_PLAY_PAUSE = 3;
+  MEDIA_CONTROL_ACTION_NEXT = 4;
+  MEDIA_CONTROL_ACTION_PREVIOUS = 5;
+  MEDIA_CONTROL_ACTION_STOP = 6;
+  MEDIA_CONTROL_ACTION_SEEK = 7;
+  MEDIA_CONTROL_ACTION_SET_VOLUME = 8;
+}
+
+message MediaControlRequest {
+  string player_id = 1;
+  MediaControlAction action = 2;
+  int64 seek_offset_us = 3;
+  double volume = 4;
+}
+
+message MediaControlResponse {
+  bool success = 1;
+  string message = 2;
+  MediaPlayerInfo player = 3;
+}
+
+message MediaStateChangeEvent {
+  MediaPlayerInfo player = 1;
+  bool is_active = 2;
+}

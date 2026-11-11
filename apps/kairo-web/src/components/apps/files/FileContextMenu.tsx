@@ -33,13 +33,10 @@ export function FileContextMenu({
     <div
       role="menu"
       aria-label="File actions"
-      className="fixed z-[120] min-w-52 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
+      className="fixed z-[120] min-w-56 overflow-hidden rounded-[16px] border border-[var(--md-sys-color-outline-variant)]/30 py-1.5 shadow-[var(--md-sys-elevation-level3)] bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] backdrop-blur-3xl animate-menu-in select-none font-google-sans"
       style={{
         left: x,
         top: y,
-        background: "var(--menu-bg)",
-        borderColor: "var(--menu-border)",
-        color: "var(--menu-fg)",
       }}
     >
       <MenuItem
@@ -66,7 +63,7 @@ export function FileContextMenu({
           }}
         />
       )}
-      <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
+      <div className="my-1.5 h-px bg-[var(--md-sys-color-outline-variant)]/20" />
       <MenuItem
         label="Copy Path"
         onSelect={() => {
@@ -83,7 +80,7 @@ export function FileContextMenu({
       />
       {entry && onMoveToTrash && (
         <>
-          <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
+          <div className="my-1.5 h-px bg-[var(--md-sys-color-outline-variant)]/20" />
           <MenuItem
             label="Move to Trash"
             shortcut="⌘⌫"
@@ -111,11 +108,11 @@ function MenuItem({
     <button
       type="button"
       role="menuitem"
-      className="flex w-[calc(100%-12px)] items-center justify-between mx-1.5 px-3 py-1.5 text-left rounded-[8px] outline-none text-[13px] font-normal transition-colors hover:bg-[#007aff] hover:!text-white focus-visible:bg-[#007aff] focus-visible:!text-white group"
+      className="m3-state-layer flex w-[calc(100%-12px)] items-center justify-between mx-1.5 px-3 py-2 text-left rounded-[10px] outline-none text-[13px] font-medium transition-colors hover:bg-[var(--md-sys-color-primary-container)] hover:text-[var(--md-sys-color-on-primary-container)] group"
       onClick={onSelect}
     >
       <span>{label}</span>
-      {shortcut && <span className="text-[11px] opacity-50 group-hover:opacity-100">{shortcut}</span>}
+      {shortcut && <span className="text-[11px] opacity-60 group-hover:opacity-100 font-mono">{shortcut}</span>}
     </button>
   );
 }

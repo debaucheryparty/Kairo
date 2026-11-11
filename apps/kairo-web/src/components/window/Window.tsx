@@ -21,6 +21,8 @@ const EDGES: ResizeEdge[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 export function Window({ window: win, children }: { window: WindowState; children: ReactNode }) {
   const {
     focusedId,
+    activeWorkspace,
+    overviewOpen,
     focusWindow,
     closeWindow,
     minimizeWindow,
@@ -38,13 +40,13 @@ export function Window({ window: win, children }: { window: WindowState; childre
 
   const handleFocus = () => {
     focusWindow(win.id);
-    if (win.app === "surface" && win.payload?.surfaceId && runtimeClient?.getSession()) {
+    if (win.payload?.surfaceId && runtimeClient?.getSession()) {
       void runtimeClient.focusSurface(win.payload.surfaceId).catch(() => undefined);
     }
   };
 
   const handleClose = () => {
-    if (win.app === "surface" && win.payload?.surfaceId && runtimeClient?.getSession()) {
+    if (win.payload?.surfaceId && runtimeClient?.getSession()) {
       void runtimeClient.closeSurface(win.payload.surfaceId).catch(() => undefined);
     }
     closeWindow(win.id);
@@ -65,8 +67,8 @@ export function Window({ window: win, children }: { window: WindowState; childre
   } | null>(null);
 
   const focused = focusedId === win.id;
-  const chrome = win.chrome ?? APP_META[win.app].chrome;
-  const light = chrome === "light" && theme === "light";
+  const chrome = win.chrome ?? (win.app === "terminal" ? "dark" : theme === "light" ? "light" : "dark");
+  const light = chrome === "light";
   const title =
     win.app === "terminal"
       ? `Terminal — ${selected?.hostname || selected?.address || server?.hostname || server?.host || "server"}`
@@ -193,6 +195,9 @@ export function Window({ window: win, children }: { window: WindowState; childre
     target.addEventListener("pointerup", onUp);
   }
 
+  const isCurrentWorkspace = (win.workspaceId ?? 1) === activeWorkspace;
+  const isHiddenByWorkspace = !isCurrentWorkspace && !overviewOpen;
+
   return (
     <article
       role="dialog"
@@ -204,20 +209,21 @@ export function Window({ window: win, children }: { window: WindowState; childre
           : `rounded-[18px] animate-window-in ${
               isDragging ? "" : "transition-[left,top,width,height] duration-200 ease-out"
             } ${
-              light
-                ? "border border-black/[0.1] bg-[#ffffff] shadow-[0_22px_70px_rgba(0,0,0,0.2),0_0_0_1px_rgba(255,255,255,0.7)_inset]"
-                : "border border-white/[0.12] bg-[#1a1a1d] shadow-[0_26px_80px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.08)_inset]"
-            } ${focused ? "ring-1 ring-black/[0.08] dark:ring-white/[0.18]" : "opacity-95"}`
-      } ${win.maximized ? (light ? "bg-[#ffffff]" : "bg-[#1a1a1d]") : ""}`}
+              focused
+                ? "border border-[var(--md-sys-color-outline-variant)]/40 shadow-[0_26px_80px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.06)_inset]"
+                : "border border-[var(--md-sys-color-outline-variant)]/30 shadow-[0_12px_40px_rgba(0,0,0,0.35)] opacity-95"
+            } bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]`
+      } ${win.maximized ? "bg-[var(--md-sys-color-surface)]" : ""}`}
       style={
         win.maximized
-          ? { zIndex: win.zIndex }
+          ? { zIndex: win.zIndex, display: isHiddenByWorkspace ? "none" : undefined }
           : {
               left: win.x,
               top: win.y,
               width: win.width,
               height: win.height,
               zIndex: win.zIndex,
+              display: isHiddenByWorkspace ? "none" : undefined,
             }
       }
       onPointerDown={handleFocus}

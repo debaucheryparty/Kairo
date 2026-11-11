@@ -60,6 +60,8 @@ message ListServicesRequest {}
 message ListServicesResponse {
   repeated SystemService services = 1;
   bool systemd_available = 2;
+  bool service_manager_available = 3;
+  string manager_name = 4;
 }
 
 enum ServiceAction {
@@ -77,4 +79,43 @@ message ManageServiceRequest {
 message ManageServiceResponse {
   bool success = 1;
   string message = 2;
+}
+
+message InstalledPackage {
+  string name = 1;
+  string version = 2;
+  string architecture = 3;
+  string description = 4;
+}
+
+message ListPackagesRequest {
+  string filter = 1;
+}
+
+message ListPackagesResponse {
+  repeated InstalledPackage packages = 1;
+  bool package_manager_available = 2;
+  string manager_name = 3;
+}
+
+message InstallPackagesRequest {
+  repeated string package_names = 1;
+}
+
+message InstallPackagesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string installed_packages = 3;
+  repeated string failed_packages = 4;
+}
+
+message RemovePackagesRequest {
+  repeated string package_names = 1;
+}
+
+message RemovePackagesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string removed_packages = 3;
+  repeated string failed_packages = 4;
 }

@@ -1,9 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, ChevronDown, LogOut, Search, Server, SlidersHorizontal, Wifi } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
 import { ThemeToggle } from "@/src/components/desktop/ThemeToggle";
 import { BrandMark } from "@/src/components/brand/BrandMark";
+import { Workspaces } from "@/src/components/desktop/Workspaces";
+import { TopBarResources } from "@/src/components/desktop/TopBarResources";
+import {
+  HyprSparkIcon,
+  HyprVolumeIcon,
+  HyprWifiIcon,
+  HyprPowerIcon,
+  HyprSettingsIcon,
+  HyprSearchIcon,
+} from "@/src/components/desktop/HyprIcons";
 import { useServer } from "@/src/lib/api/server-context";
 import { useSelectedServer, useSession } from "@/src/lib/session";
 import { useWindowManager } from "@/src/components/window/window-context";
@@ -25,24 +35,15 @@ function statusLabel(status: string | undefined, loading: boolean) {
   }
 }
 
-function metric(value: number | undefined, loading: boolean, ready: boolean) {
-  if (loading && !ready) return "—";
-  if (!ready || typeof value !== "number") return "—";
-  return `${Math.round(value)}%`;
-}
-
-function formatMacDate(date: Date) {
+function formatClockDate(date: Date) {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const day = days[date.getDay()];
   const month = months[date.getMonth()];
   const dayNum = date.getDate();
-  const timeStr = date.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `${day} ${month} ${dayNum}  ${timeStr}`;
+  const hours = date.getHours().toString().padStart(2, "0");
+  const minutes = date.getMinutes().toString().padStart(2, "0");
+  return `${hours}:${minutes} • ${day}, ${month} ${dayNum}`;
 }
 
 export function TopBar() {
@@ -50,23 +51,21 @@ export function TopBar() {
   const { servers, switchServer, backToServers, logOut, runtimeClient, runtimeConnected } = useSession();
   const { server, loading, error } = useServer();
   const {
-    openWindow,
-    tileWindows,
-    snapWindow,
-    minimizeWindow,
-    maximizeWindow,
-    restoreWindow,
-    closeWindow,
+    windows,
     focusedId,
+    activeWorkspace,
+    setWorkspace,
+    openWindow,
+    focusWindow,
   } = useWindowManager();
 
-  const [dateStr, setDateStr] = useState("");
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [dateStr, setDateStr] = useState(() => formatClockDate(new Date()));
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [liveMetrics, setLiveMetrics] = useState<SystemMetrics | null>(null);
   const barRef = useRef<HTMLElement>(null);
   const serverMenuRef = useRef<HTMLDivElement>(null);
 
+  // Fetch system metrics once on connect without recurring interval polling
   useEffect(() => {
     if (!runtimeClient?.getSession()) {
       setLiveMetrics(null);
@@ -74,23 +73,17 @@ export function TopBar() {
     }
 
     let active = true;
-    const fetchMetrics = async () => {
-      try {
-        const metrics = await runtimeClient.getMetrics();
+    runtimeClient
+      .getMetrics()
+      .then((metrics) => {
         if (active) setLiveMetrics(metrics);
-      } catch {}
-    };
-
-    void fetchMetrics();
-    const interval = setInterval(() => {
-      void fetchMetrics();
-    }, 2000);
+      })
+      .catch(() => {});
 
     return () => {
       active = false;
-      clearInterval(interval);
     };
-  }, [runtimeClient]);
+  }, [runtimeClient, runtimeConnected]);
 
   const isLive = Boolean(runtimeConnected && runtimeClient?.getSession());
   const online = isLive || server?.status === "online";
@@ -98,31 +91,28 @@ export function TopBar() {
   const name = selected?.name || server?.name || "Server";
   const otherServers = servers.filter((item) => item.id !== selected?.id);
 
-  const cpuPercent = isLive && liveMetrics
-    ? Math.round(liveMetrics.cpuUsagePercent)
-    : undefined;
-
-  const ramPercent = isLive && liveMetrics && liveMetrics.memoryTotalBytes > 0
-    ? Math.round((liveMetrics.memoryUsedBytes / liveMetrics.memoryTotalBytes) * 100)
-    : undefined;
+  const cpuPercent = isLive && liveMetrics ? Math.round(liveMetrics.cpuUsagePercent) : undefined;
+  const ramPercent =
+    isLive && liveMetrics && liveMetrics.memoryTotalBytes > 0
+      ? Math.round((liveMetrics.memoryUsedBytes / liveMetrics.memoryTotalBytes) * 100)
+      : undefined;
 
   useEffect(() => {
-    const tick = () => setDateStr(formatMacDate(new Date()));
+    const tick = () => setDateStr(formatClockDate(new Date()));
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
   }, []);
 
+  // Close menus on outside click / Esc
   useEffect(() => {
     function onPointer(event: PointerEvent) {
-      if (!barRef.current?.contains(event.target as Node)) {
-        setActiveMenu(null);
+      if (!serverMenuRef.current?.contains(event.target as Node)) {
         setServerMenuOpen(false);
       }
     }
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setActiveMenu(null);
         setServerMenuOpen(false);
       }
     }
@@ -134,396 +124,140 @@ export function TopBar() {
     };
   }, []);
 
-  useEffect(() => {
-    function onToggle(event: Event) {
-      event.preventDefault();
-      setServerMenuOpen((open) => !open);
+  // Which workspaces contain open windows
+  const occupiedWorkspaces = useMemo(() => {
+    const set = new Set<number>();
+    for (const win of windows) {
+      if (!win.minimized) {
+        set.add(win.workspaceId ?? 1);
+      }
     }
-    window.addEventListener("kairo:toggle-server-menu", onToggle);
-    return () => window.removeEventListener("kairo:toggle-server-menu", onToggle);
-  }, []);
+    return set;
+  }, [windows]);
 
-  const handleMenuClick = (menu: string) => {
-    setActiveMenu((prev) => (prev === menu ? null : menu));
-  };
-
-  const handleMenuHover = (menu: string) => {
-    if (activeMenu !== null) {
-      setActiveMenu(menu);
-    }
-  };
-
-  const closeMenus = () => {
-    setActiveMenu(null);
-    setServerMenuOpen(false);
-  };
-
+  // Focused window info for active window chip
+  const focusedWindow = useMemo(() => {
+    return windows.find((w) => w.id === focusedId);
+  }, [windows, focusedId]);
   return (
     <header
       ref={barRef}
-      className="relative z-50 flex h-8 items-center justify-between gap-2 px-3 text-[13px] font-normal tracking-tight backdrop-blur-2xl border-b border-black/[0.06] dark:border-white/[0.08] select-none shadow-[0_1px_3px_rgba(0,0,0,0.1)]"
-      style={{ background: "var(--topbar-bg)", color: "var(--topbar-fg)" }}
+      className="fixed top-2.5 inset-x-3 pointer-events-none z-50 flex items-center justify-between gap-3 text-[13px] select-none font-medium"
+      aria-label="Kairo Top Bar"
     >
-      <div className="flex items-center gap-0.5">
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => handleMenuClick("apple")}
-            onMouseEnter={() => handleMenuHover("apple")}
-            className={`flex items-center rounded-md px-2 py-0.5 transition-colors outline-none ${
-              activeMenu === "apple" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
-            }`}
-            aria-label="System Menu"
-          >
-            <BrandMark size={15} />
-          </button>
+      {/* ─── LEFT ISLAND: App Launcher + Active Window ─── */}
+      <div
+        className="pointer-events-auto flex items-center h-10 gap-2 px-2.5 rounded-full m3-elevation-2 bg-[var(--m3-surface-container-low)]/90 border border-[var(--m3-outline-variant)]/40 backdrop-blur-2xl text-[var(--m3-on-surface)] transition-all duration-200"
+      >
+        {/* Spotlight App Launcher Button */}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("kairo:toggle-spotlight"))}
+          className="relative flex items-center justify-center size-8 rounded-full overflow-hidden bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] m3-state-layer transition-transform active:scale-95 shadow-sm"
+          title="App Launcher (Super / Ctrl+Space)"
+          aria-label="App Launcher"
+        >
+          <HyprSearchIcon className="size-4" />
+        </button>
 
-          {activeMenu === "apple" && (
-            <div
-              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
-              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
-            >
-              <MenuItem
-                label="About Kairo"
-                onSelect={() => {
-                  openWindow("about");
-                  closeMenus();
-                }}
-              />
-              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
-              <MenuItem
-                label="Settings..."
-                shortcut="⌘,"
-                onSelect={() => {
-                  openWindow("settings");
-                  closeMenus();
-                }}
-              />
-              <MenuItem
-                label="Switch Server..."
-                shortcut="⌘K"
-                onSelect={() => {
-                  closeMenus();
-                  window.dispatchEvent(new Event("kairo:toggle-server-menu"));
-                }}
-              />
-              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
-              <MenuItem
-                label="Leave Server"
-                shortcut="⌘Q"
-                onSelect={() => {
-                  closeMenus();
-                  logOut();
-                }}
-              />
-            </div>
-          )}
+        <div className="h-4 w-px bg-[var(--m3-outline-variant)]/50 mx-0.5" />
+
+        {/* Active Window Chip */}
+        <div
+          onClick={() => {
+            if (focusedWindow) focusWindow(focusedWindow.id);
+          }}
+          className="relative flex items-center gap-2 h-7 px-3 rounded-full overflow-hidden bg-[var(--m3-surface-container)] hover:bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline-variant)]/30 text-[var(--m3-on-surface)] max-w-[200px] m3-state-layer transition-colors cursor-pointer"
+          title={focusedWindow ? focusedWindow.title : "Kairo Desktop"}
+        >
+          <BrandMark size={14} className="shrink-0 opacity-80" />
+          <span className="truncate m3-label-medium font-google-sans tracking-tight">
+            {focusedWindow ? focusedWindow.title : "Kairo"}
+          </span>
         </div>
 
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => handleMenuClick("kairo")}
-            onMouseEnter={() => handleMenuHover("kairo")}
-            className={`rounded-md px-2.5 py-0.5 font-semibold text-[13px] transition-colors outline-none ${
-              activeMenu === "kairo" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
-            }`}
-          >
-            Kairo
-          </button>
+        
+      </div>
 
-          {activeMenu === "kairo" && (
-            <div
-              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
-              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
-            >
-              <MenuItem
-                label="About Kairo"
-                onSelect={() => {
-                  openWindow("about");
-                  closeMenus();
-                }}
-              />
-              <MenuItem
-                label="Settings..."
-                shortcut="⌘,"
-                onSelect={() => {
-                  openWindow("settings");
-                  closeMenus();
-                }}
-              />
-              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
-              <MenuItem
-                label="Leave Server"
-                shortcut="⌘Q"
-                onSelect={() => {
-                  closeMenus();
-                  logOut();
-                }}
-              />
-            </div>
-          )}
-        </div>
+      {/* ─── CENTER UNIFIED ISLAND: Resources + Workspaces + Clock ─── */}
+      <div className="pointer-events-auto flex items-center h-10 gap-2 px-3 rounded-full m3-elevation-2 bg-[var(--m3-surface-container-low)]/90 border border-[var(--m3-outline-variant)]/40 backdrop-blur-2xl text-[var(--m3-on-surface)] transition-all duration-200">
+        {/* Hardware Telemetry Chips (Resources.qml → TopBarResources.tsx) */}
+        {(typeof cpuPercent === "number" || typeof ramPercent === "number") && (
+          <>
+            <TopBarResources cpuPercent={cpuPercent} ramPercent={ramPercent} />
+            <div className="h-4 w-px bg-[var(--m3-outline-variant)]/50" />
+          </>
+        )}
 
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => handleMenuClick("file")}
-            onMouseEnter={() => handleMenuHover("file")}
-            className={`rounded-md px-2 py-0.5 text-[13px] transition-colors outline-none ${
-              activeMenu === "file" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
-            }`}
-          >
-            File
-          </button>
+        {/* Workspaces Pill (Workspaces.qml → Workspaces.tsx) */}
+        <Workspaces
+          activeWorkspace={activeWorkspace}
+          occupiedWorkspaces={occupiedWorkspaces}
+          setWorkspace={setWorkspace}
+        />
 
-          {activeMenu === "file" && (
-            <div
-              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
-              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
-            >
-              <MenuItem
-                label="New Terminal Window"
-                shortcut="⌘T"
-                onSelect={() => {
-                  openWindow("terminal");
-                  closeMenus();
-                }}
-              />
-              <MenuItem
-                label="Browse Files"
-                shortcut="⌘O"
-                onSelect={() => {
-                  openWindow("files");
-                  closeMenus();
-                }}
-              />
-              <MenuItem
-                label="Dashboard"
-                onSelect={() => {
-                  openWindow("dashboard");
-                  closeMenus();
-                }}
-              />
-              <MenuItem
-                label="Linux Applications"
-                shortcut="⌘Space"
-                onSelect={() => {
-                  window.dispatchEvent(new Event("kairo:toggle-spotlight"));
-                  closeMenus();
-                }}
-              />
-              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
-              <MenuItem
-                label="Close Window"
-                shortcut="⌘W"
-                disabled={!focusedId}
-                onSelect={() => {
-                  if (focusedId) closeWindow(focusedId);
-                  closeMenus();
-                }}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => handleMenuClick("view")}
-            onMouseEnter={() => handleMenuHover("view")}
-            className={`rounded-md px-2 py-0.5 text-[13px] transition-colors outline-none ${
-              activeMenu === "view" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
-            }`}
-          >
-            View
-          </button>
-
-          {activeMenu === "view" && (
-            <div
-              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
-              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
-            >
-              <MenuItem
-                label="Tile Windows"
-                shortcut="⌥T"
-                onSelect={() => {
-                  tileWindows();
-                  closeMenus();
-                }}
-              />
-              <MenuItem
-                label="Snap Left (50%)"
-                shortcut="⌥←"
-                disabled={!focusedId}
-                onSelect={() => {
-                  if (focusedId) snapWindow(focusedId, "left");
-                  closeMenus();
-                }}
-              />
-              <MenuItem
-                label="Snap Right (50%)"
-                shortcut="⌥→"
-                disabled={!focusedId}
-                onSelect={() => {
-                  if (focusedId) snapWindow(focusedId, "right");
-                  closeMenus();
-                }}
-              />
-              <MenuItem
-                label="Maximize Window"
-                shortcut="⌥↑"
-                disabled={!focusedId}
-                onSelect={() => {
-                  if (focusedId) maximizeWindow(focusedId);
-                  closeMenus();
-                }}
-              />
-              <MenuItem
-                label="Restore Window"
-                shortcut="⌥↓"
-                disabled={!focusedId}
-                onSelect={() => {
-                  if (focusedId) restoreWindow(focusedId);
-                  closeMenus();
-                }}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => handleMenuClick("window")}
-            onMouseEnter={() => handleMenuHover("window")}
-            className={`rounded-md px-2 py-0.5 text-[13px] transition-colors outline-none ${
-              activeMenu === "window" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
-            }`}
-          >
-            Window
-          </button>
-
-          {activeMenu === "window" && (
-            <div
-              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
-              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
-            >
-              <MenuItem
-                label="Minimize"
-                shortcut="⌘M"
-                disabled={!focusedId}
-                onSelect={() => {
-                  if (focusedId) minimizeWindow(focusedId);
-                  closeMenus();
-                }}
-              />
-              <MenuItem
-                label="Zoom"
-                disabled={!focusedId}
-                onSelect={() => {
-                  if (focusedId) maximizeWindow(focusedId);
-                  closeMenus();
-                }}
-              />
-              <MenuItem
-                label="Tile Windows Side-by-Side"
-                shortcut="⌥T"
-                onSelect={() => {
-                  tileWindows();
-                  closeMenus();
-                }}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => handleMenuClick("help")}
-            onMouseEnter={() => handleMenuHover("help")}
-            className={`rounded-md px-2 py-0.5 text-[13px] transition-colors outline-none ${
-              activeMenu === "help" ? "bg-[var(--topbar-active)]" : "hover:bg-[var(--topbar-hover)]"
-            }`}
-          >
-            Help
-          </button>
-
-          {activeMenu === "help" && (
-            <div
-              className="absolute left-0 top-[calc(100%+4px)] z-[100] min-w-56 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
-              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
-            >
-              <MenuItem
-                label="Spotlight Search"
-                shortcut="⌘Space"
-                onSelect={() => {
-                  closeMenus();
-                  window.dispatchEvent(new Event("kairo:toggle-spotlight"));
-                }}
-              />
-              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
-              <MenuItem
-                label="Kairo Help"
-                onSelect={() => {
-                  openWindow("about");
-                  closeMenus();
-                }}
-              />
-            </div>
-          )}
+        {/* Center Clock & Date */}
+        <div className="relative px-2 py-1 text-[var(--m3-on-surface)] m3-title-small font-roboto tracking-tight">
+          {dateStr}
         </div>
       </div>
 
-      <div className="flex min-w-0 items-center justify-end gap-3.5 overflow-visible whitespace-nowrap text-[12px]">
-        <div
-          className="relative flex min-w-0 items-center gap-1.5"
-          ref={serverMenuRef}
-          title={error || undefined}
-        >
-          <span
-            className={`size-2 shrink-0 rounded-full ${
-              online
-                ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]"
-                : loading && !ready
-                  ? "bg-amber-300"
-                  : "bg-red-400"
-            }`}
-            aria-hidden
-          />
+      {/* ─── RIGHT ISLAND: Server Dropdown + Settings + Theme + Disconnect ─── */}
+      <div
+        className="pointer-events-auto flex items-center h-10 gap-2 px-2.5 rounded-full m3-elevation-2 bg-[var(--m3-surface-container-low)]/90 border border-[var(--m3-outline-variant)]/40 backdrop-blur-2xl text-[var(--m3-on-surface)] transition-all duration-200"
+      >
+        {/* Status Indicators */}
+        <div className="flex items-center gap-1.5 text-[var(--m3-on-surface-variant)] px-1">
+          <HyprVolumeIcon className="size-3.5" />
+          <HyprWifiIcon className="size-3.5" />
+        </div>
+
+        <div className="h-4 w-px bg-[var(--m3-outline-variant)]/50" />
+
+        {/* Server Status Dropdown */}
+        <div className="relative flex items-center" ref={serverMenuRef} title={error || undefined}>
           <button
             type="button"
-            onClick={() => setServerMenuOpen((open) => !open)}
-            className="inline-flex min-w-0 max-w-[200px] items-center gap-1 rounded-full px-2 py-0.5 outline-none hover:bg-[var(--topbar-hover)] transition-colors focus-visible:ring-2 focus-visible:ring-white/40"
+            onClick={() => setServerMenuOpen((prev) => !prev)}
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-[var(--m3-surface-container-high)] hover:bg-[var(--m3-surface-container-highest)] border border-[var(--m3-outline-variant)]/30 text-[var(--m3-on-surface)] transition-colors outline-none"
             aria-haspopup="menu"
             aria-expanded={serverMenuOpen}
-            aria-label={`Current server ${name}. Open server menu.`}
           >
-            <span className="truncate font-medium">{name}</span>
-            <ChevronDown className="size-3 opacity-70" aria-hidden />
+            <span
+              className={`size-1.5 rounded-full ${
+                online
+                  ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+                  : loading && !ready
+                    ? "bg-amber-300"
+                    : "bg-[var(--m3-error)]"
+              }`}
+            />
+            <span className="max-w-[110px] truncate m3-label-small font-roboto">{name}</span>
+            <span className="material-symbol text-[14px] text-[var(--m3-on-surface-variant)]">expand_more</span>
           </button>
-          <span className="opacity-60 text-[11px]">{online ? "Online" : statusLabel(server?.status || selected?.status, loading)}</span>
+
           {serverMenuOpen && (
             <div
               role="menu"
-              aria-label="Server menu"
-              className="absolute right-0 top-[calc(100%+6px)] z-[100] w-[240px] overflow-hidden rounded-[16px] border py-1.5 text-left shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-3xl animate-menu-in select-none"
-              style={{ background: "var(--menu-bg)", borderColor: "var(--menu-border)", color: "var(--menu-fg)" }}
+              className="absolute right-0 top-[calc(100%+8px)] z-[100] w-[240px] overflow-hidden rounded-2xl border border-[var(--m3-outline-variant)]/50 p-2 text-left m3-elevation-5 backdrop-blur-3xl select-none bg-[var(--m3-surface-container)] text-[var(--m3-on-surface)] animate-in fade-in zoom-in-95 duration-150"
             >
-              <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] opacity-40">
-                Current server
-              </p>
-              <div className="flex items-center gap-2 px-3 py-1.5 text-[12px]">
-                <Server aria-hidden className="size-3.5 opacity-70" />
-                <span className="truncate font-medium">{name}</span>
+              <div className="px-3 py-1.5 m3-label-small font-bold uppercase tracking-wider text-[var(--m3-on-surface-variant)]">
+                Connected VPS
               </div>
+              <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[var(--m3-surface-container-high)]/60">
+                <span className="material-symbol text-[18px] text-[var(--m3-primary)]">dns</span>
+                <span className="truncate m3-label-medium font-roboto">{name}</span>
+                <span className="ml-auto m3-label-small text-emerald-400 font-bold">
+                  {online ? "Active" : statusLabel(server?.status || selected?.status, loading)}
+                </span>
+              </div>
+
               {otherServers.length > 0 && (
                 <>
-                  <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
-                  <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] opacity-40">
-                    Switch to
-                  </p>
+                  <div className="my-1.5 h-px bg-[var(--m3-outline-variant)]/40" />
+                  <div className="px-3 py-1.5 m3-label-small font-bold uppercase tracking-wider text-[var(--m3-on-surface-variant)]">
+                    Switch VPS
+                  </div>
                   {otherServers.map((item) => (
                     <button
                       key={item.id}
@@ -533,15 +267,16 @@ export function TopBar() {
                         setServerMenuOpen(false);
                         switchServer(item);
                       }}
-                      className="flex w-[calc(100%-12px)] items-center gap-2 mx-1.5 px-3 py-1.5 text-[12px] rounded-[8px] hover:bg-[#007aff] hover:!text-white transition-colors"
+                      className="flex w-full items-center gap-2 px-3 py-2 m3-label-medium rounded-xl hover:bg-[var(--m3-primary-container)] hover:text-[var(--m3-on-primary-container)] transition-colors"
                     >
-                      <ArrowLeftRight aria-hidden className="size-3.5 opacity-70" />
+                      <span className="material-symbol text-[16px] text-[var(--m3-on-surface-variant)]">swap_horiz</span>
                       <span className="truncate">{item.name}</span>
                     </button>
                   ))}
                 </>
               )}
-              <div className="my-1.5 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
+
+              <div className="my-1.5 h-px bg-[var(--m3-outline-variant)]/40" />
               <button
                 type="button"
                 role="menuitem"
@@ -549,10 +284,10 @@ export function TopBar() {
                   setServerMenuOpen(false);
                   backToServers();
                 }}
-                className="flex w-[calc(100%-12px)] items-center gap-2 mx-1.5 px-3 py-1.5 text-[12px] rounded-[8px] hover:bg-[#007aff] hover:!text-white transition-colors"
+                className="flex w-full items-center gap-2 px-3 py-2 m3-label-medium rounded-xl hover:bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface)] transition-colors"
               >
-                <Server aria-hidden className="size-3.5 opacity-80" />
-                All servers
+                <span className="material-symbol text-[16px] text-[var(--m3-on-surface-variant)]">dns</span>
+                <span>All VPS Instances</span>
               </button>
               <button
                 type="button"
@@ -561,71 +296,40 @@ export function TopBar() {
                   setServerMenuOpen(false);
                   logOut();
                 }}
-                className="flex w-[calc(100%-12px)] items-center gap-2 mx-1.5 px-3 py-1.5 text-[12px] rounded-[8px] hover:bg-[#007aff] hover:!text-white transition-colors"
+                className="flex w-full items-center gap-2 px-3 py-2 m3-label-medium rounded-xl text-[var(--m3-error)] hover:bg-[var(--m3-error-container)] hover:text-[var(--m3-on-error-container)] transition-colors"
               >
-                <LogOut aria-hidden className="size-3.5 opacity-80" />
-                Leave server
+                <span className="material-symbol text-[16px]">logout</span>
+                <span>Disconnect</span>
               </button>
             </div>
           )}
         </div>
 
-        <span className="hidden shrink-0 font-medium sm:inline opacity-80" title={!isLive ? "Agent not loaded / offline" : undefined}>
-          CPU {metric(cpuPercent, loading, isLive)}
-        </span>
-        <span className="hidden shrink-0 font-medium sm:inline opacity-80" title={!isLive ? "Agent not loaded / offline" : undefined}>
-          RAM {metric(ramPercent, loading, isLive)}
-        </span>
+        {/* Settings Button */}
+        <button
+          type="button"
+          onClick={() => openWindow("settings")}
+          className="relative flex items-center justify-center size-8 rounded-full overflow-hidden bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-on-surface)] m3-state-layer transition-colors active:scale-95 shadow-sm"
+          title="Settings (Appearance & System)"
+          aria-label="Settings"
+        >
+          <HyprSettingsIcon className="size-4" />
+        </button>
 
-        <div className="flex items-center gap-2 opacity-80">
-          <Wifi className="size-3.5" />
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new Event("kairo:toggle-spotlight"))}
-            className="rounded p-0.5 hover:opacity-100 hover:bg-white/10 transition-colors"
-            title="Spotlight Search (⌘Space)"
-            aria-label="Spotlight Search"
-          >
-            <Search className="size-3.5" />
-          </button>
-          <SlidersHorizontal className="size-3.5" />
-        </div>
-
+        {/* Theme Toggle */}
         <ThemeToggle />
 
-        <time className="shrink-0 text-right font-medium text-[12px]" dateTime={dateStr || undefined}>
-          {dateStr}
-        </time>
+        {/* Power / Leave Server Button */}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("kairo:leave-server"))}
+          className="relative flex items-center justify-center size-8 rounded-full overflow-hidden bg-[var(--m3-error-container)] text-[var(--m3-on-error-container)] hover:bg-[var(--m3-error)] hover:text-[var(--m3-on-error)] m3-state-layer transition-all active:scale-95 shadow-sm"
+          title="Leave Server / Disconnect"
+          aria-label="Leave Server"
+        >
+          <HyprPowerIcon className="size-4" />
+        </button>
       </div>
     </header>
-  );
-}
-
-function MenuItem({
-  label,
-  shortcut,
-  disabled,
-  onSelect,
-}: {
-  label: string;
-  shortcut?: string;
-  disabled?: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      disabled={disabled}
-      onClick={onSelect}
-      className="flex w-[calc(100%-12px)] items-center justify-between mx-1.5 px-3 py-1.5 text-left rounded-[8px] outline-none text-[13px] font-normal transition-colors disabled:opacity-35 disabled:pointer-events-none hover:bg-[#007aff] hover:!text-white focus-visible:bg-[#007aff] focus-visible:!text-white group/item"
-    >
-      <span>{label}</span>
-      {shortcut && (
-        <span className="text-[11px] opacity-50 ml-4 font-mono group-hover/item:opacity-90 group-hover/item:!text-white">
-          {shortcut}
-        </span>
-      )}
-    </button>
   );
 }

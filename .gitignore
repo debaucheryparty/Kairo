@@ -30,3 +30,6 @@ apps/kairo-desktop/src-tauri/binaries/*.exe
 
 # Protobuf generated (tracked separately)
 # proto/gen/
+
+# Local working files
+scratch/

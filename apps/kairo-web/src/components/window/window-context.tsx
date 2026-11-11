@@ -24,6 +24,7 @@ export type WindowPayload = {
   isDirectory?: boolean;
   infoOnly?: boolean;
   surfaceId?: string;
+  appId?: string;
   appName?: string;
   appExec?: string;
   appIcon?: string;
@@ -50,6 +51,7 @@ export type WindowState = {
   maximized: boolean;
   snapped?: "left" | "right" | null;
   zIndex: number;
+  workspaceId?: number;
   payload?: WindowPayload;
   chrome?: WindowChrome;
   restoreBounds?: {
@@ -64,6 +66,8 @@ type ManagerState = {
   windows: WindowState[];
   focusedId: string | null;
   zCounter: number;
+  activeWorkspace: number;
+  overviewOpen: boolean;
 };
 
 type Action =
@@ -86,7 +90,11 @@ type Action =
       height: number;
     }
   | { type: "syncMaximized" }
-  | { type: "updateTitle"; id: string; title: string };
+  | { type: "updateTitle"; id: string; title: string }
+  | { type: "setWorkspace"; workspaceId: number }
+  | { type: "moveWindowToWorkspace"; id: string; workspaceId: number }
+  | { type: "toggleOverview" }
+  | { type: "setOverview"; open: boolean };
 
 function nextZ(state: ManagerState) {
   return state.zCounter + 1;
@@ -147,6 +155,7 @@ function reducer(state: ManagerState, action: Action): ManagerState {
       if (existing) {
         const zIndex = nextZ(state);
         return {
+          ...state,
           windows: state.windows.map((item) =>
             item.id === existing.id
               ? {
@@ -161,10 +170,17 @@ function reducer(state: ManagerState, action: Action): ManagerState {
           ),
           focusedId: existing.id,
           zCounter: zIndex,
+          overviewOpen: false,
         };
       }
 
-      const meta = APP_META[action.app];
+      const meta = APP_META[action.app] || {
+        title: action.payload?.appName || action.app,
+        width: 960,
+        height: 640,
+        available: true,
+        chrome: "dark" as const,
+      };
       const size = fitSize(meta.width, meta.height);
       const cascade = (state.windows.length % 6) * 28;
       const pos = clampPosition(64 + cascade, 20 + cascade, size.width);
@@ -180,37 +196,41 @@ function reducer(state: ManagerState, action: Action): ManagerState {
         minimized: false,
         maximized: false,
         zIndex,
+        workspaceId: state.activeWorkspace,
         payload: action.payload,
         chrome: windowChrome(action.app, action.payload),
       };
 
       return {
+        ...state,
         windows: [...state.windows, windowState],
         focusedId: windowState.id,
         zCounter: zIndex,
+        overviewOpen: false,
       };
     }
     case "close":
       return {
+        ...state,
         windows: state.windows.filter((item) => item.id !== action.id),
         focusedId:
           state.focusedId === action.id
             ? (state.windows.filter((item) => item.id !== action.id).at(-1)?.id ?? null)
             : state.focusedId,
-        zCounter: state.zCounter,
       };
     case "minimize":
       return {
+        ...state,
         windows: state.windows.map((item) =>
           item.id === action.id ? { ...item, minimized: true } : item,
         ),
         focusedId: state.focusedId === action.id ? null : state.focusedId,
-        zCounter: state.zCounter,
       };
     case "maximize": {
       const max = maximizedRect();
       const zIndex = nextZ(state);
       return {
+        ...state,
         windows: state.windows.map((item) => {
           if (item.id !== action.id) return item;
           if (item.maximized) return item;
@@ -235,6 +255,7 @@ function reducer(state: ManagerState, action: Action): ManagerState {
     case "restore": {
       const zIndex = nextZ(state);
       return {
+        ...state,
         windows: state.windows.map((item) => {
           if (item.id !== action.id) return item;
           if (item.minimized && item.maximized) {
@@ -264,6 +285,7 @@ function reducer(state: ManagerState, action: Action): ManagerState {
       const zIndex = nextZ(state);
       const rect = snapRect(action.side);
       return {
+        ...state,
         windows: state.windows.map((item) => {
           if (item.id !== action.id) return item;
           const restoreBounds = item.restoreBounds || {
@@ -355,6 +377,7 @@ function reducer(state: ManagerState, action: Action): ManagerState {
     case "focus": {
       const zIndex = nextZ(state);
       return {
+        ...state,
         windows: state.windows.map((item) =>
           item.id === action.id ? { ...item, minimized: false, zIndex } : item,
         ),
@@ -367,13 +390,12 @@ function reducer(state: ManagerState, action: Action): ManagerState {
     case "move": {
       const pos = clampPosition(action.x, action.y, 80);
       return {
+        ...state,
         windows: state.windows.map((item) =>
           item.id === action.id && !item.maximized
             ? { ...item, x: pos.x, y: pos.y, snapped: null }
             : item,
         ),
-        zCounter: state.zCounter,
-        focusedId: state.focusedId,
       };
     }
     case "resize": {
@@ -381,13 +403,12 @@ function reducer(state: ManagerState, action: Action): ManagerState {
       const height = Math.max(WINDOW_MIN_HEIGHT, action.height);
       const pos = clampPosition(action.x, action.y, width);
       return {
+        ...state,
         windows: state.windows.map((item) =>
           item.id === action.id && !item.maximized
             ? { ...item, ...pos, width, height, snapped: null }
             : item,
         ),
-        zCounter: state.zCounter,
-        focusedId: state.focusedId,
       };
     }
     case "syncMaximized": {
@@ -405,6 +426,43 @@ function reducer(state: ManagerState, action: Action): ManagerState {
         ),
       };
     }
+    case "setWorkspace": {
+      const targetWs = Math.max(1, Math.min(5, action.workspaceId));
+      if (state.activeWorkspace === targetWs) {
+        return state.overviewOpen ? { ...state, overviewOpen: false } : state;
+      }
+      const wsWindows = state.windows.filter(
+        (w) => (w.workspaceId ?? 1) === targetWs && !w.minimized,
+      );
+      const topWindow = wsWindows.sort((a, b) => b.zIndex - a.zIndex)[0];
+      return {
+        ...state,
+        activeWorkspace: targetWs,
+        focusedId: topWindow ? topWindow.id : null,
+        overviewOpen: false,
+      };
+    }
+    case "moveWindowToWorkspace": {
+      const targetWs = Math.max(1, Math.min(5, action.workspaceId));
+      return {
+        ...state,
+        windows: state.windows.map((w) =>
+          w.id === action.id ? { ...w, workspaceId: targetWs } : w,
+        ),
+      };
+    }
+    case "toggleOverview": {
+      return {
+        ...state,
+        overviewOpen: !state.overviewOpen,
+      };
+    }
+    case "setOverview": {
+      return {
+        ...state,
+        overviewOpen: action.open,
+      };
+    }
     default:
       return state;
   }
@@ -413,6 +471,8 @@ function reducer(state: ManagerState, action: Action): ManagerState {
 type WindowManagerApi = {
   windows: WindowState[];
   focusedId: string | null;
+  activeWorkspace: number;
+  overviewOpen: boolean;
   snapPreview: { side: SnapSide; rect: SnapRect } | null;
   setSnapPreview: (preview: { side: SnapSide; rect: SnapRect } | null) => void;
   snapWindow: (id: string, side: "left" | "right") => void;
@@ -427,6 +487,10 @@ type WindowManagerApi = {
   updateWindowPosition: (id: string, x: number, y: number) => void;
   updateWindowSize: (id: string, width: number, height: number, x: number, y: number) => void;
   updateWindowTitle: (id: string, title: string) => void;
+  setWorkspace: (workspaceId: number) => void;
+  moveWindowToWorkspace: (id: string, workspaceId: number) => void;
+  toggleOverview: () => void;
+  setOverview: (open: boolean) => void;
 };
 
 const WindowManagerContext = createContext<WindowManagerApi | null>(null);
@@ -436,6 +500,11 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
     windows: [],
     focusedId: null,
     zCounter: 10,
+    activeWorkspace: 1,
+    overviewOpen:
+      typeof window !== "undefined" &&
+      (new URLSearchParams(window.location.search).has("overview") ||
+        window.location.pathname.toLowerCase().includes("overview")),
   });
   const [snapPreview, setSnapPreview] = useState<{ side: SnapSide; rect: SnapRect } | null>(null);
 
@@ -484,11 +553,25 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
   const updateWindowTitle = useCallback((id: string, title: string) => {
     dispatch({ type: "updateTitle", id, title });
   }, []);
+  const setWorkspace = useCallback((workspaceId: number) => {
+    dispatch({ type: "setWorkspace", workspaceId });
+  }, []);
+  const moveWindowToWorkspace = useCallback((id: string, workspaceId: number) => {
+    dispatch({ type: "moveWindowToWorkspace", id, workspaceId });
+  }, []);
+  const toggleOverview = useCallback(() => {
+    dispatch({ type: "toggleOverview" });
+  }, []);
+  const setOverview = useCallback((open: boolean) => {
+    dispatch({ type: "setOverview", open });
+  }, []);
 
   const value = useMemo<WindowManagerApi>(
     () => ({
       windows: state.windows,
       focusedId: state.focusedId,
+      activeWorkspace: state.activeWorkspace,
+      overviewOpen: state.overviewOpen,
       snapPreview,
       setSnapPreview,
       snapWindow,
@@ -503,10 +586,16 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
       updateWindowPosition,
       updateWindowSize,
       updateWindowTitle,
+      setWorkspace,
+      moveWindowToWorkspace,
+      toggleOverview,
+      setOverview,
     }),
     [
       state.windows,
       state.focusedId,
+      state.activeWorkspace,
+      state.overviewOpen,
       snapPreview,
       snapWindow,
       tileWindows,
@@ -520,6 +609,10 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
       updateWindowPosition,
       updateWindowSize,
       updateWindowTitle,
+      setWorkspace,
+      moveWindowToWorkspace,
+      toggleOverview,
+      setOverview,
     ],
   );
 
@@ -541,7 +634,7 @@ function windowId(app: AppId, payload?: WindowPayload) {
     }
     return `viewer:${payload.filePath}`;
   }
-  if (app === "surface" && payload?.surfaceId) {
+  if (payload?.surfaceId) {
     return `surface:${payload.surfaceId}`;
   }
   return app;
@@ -551,10 +644,10 @@ function windowTitle(app: AppId, payload?: WindowPayload) {
   if (app === "viewer") {
     return payload?.fileName || payload?.filePath?.split("/").filter(Boolean).pop() || "Viewer";
   }
-  if (app === "surface") {
-    return payload?.appName || "Remote Surface";
+  if (payload?.appName) {
+    return payload.appName;
   }
-  return APP_META[app].title;
+  return APP_META[app]?.title || app.charAt(0).toUpperCase() + app.slice(1);
 }
 
 function windowChrome(app: AppId, payload?: WindowPayload): WindowChrome | undefined {

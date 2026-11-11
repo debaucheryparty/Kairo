@@ -1,0 +1,50 @@
+# Kairo Test Matrix
+
+Only actually executed results are recorded. Platform: Windows dev host unless stated.
+- Host: Windows 11, PowerShell 5.1, rustc/cargo 1.96.0, Node 24.20.0, git 2.52.0
+- Linux verification host: InstaBox `app` machine `m_agq3cscsuugpmq6rcmyfurqrlq`
+  (Debian 13 trixie, kernel 6.18.60-instabox, x86_64, 4 vCPU, 8 GiB, Rust 1.99.0, Node 22.23.3,
+  pnpm, Docker, passwordless sudo)
+
+## Workspace verification (Rust)
+
+| Command | Date | Platform | Result | Evidence |
+|---|---|---|---|---|
+| `cargo check --workspace` | 2026-11-11 | Windows | PASS, 1m45s, 2 unused-import warnings → fixed | scratch logs (transient); warnings eliminated in same session |
+| `cargo test --workspace --no-fail-fast` (pre-fmt) | 2026-11-11 | Windows | 1 failure: `filesystem_test::test_filesystem_e2e_over_websocket` (stale exact-count assertion vs. newly created managed root); all others pass (see counts below) | test-run3.log |
+| `cargo test -p kairo-agent --test filesystem_test` (post-fix) | 2026-11-11 | Windows | PASS 2/2 | |
+| `cargo test -p kairo-core` (post-fix) | 2026-11-11 | Windows | PASS 6/6 | core_test updated to current bridge runner API |
+| `cargo fmt --all` | 2026-11-11 | Windows | applied; pre-existing debt in session.rs + others | commit history |
+| `cargo test --workspace --no-fail-fast` (post-fmt) | 2026-11-11 | Windows | **PASS: 104 tests, 0 failed (exit 0)** | test-run4.log |
+| `cargo clippy --workspace --all-targets -- -D warnings` | 2026-11-11 | Windows | **PASS (exit 0)** after removing 2 unused imports in core_test.rs | clippy2.log |
+
+## Suite counts (pre-fmt run, `--no-fail-fast`)
+
+| Suite | Result |
+|---|---|
+| kairo-agent unit (lib) | 14 passed |
+| kairo-agent tests/audit_test | 3 passed |
+| kairo-agent tests/bridge_e2e_test | 1 passed |
+| kairo-agent tests/discovery_test | 6 passed |
+| kairo-agent tests/filesystem_test | 1 passed / 1 failed → fixed |
+| kairo-agent tests/handshake_test | 3 passed |
+| kairo-agent tests/media_and_notification_test | 3 passed |
+| kairo-agent tests/metrics_test | 1 passed |
+| kairo-agent tests/process_test | 1 passed |
+| kairo-agent tests/remote_surface_test | 3 passed |
+| kairo-agent tests/system_test | 1 passed |
+| kairo-agent tests/terminal_test | 2 passed |
+| kairo-bridge tests/bridge_test | 11 passed |
+| kairo-common unit | 5 passed |
+| kairo-core tests/core_test | 6 passed (after API repair) |
+| kairo-discovery unit | 35 passed |
+| kairo-transport unit | 5 passed |
+| kairo-protocol unit | 3 passed |
+
+## Known gaps (not yet covered)
+
+1. No Linux run of the workspace suite (InstaBox machine ready; clone + build next).
+2. No integration test exercises `apt`/`systemctl` against a real host (bridge tests use mocks).
+3. No tests for kairo-web / kairo-runtime (TypeScript) — `pnpm typecheck` only.
+4. No failure-injection, upgrade/migration, or performance tests yet (roadmap M4+).
+5. `cargo clippy -D warnings` gate not yet executed this session.

@@ -13,9 +13,10 @@ export type DockItem = {
 const STORAGE_KEY = "kairo_dock_items_v3";
 
 export const DEFAULT_DOCK_ITEMS: DockItem[] = [
-  { id: "files", title: "Finder", builtinAppId: "files" },
+  { id: "files", title: "Files", builtinAppId: "files" },
   { id: "terminal", title: "Terminal", builtinAppId: "terminal" },
-  { id: "dashboard", title: "Activity Monitor", builtinAppId: "dashboard" },
+  { id: "browser", title: "Browser", builtinAppId: "browser" },
+  { id: "dashboard", title: "Docker & Metrics", builtinAppId: "dashboard" },
   { id: "settings", title: "System Settings", builtinAppId: "settings" },
 ];
 

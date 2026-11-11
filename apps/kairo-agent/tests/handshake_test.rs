@@ -184,7 +184,10 @@ async fn test_token_authentication_success_and_failure() {
     let mut bad_payload = Vec::new();
     bad_init.encode(&mut bad_payload).expect("encode bad init");
     let bad_msg = KairoMessage::new(MessageKind::HandshakeInit, 1, Bytes::from(bad_payload));
-    bad_client.send(WsMessage::Binary(bad_msg.encode().expect("encode msg"))).await.expect("send bad init");
+    bad_client
+        .send(WsMessage::Binary(bad_msg.encode().expect("encode msg")))
+        .await
+        .expect("send bad init");
 
     let bad_resp = timeout(Duration::from_secs(5), bad_client.next())
         .await
@@ -210,9 +213,16 @@ async fn test_token_authentication_success_and_failure() {
         timestamp: 0,
     };
     let mut good_payload = Vec::new();
-    good_init.encode(&mut good_payload).expect("encode good init");
+    good_init
+        .encode(&mut good_payload)
+        .expect("encode good init");
     let good_msg = KairoMessage::new(MessageKind::HandshakeInit, 2, Bytes::from(good_payload));
-    good_client.send(WsMessage::Binary(good_msg.encode().expect("encode good msg"))).await.expect("send good init");
+    good_client
+        .send(WsMessage::Binary(
+            good_msg.encode().expect("encode good msg"),
+        ))
+        .await
+        .expect("send good init");
 
     let good_resp = timeout(Duration::from_secs(5), good_client.next())
         .await
