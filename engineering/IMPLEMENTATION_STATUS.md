@@ -24,7 +24,7 @@ Inventory of every subsystem with honest statuses. Evidence rules:
 | Web client shell | IMPLEMENTED | `apps/kairo-web` | none (manual) | large uncommitted UI rework; frontend not prioritized per roadmap |
 | Desktop shell (Tauri) | IMPLEMENTED | `apps/kairo-desktop` | none | |
 | TS runtime client | IMPLEMENTED | `packages/kairo-runtime` | none | IndexedDB + short-lived session tokens |
-| **Managed userspace (persistent layout)** | NOT_STARTED | — | — | M3 |
+| **Managed userspace (persistent layout)** | TESTED | `crates/kairo-core/src/userspace.rs`, `state.rs` | `tests/userspace_test.rs` (7) | fixed layout under managed root, checksummed generation-tracked manifest, corrupt-file quarantine; core degrades gracefully if init fails |
 | **Declarative configuration engine** | NOT_STARTED | — | — | M4 |
 | **Kairo Dots (dotfiles/profiles)** | NOT_STARTED | — | — | M5 |
 | **Real managed packages** | IN_PROGRESS | `crates/kairo-core/src/package.rs` | core_test (registry behavior only) | current managed install records names only, in-memory, version hardcoded "1.0.0" — must be replaced by real artifact installation (M6) |

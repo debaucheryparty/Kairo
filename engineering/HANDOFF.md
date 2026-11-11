@@ -27,11 +27,23 @@ supervision, CLI, install lifecycle) is in early stages — see IMPLEMENTATION_S
 4. M2 filesystem hardening (b55aab8): managed-root traversal now rejected explicitly; symlink
    escapes blocked via canonicalize containment (incl. dangling-symlink create targets); writes
    atomic via temp+rename. Windows 106 tests, Linux 108 tests pass.
-5. Linux verification environment on InstaBox (see below); gates run there found and fixed four
-   real defects: apt-lock false positive (109754d), Xvfb display-allocation race (caf03ed),
-   windows-only traversal test expectation (6c74259), parallel tests sharing one display (5dd6c19).
-6. Both platforms now pass all four gates: check, test (Win 106 / Linux 108), fmt, clippy -D warnings.
+5. M3 managed userspace (6464ce1): fixed layout under the managed root (config/packages/services/
+   state/logs/cache/tmp) with a persistent manifest; integrity-checked JSON state store (kind +
+   generation + sha-256 checksum, atomic replace, corrupt-file quarantine, fresh-generation
+   recovery). KairoCore initializes it and degrades to a warning if the filesystem refuses.
+   Windows 113 tests, Linux 115 tests, all four gates green on both platforms.
+6. Linux verification on InstaBox found and fixed four real defects: apt-lock false positive
+   (109754d), Xvfb display-allocation race (caf03ed), windows-only traversal test expectation
+   (6c74259), parallel tests sharing one display (5dd6c19).
 7. engineering/ documentation system live and synchronized.
+
+## Immediate next actions (in order)
+
+1. M6 real managed packages (SEC-04): artifact acquisition + checksum verify + receipts +
+   rollback on top of the M3 state store; replace the register-only stub in
+   `kairo-core/src/package.rs` and update core_test expectations to the new contract.
+2. M7 service runtime/supervision persisted via the same store (SEC-05).
+3. M4 declarative configuration engine; M5 dots; M9 CLI.
 
 ## Verification environment (Linux)
 
