@@ -597,6 +597,11 @@ fn signal_terminate(pid: u32) {
     {
         // SIGTERM lets managed services shut down cleanly; wait_supervised
         // escalates to SIGKILL after the grace period.
+        //
+        // Safety: libc::kill only sends a signal to the given pid; it cannot
+        // cause memory unsafety. A stale pid fails with ESRCH, which is
+        // ignored — the supervision task still observes the child exiting.
+        #[allow(unsafe_code)]
         let _ = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
     }
     #[cfg(not(unix))]

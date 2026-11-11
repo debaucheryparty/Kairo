@@ -10,7 +10,6 @@ use kairo_core::{
 };
 use tempfile::TempDir;
 
-
 fn make_supervisor(data_dir: &Path) -> Arc<ServiceSupervisor> {
     let space = Arc::new(ManagedUserspace::init(data_dir).unwrap());
     Arc::new(ServiceSupervisor::new(space, Duration::from_millis(50)))

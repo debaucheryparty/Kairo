@@ -9,8 +9,7 @@ use kairo_core::{
     PackageManifest,
 };
 use kairo_protocol::v1::{
-    InitSystem, OsFamily, PackageManager, PlatformSupportTier, PrivilegeLevel,
-    SystemProfile,
+    InitSystem, OsFamily, PackageManager, PlatformSupportTier, PrivilegeLevel, SystemProfile,
 };
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
