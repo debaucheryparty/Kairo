@@ -5,6 +5,7 @@ pub mod error;
 pub mod fs;
 pub mod package;
 pub mod process;
+pub mod runtime;
 pub mod service;
 pub mod state;
 pub mod system;
@@ -12,6 +13,7 @@ pub mod target;
 pub mod userspace;
 
 use std::sync::Arc;
+use std::time::Duration;
 
 pub use audit::{AuditEvent, AuditLog, AuditSeverity};
 pub use auth::{AuthContext, OperationLevel, PermissionManager};
@@ -20,7 +22,10 @@ pub use error::CoreError;
 pub use fs::{FileMetadata, FilesystemApi};
 pub use package::{ArtifactKind, PackageApi, PackageManifest};
 pub use process::ProcessApi;
-pub use service::{ManagedServiceDefinition, ServiceApi};
+pub use runtime::{
+    ManagedServiceSpec, RestartPolicy, ServiceState, ServiceStatus, ServiceSupervisor,
+};
+pub use service::ServiceApi;
 pub use state::{StateDocument, load_state, store_state};
 pub use system::{SystemApi, SystemBoundaries, SystemResources};
 pub use target::ExecutionTarget;
@@ -80,8 +85,17 @@ impl KairoCore {
             }
         };
 
+        let supervisor = userspace
+            .clone()
+            .map(|space| Arc::new(ServiceSupervisor::new(space, Duration::from_secs(1))));
+
         let process = ProcessApi::new(adapter.clone(), permissions.clone(), audit.clone());
-        let service = ServiceApi::new(adapter.clone(), permissions.clone(), audit.clone());
+        let service = ServiceApi::new(
+            adapter.clone(),
+            permissions.clone(),
+            audit.clone(),
+            supervisor,
+        );
         let package = PackageApi::new(
             adapter,
             permissions.clone(),

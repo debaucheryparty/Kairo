@@ -1,26 +1,18 @@
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::audit::{AuditLog, AuditSeverity};
 use crate::auth::{AuthContext, OperationLevel, PermissionManager};
 use crate::error::CoreError;
+use crate::runtime::{ManagedServiceSpec, ServiceState, ServiceStatus, ServiceSupervisor};
 use crate::target::ExecutionTarget;
 use kairo_bridge::PlatformAdapter;
 use kairo_protocol::v1::{ManageServiceResponse, ServiceAction, SystemService};
-
-#[derive(Debug, Clone)]
-pub struct ManagedServiceDefinition {
-    pub name: String,
-    pub description: String,
-    pub command: String,
-    pub active: bool,
-}
 
 pub struct ServiceApi {
     adapter: Arc<dyn PlatformAdapter>,
     permissions: PermissionManager,
     audit: Arc<AuditLog>,
-    managed_services: RwLock<HashMap<String, ManagedServiceDefinition>>,
+    supervisor: Option<Arc<ServiceSupervisor>>,
 }
 
 impl ServiceApi {
@@ -29,61 +21,49 @@ impl ServiceApi {
         adapter: Arc<dyn PlatformAdapter>,
         permissions: PermissionManager,
         audit: Arc<AuditLog>,
+        supervisor: Option<Arc<ServiceSupervisor>>,
     ) -> Self {
-        let mut initial_managed = HashMap::new();
-        initial_managed.insert(
-            "kairo-agent".to_string(),
-            ManagedServiceDefinition {
-                name: "kairo-agent".to_string(),
-                description: "Kairo Universal Operating Environment Agent".to_string(),
-                command: "kairo-agent".to_string(),
-                active: true,
-            },
-        );
-
         Self {
             adapter,
             permissions,
             audit,
-            managed_services: RwLock::new(initial_managed),
+            supervisor,
         }
+    }
+
+    fn supervisor(&self) -> Result<&ServiceSupervisor, CoreError> {
+        self.supervisor.as_deref().ok_or_else(|| {
+            CoreError::TargetUnsupported(
+                "the managed userspace is unavailable on this host".to_string(),
+            )
+        })
     }
 
     pub fn list_services(&self, target: ExecutionTarget) -> Result<Vec<SystemService>, CoreError> {
         match target {
-            ExecutionTarget::Host => {
-                let services = self.adapter.services().list_services()?;
-                Ok(services)
-            }
+            ExecutionTarget::Host => Ok(self.adapter.services().list_services()?),
             ExecutionTarget::Managed => {
-                let managed = self
-                    .managed_services
-                    .read()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let list = managed
-                    .values()
-                    .map(|s| SystemService {
-                        name: s.name.clone(),
-                        description: s.description.clone(),
-                        load_state: "loaded".to_string(),
-                        active_state: if s.active {
-                            "active".to_string()
-                        } else {
-                            "inactive".to_string()
+                let statuses: Vec<ServiceStatus> = self.supervisor()?.list().into_iter().collect();
+                Ok(statuses
+                    .into_iter()
+                    .map(|status| SystemService {
+                        name: status.name,
+                        description: status.description,
+                        load_state: "managed".to_string(),
+                        active_state: match status.state {
+                            ServiceState::Running => "active".to_string(),
+                            ServiceState::Stopped => "inactive".to_string(),
+                            ServiceState::Exited => "exited".to_string(),
+                            ServiceState::Failed => "failed".to_string(),
                         },
-                        sub_state: if s.active {
-                            "running".to_string()
-                        } else {
-                            "dead".to_string()
-                        },
+                        sub_state: status.pid.map_or_else(String::new, |pid| pid.to_string()),
                     })
-                    .collect();
-                Ok(list)
+                    .collect())
             }
         }
     }
 
-    pub fn manage_service(
+    pub async fn manage_service(
         &self,
         service_name: &str,
         action: ServiceAction,
@@ -124,41 +104,96 @@ impl ServiceApi {
             ExecutionTarget::Managed => {
                 self.permissions
                     .require_level(auth, OperationLevel::Modify)?;
+                let supervisor = self.supervisor()?;
 
-                let mut managed = self
-                    .managed_services
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let service = managed.get_mut(service_name).ok_or_else(|| {
-                    CoreError::NotFound(format!("managed service '{service_name}' not found"))
-                })?;
-
-                match action {
+                let result = match action {
                     ServiceAction::Start | ServiceAction::Restart => {
-                        service.active = true;
+                        supervisor.start_service(service_name).await
                     }
-                    ServiceAction::Stop => {
-                        service.active = false;
+                    ServiceAction::Stop => supervisor.stop_service(service_name).await,
+                    ServiceAction::Unspecified => Err(CoreError::InvalidArgument(
+                        "unspecified service action".to_string(),
+                    )),
+                };
+
+                match result {
+                    Ok(()) => {
+                        self.audit.record(
+                            &auth.actor_id,
+                            ExecutionTarget::Managed,
+                            "service.manage",
+                            AuditSeverity::Info,
+                            true,
+                            &format!("managed service {service_name} action {action:?}"),
+                        );
+                        Ok(ManageServiceResponse {
+                            success: true,
+                            message: format!("managed service {service_name} updated"),
+                        })
                     }
-                    _ => {
-                        return Err(CoreError::InvalidArgument("unspecified action".to_string()));
+                    Err(e) => {
+                        self.audit.record(
+                            &auth.actor_id,
+                            ExecutionTarget::Managed,
+                            "service.manage",
+                            AuditSeverity::Warning,
+                            false,
+                            &format!("failed managed service {service_name}: {e}"),
+                        );
+                        Err(e)
                     }
                 }
-
-                self.audit.record(
-                    &auth.actor_id,
-                    ExecutionTarget::Managed,
-                    "service.manage",
-                    AuditSeverity::Info,
-                    true,
-                    &format!("managed service {service_name} action {action:?}"),
-                );
-
-                Ok(ManageServiceResponse {
-                    success: true,
-                    message: format!("managed service {service_name} updated"),
-                })
             }
         }
+    }
+
+    pub fn define_managed_service(
+        &self,
+        spec: ManagedServiceSpec,
+        auth: &AuthContext,
+    ) -> Result<(), CoreError> {
+        self.permissions
+            .require_level(auth, OperationLevel::Modify)?;
+        let supervisor = self.supervisor()?;
+        supervisor.define_service(spec)?;
+        self.audit.record(
+            &auth.actor_id,
+            ExecutionTarget::Managed,
+            "service.define",
+            AuditSeverity::Info,
+            true,
+            "managed service definition updated",
+        );
+        Ok(())
+    }
+
+    pub fn remove_managed_service(&self, name: &str, auth: &AuthContext) -> Result<(), CoreError> {
+        self.permissions
+            .require_level(auth, OperationLevel::Modify)?;
+        let supervisor = self.supervisor()?;
+        supervisor.remove_service(name)?;
+        self.audit.record(
+            &auth.actor_id,
+            ExecutionTarget::Managed,
+            "service.remove",
+            AuditSeverity::Info,
+            true,
+            &format!("managed service {name} removed"),
+        );
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn managed_status(&self) -> Vec<ServiceStatus> {
+        self.supervisor
+            .as_deref()
+            .map(ServiceSupervisor::list)
+            .unwrap_or_default()
+    }
+
+    /// Starts persisted services flagged for autostart; called once per
+    /// agent process at startup.
+    pub async fn start_autostart_services(&self) -> Result<Vec<String>, CoreError> {
+        self.supervisor()?.start_autostart().await
     }
 }

@@ -20,6 +20,9 @@ tar = "0.4"
 flate2 = "1"
 ureq = { version = "2", default-features = false, features = ["rustls"] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 tempfile = "3"
 tar = "0.4"

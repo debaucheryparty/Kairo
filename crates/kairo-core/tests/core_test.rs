@@ -9,7 +9,7 @@ use kairo_core::{
     PackageManifest,
 };
 use kairo_protocol::v1::{
-    InitSystem, OsFamily, PackageManager, PlatformSupportTier, PrivilegeLevel, ServiceAction,
+    InitSystem, OsFamily, PackageManager, PlatformSupportTier, PrivilegeLevel,
     SystemProfile,
 };
 use sha2::{Digest, Sha256};
@@ -191,7 +191,7 @@ fn test_filesystem_api_managed_boundary_enforcement() {
 }
 
 #[test]
-fn test_service_api_host_vs_managed() {
+fn test_service_api_host_listing_with_mock() {
     let temp = TempDir::new().unwrap();
     let runner = Arc::new(MockCommandRunner::new());
 
@@ -208,9 +208,7 @@ fn test_service_api_host_vs_managed() {
     let profile = make_ubuntu_profile(false, true);
     let core = create_test_core(profile, &temp, runner);
 
-    let auth = AuthContext::new("admin", false, true).with_confirmed(true);
-
-    // 1. Host services
+    // 1. Host services come from the systemd adapter via the mock.
     let host_services = core
         .services()
         .list_services(ExecutionTarget::Host)
@@ -218,34 +216,13 @@ fn test_service_api_host_vs_managed() {
     assert_eq!(host_services.len(), 1);
     assert_eq!(host_services[0].name, "nginx.service");
 
-    // 2. Managed services
+    // 2. Managed services are supervisor-backed and start empty; they are
+    // exercised in runtime_test.rs.
     let managed_services = core
         .services()
         .list_services(ExecutionTarget::Managed)
         .unwrap();
-    assert!(managed_services.iter().any(|s| s.name == "kairo-agent"));
-
-    // 3. Manage managed service state
-    let manage_res = core
-        .services()
-        .manage_service(
-            "kairo-agent",
-            ServiceAction::Stop,
-            ExecutionTarget::Managed,
-            &auth,
-        )
-        .unwrap();
-    assert!(manage_res.success);
-
-    let updated_managed = core
-        .services()
-        .list_services(ExecutionTarget::Managed)
-        .unwrap();
-    let agent_srv = updated_managed
-        .iter()
-        .find(|s| s.name == "kairo-agent")
-        .unwrap();
-    assert_eq!(agent_srv.active_state, "inactive");
+    assert!(managed_services.is_empty());
 }
 
 fn manifest_for(name: &str, artifact_path: &std::path::Path, deps: Vec<String>) -> PackageManifest {
