@@ -56,11 +56,11 @@ display claimed elsewhere is shared instead of duplicated.
 Authentication of the *connection* is enforced separately in the session, but the permission model
 itself has no notion of identity strength. **Fix planned: M2 (session-bound identities).**
 
-### SEC-04 — Managed package install is a registry write, not an installation (High, integrity)
-`PackageApi::install(..., ExecutionTarget::Managed, ...)` inserts the requested name into an
-in-memory `HashMap` with version `"1.0.0"` and reports success. No artifact is fetched, no checksum
-verified, nothing lands on disk. This is exactly the "fake installation" pattern that must not ship:
-it reports success for packages that do not exist. **Fix planned: M6 (real artifact pipeline).**
+### SEC-04 — Managed package install is a registry write, not an installation (High, integrity) — **FIXED 2026-11-11**
+Managed installation now acquires the artifact (local path or HTTP), verifies its SHA-256 against
+the manifest, extracts with zip-slip/symlink/size-cap defenses into the userspace, and writes a
+persisted receipt. A package is installed only after its artifact is on disk and verified.
+Tests: `package_test.rs`, including a real HTTP acquisition run (env-gated) on Windows and Linux.
 
 ### SEC-05 — Managed state is lost on agent restart (Medium, reliability/security)
 Managed service/package state is `RwLock<HashMap<..>>` in the process. Restart loses it; a

@@ -27,7 +27,7 @@ Inventory of every subsystem with honest statuses. Evidence rules:
 | **Managed userspace (persistent layout)** | TESTED | `crates/kairo-core/src/userspace.rs`, `state.rs` | `tests/userspace_test.rs` (7) | fixed layout under managed root, checksummed generation-tracked manifest, corrupt-file quarantine; core degrades gracefully if init fails |
 | **Declarative configuration engine** | NOT_STARTED | — | — | M4 |
 | **Kairo Dots (dotfiles/profiles)** | NOT_STARTED | — | — | M5 |
-| **Real managed packages** | IN_PROGRESS | `crates/kairo-core/src/package.rs` | core_test (registry behavior only) | current managed install records names only, in-memory, version hardcoded "1.0.0" — must be replaced by real artifact installation (M6) |
+| **Real managed packages** | TESTED | `crates/kairo-core/src/package*.rs` | `tests/package_test.rs` (7 + env-gated HTTP test) | artifact acquisition (local + HTTP), sha-256 verify, hardened tar.gz extraction, dependency ordering, transactional install, persisted receipts, upgrade/rollback — replaces the registry-only stub (SEC-04 fixed) |
 | **Service runtime (supervision)** | NOT_STARTED | — | — | managed services today are in-memory toggles (M7) |
 | **Operator CLI** | NOT_STARTED | — | — | M9 |
 | **Install/lifecycle** | PARTIAL | `scripts/install.sh` (Linux) | never executed | no Windows path, no upgrade/uninstall (M10) |

@@ -24,6 +24,8 @@ Only actually executed results are recorded. Platforms:
 | `cargo clippy -D warnings` | 2026-11-11 | Linux | PASS (gate 4 found 4 rustc-1.99-only lint errors, fixed in 6c74259; gate 7 re-confirmed after M3) | /tmp/kairo-clippy.log |
 | `cargo test --workspace` (gates 3–6) | 2026-11-11 | Linux | verification found and fixed 4 real defects: apt-lock false positive (109754d), Xvfb display race (caf03ed), windows-only traversal expectation (6c74259), parallel tests sharing one display (5dd6c19) | /tmp/kairo-test.log |
 | `cargo test --workspace` (gate 7, after M3) | 2026-11-11 | Linux | **PASS: 115 tests, 0 failed** | /tmp/kairo-test.log |
+| `cargo test --workspace` (after M6 packages, gate 8) | 2026-11-11 | Windows | **PASS: 120 tests, 0 failed** (HTTP test run with `KAIRO_TEST_HTTP=1`) | test-run7.log |
+| `cargo test --workspace` (after M6, gate 8, `KAIRO_TEST_HTTP=1`) | 2026-11-11 | Linux | **PASS: 123 tests, 0 failed**; fmt + clippy `-D warnings` PASS; real HTTP artifact acquisition verified against a local server on the box | /tmp/kairo-test.log on box |
 
 ## Suite counts (baseline run, `--no-fail-fast`, Windows)
 

@@ -73,3 +73,23 @@ Append-only ADR log. Superseded decisions stay here with their replacement noted
 - **Dependency note:** per Docs/KAIRO_CODE_RULES.md §3.5 this adds one new, widely-maintained,
   MIT/Apache dual-licensed crate with no transitive weight beyond digest primitives.
 
+
+## ADR-0007 — Real managed packages acquire artifacts over local paths and HTTP(S)
+- **Date:** 2026-11-11
+- **Decision:** Package manifests carry name, version, description, dependencies (`name` or
+  `name@version`), one artifact source (absolute local path / `file://` / `http(s)://`), a SHA-256
+  checksum and a payload kind (`single_file` or `tar_gz`). Acquisition streams to the userspace
+  tmp dir while hashing, capped at 512 MiB; extraction rejects absolute paths, `..` (zip-slip)
+  and any links, caps unpacked size at 2 GiB, and preserves the executable bit on Unix. Install
+  is transactional (version directory removed on failure); receipts live in
+  `state/package-registry.json`; upgrades supersede receipts while keeping old files so rollback
+  can restore them without re-downloading.
+- **Context:** ADR-0005 required real installs; the registry-only stub (SEC-04) is replaced.
+- **Alternatives:** tar-only without gz (less common), zip support (deferred, extra dependency),
+  allowing package symlinks (rejected — untrusted links are an escape vector), no size caps
+  (disk-exhaustion risk).
+- **Consequences:** adds `tar`, `flate2`, `ureq` (rustls) to kairo-core — each the standard,
+  maintained choice for its job. Dependency sets that cannot be ordered (cycles, missing deps)
+  fail before any artifact is touched; artifact-level failures are reported per package in the
+  response. HTTP acquisition is verified end-to-end by the env-gated `KAIRO_TEST_HTTP=1` test
+  that runs against a local node server on Windows and Linux.

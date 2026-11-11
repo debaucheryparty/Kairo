@@ -32,18 +32,24 @@ supervision, CLI, install lifecycle) is in early stages — see IMPLEMENTATION_S
    generation + sha-256 checksum, atomic replace, corrupt-file quarantine, fresh-generation
    recovery). KairoCore initializes it and degrades to a warning if the filesystem refuses.
    Windows 113 tests, Linux 115 tests, all four gates green on both platforms.
-6. Linux verification on InstaBox found and fixed four real defects: apt-lock false positive
+6. M6 real managed packages (39c8940): manifest-driven installation replacing the registry-only
+   stub — artifact acquisition (local + HTTP, streaming sha-256, size cap), hardened tar.gz
+   extraction (zip-slip, links, unpacked-size cap, exec bit), dependency ordering with cycle
+   detection, transactional installs, persisted receipts, upgrade + rollback. Windows 120 tests,
+   Linux 123 tests, all four gates green on both platforms, HTTP path verified live on both.
+7. Linux verification on InstaBox found and fixed four real defects: apt-lock false positive
    (109754d), Xvfb display-allocation race (caf03ed), windows-only traversal test expectation
    (6c74259), parallel tests sharing one display (5dd6c19).
-7. engineering/ documentation system live and synchronized.
+8. engineering/ documentation system live and synchronized.
 
 ## Immediate next actions (in order)
 
-1. M6 real managed packages (SEC-04): artifact acquisition + checksum verify + receipts +
-   rollback on top of the M3 state store; replace the register-only stub in
-   `kairo-core/src/package.rs` and update core_test expectations to the new contract.
-2. M7 service runtime/supervision persisted via the same store (SEC-05).
-3. M4 declarative configuration engine; M5 dots; M9 CLI.
+1. M7 service runtime/supervision persisted via the state store (SEC-05): real process launch,
+   restart policies, log capture, health checks — replacing the in-memory managed-service toggles.
+2. M4 declarative configuration engine (drift detection, idempotent apply, transactions) on the
+   userspace config dir; M5 dots on top of it; M9 CLI exposing userspace/packages/runtime.
+3. M10 installer consumes the Linux prerequisites list in TEST_MATRIX.md.
+4. Rewrites of README and docs/INDEX.md when the CLI/install story lands (M9/M10).
 
 ## Verification environment (Linux)
 
