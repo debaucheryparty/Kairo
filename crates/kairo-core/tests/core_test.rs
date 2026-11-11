@@ -4,11 +4,15 @@ use std::sync::Arc;
 
 use kairo_bridge::common::MockCommandRunner;
 use kairo_bridge::{PlatformBridge, select_adapter};
-use kairo_core::{AuthContext, CoreConfig, CoreError, ExecutionTarget, KairoCore, OperationLevel};
+use kairo_core::{
+    ArtifactKind, AuthContext, CoreConfig, CoreError, ExecutionTarget, KairoCore, OperationLevel,
+    PackageManifest,
+};
 use kairo_protocol::v1::{
     InitSystem, OsFamily, PackageManager, PlatformSupportTier, PrivilegeLevel, ServiceAction,
     SystemProfile,
 };
+use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
 fn make_ubuntu_profile(elevated: bool, has_sudo: bool) -> SystemProfile {
@@ -244,53 +248,100 @@ fn test_service_api_host_vs_managed() {
     assert_eq!(agent_srv.active_state, "inactive");
 }
 
+fn manifest_for(name: &str, artifact_path: &std::path::Path, deps: Vec<String>) -> PackageManifest {
+    let bytes = std::fs::read(artifact_path).unwrap();
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    PackageManifest {
+        name: name.to_string(),
+        version: "1.0.0".to_string(),
+        description: format!("{name} test package"),
+        dependencies: deps,
+        source: artifact_path.to_string_lossy().to_string(),
+        sha256: format!("{:x}", hasher.finalize()),
+        kind: ArtifactKind::SingleFile,
+        dest_path: format!("{name}.bin"),
+    }
+}
+
 #[test]
-fn test_package_api_host_vs_managed_and_audit_logging() {
+fn test_package_api_managed_manifest_install_and_audit_logging() {
     let temp = TempDir::new().unwrap();
     let runner = Arc::new(MockCommandRunner::new());
-
     let profile = make_ubuntu_profile(false, true);
     let core = create_test_core(profile, &temp, runner);
-
     let auth = AuthContext::new("operator", false, true).with_confirmed(true);
 
-    // List initial managed packages
-    let pkgs = core
+    let artifacts = TempDir::new().unwrap();
+    let a_path = artifacts.path().join("a-tool.bin");
+    std::fs::write(&a_path, b"tool-a-payload").unwrap();
+    let b_path = artifacts.path().join("b-tool.bin");
+    std::fs::write(&b_path, b"tool-b-payload").unwrap();
+
+    // b-tool depends on a-tool; the set must install a-tool first.
+    let manifests = vec![
+        manifest_for("b-tool", &b_path, vec!["a-tool".to_string()]),
+        manifest_for("a-tool", &a_path, Vec::new()),
+    ];
+
+    let response = core
+        .packages()
+        .install_manifests(&manifests, ExecutionTarget::Managed, &auth)
+        .unwrap();
+    assert!(response.success);
+    assert_eq!(response.installed_packages.len(), 2);
+
+    let space = core.userspace().unwrap();
+    let payload = std::fs::read(
+        space
+            .packages_dir()
+            .join("a-tool")
+            .join("1.0.0")
+            .join("a-tool.bin"),
+    )
+    .unwrap();
+    assert_eq!(payload, b"tool-a-payload");
+
+    let installed = core
+        .packages()
+        .list_installed(Some("tool"), ExecutionTarget::Managed)
+        .unwrap();
+    assert_eq!(installed.len(), 2);
+
+    // The registry persists across a fresh core on the same data dir.
+    let core2 = create_test_core(
+        make_ubuntu_profile(false, true),
+        &temp,
+        Arc::new(MockCommandRunner::new()),
+    );
+    let persisted = core2
         .packages()
         .list_installed(None, ExecutionTarget::Managed)
         .unwrap();
-    assert_eq!(pkgs.len(), 1);
-    assert_eq!(pkgs[0].name, "kairo-base");
+    assert_eq!(persisted.len(), 2);
 
-    // Install managed package
-    let install_res = core
-        .packages()
-        .install(&["curl", "htop"], ExecutionTarget::Managed, &auth)
-        .unwrap();
-    assert!(install_res.success);
-    assert_eq!(install_res.installed_packages, vec!["curl", "htop"]);
+    // Bare-name managed installs were the old registry-only fake and must be refused.
+    assert!(
+        core.packages()
+            .install(&["x"], ExecutionTarget::Managed, &auth)
+            .is_err()
+    );
 
-    let updated_pkgs = core
-        .packages()
-        .list_installed(None, ExecutionTarget::Managed)
-        .unwrap();
-    assert_eq!(updated_pkgs.len(), 3);
-
-    // Remove managed package
-    let remove_res = core
-        .packages()
-        .remove(&["curl"], ExecutionTarget::Managed, &auth)
-        .unwrap();
-    assert!(remove_res.success);
-    assert_eq!(remove_res.removed_packages, vec!["curl"]);
-
-    // Verify audit log has recorded all events
     let recent_events = core.audit().get_recent(10);
     assert!(
         recent_events
             .iter()
             .any(|e| e.action == "package.install" && e.success)
     );
+
+    let remove_res = core
+        .packages()
+        .remove(&["b-tool"], ExecutionTarget::Managed, &auth)
+        .unwrap();
+    assert!(remove_res.success);
+    assert_eq!(remove_res.removed_packages, vec!["b-tool"]);
+
+    let recent_events = core.audit().get_recent(10);
     assert!(
         recent_events
             .iter()

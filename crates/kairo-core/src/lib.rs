@@ -18,9 +18,9 @@ pub use auth::{AuthContext, OperationLevel, PermissionManager};
 pub use env::EnvironmentApi;
 pub use error::CoreError;
 pub use fs::{FileMetadata, FilesystemApi};
-pub use package::PackageApi;
+pub use package::{ArtifactKind, PackageApi, PackageManifest};
 pub use process::ProcessApi;
-pub use service::ServiceApi;
+pub use service::{ManagedServiceDefinition, ServiceApi};
 pub use state::{StateDocument, load_state, store_state};
 pub use system::{SystemApi, SystemBoundaries, SystemResources};
 pub use target::ExecutionTarget;
@@ -53,7 +53,7 @@ pub struct KairoCore {
     env: EnvironmentApi,
     audit: Arc<AuditLog>,
     permissions: PermissionManager,
-    userspace: Option<ManagedUserspace>,
+    userspace: Option<Arc<ManagedUserspace>>,
 }
 
 impl KairoCore {
@@ -68,14 +68,8 @@ impl KairoCore {
         let boundaries = system.boundaries().clone();
         let managed_root = boundaries.managed_root.clone();
 
-        let process = ProcessApi::new(adapter.clone(), permissions.clone(), audit.clone());
-        let service = ServiceApi::new(adapter.clone(), permissions.clone(), audit.clone());
-        let package = PackageApi::new(adapter, permissions.clone(), audit.clone());
-        let fs = FilesystemApi::new(boundaries, permissions.clone(), audit.clone());
-        let env = EnvironmentApi::new(permissions.clone(), audit.clone());
-
-        let userspace = match ManagedUserspace::init(&managed_root) {
-            Ok(u) => Some(u),
+        let userspace: Option<Arc<ManagedUserspace>> = match ManagedUserspace::init(&managed_root) {
+            Ok(space) => Some(Arc::new(space)),
             Err(e) => {
                 warn!(
                     root = %managed_root.display(),
@@ -85,6 +79,17 @@ impl KairoCore {
                 None
             }
         };
+
+        let process = ProcessApi::new(adapter.clone(), permissions.clone(), audit.clone());
+        let service = ServiceApi::new(adapter.clone(), permissions.clone(), audit.clone());
+        let package = PackageApi::new(
+            adapter,
+            permissions.clone(),
+            audit.clone(),
+            userspace.clone(),
+        );
+        let fs = FilesystemApi::new(boundaries, permissions.clone(), audit.clone());
+        let env = EnvironmentApi::new(permissions.clone(), audit.clone());
 
         Self {
             system,
@@ -141,6 +146,6 @@ impl KairoCore {
 
     #[must_use]
     pub fn userspace(&self) -> Option<&ManagedUserspace> {
-        self.userspace.as_ref()
+        self.userspace.as_deref()
     }
 }
