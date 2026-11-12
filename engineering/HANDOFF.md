@@ -1,120 +1,204 @@
-# Kairo Handoff
+# Kairo Handoff — for the next engineer or AI
 
-Persistent continuation document. Read this first, then MASTER_ROADMAP.md, then verify against
-the source — the code always wins over this document.
+Complete continuation document. Read this first, then
+[MASTER_ROADMAP.md](MASTER_ROADMAP.md) and [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md),
+then verify claims against the code — the code and test results always win over documents.
 
-**Last updated:** 2026-11-11 (session 1)
-**Branch:** main · **HEAD at session start:** 673dda3
+**Last updated:** 2026-11-12 · **Branch:** `main` · **HEAD:** `071b9a4` · **Working tree:** clean
+**Repo:** `C:\Users\sahil\Downloads\Kairo` = github.com/debaucheryparty/Kairo (public)
 
-## Current project state
+---
 
-Kairo is a working remote-computer platform: agent (WebSocket + reverse tunnel, PTY, filesystem,
-processes, apps, metrics, X11 remote GUI, media, notifications) ↔ protocol/transport ↔ web and
-Tauri clients, with a platform-management layer (`kairo-discovery` → `kairo-bridge` adapters →
-`kairo-core` APIs with permissions + audit) wired into the agent session.
+## 1. What this project is
 
-The production scope (managed userspace, declarative config, dots, real packages, service
-supervision, CLI, install lifecycle) is in early stages — see IMPLEMENTATION_STATUS.md.
+Kairo is a remote-computer platform: a local client (web/Tauri) makes a remote Linux host feel like
+a computer, and the same machinery maintains a **managed userspace** — an independent environment
+with its own packages, services, configuration and dotfiles — separable from the host's own
+resources at every call site via `ExecutionTarget::{Host, Managed}`.
 
-## Last completed work (session 1)
+```
+clients <-- Kairo Protocol (WS / reverse tunnel) --> kairo-agent
+                                                     └─ kairo-core ─ platform adapters (apt, pacman, systemd, openrc)
+```
 
-1. Recon: verified actual repo (not prior reports). 89 uncommitted entries existed; three whole
-   crates (kairo-bridge, kairo-core, kairo-discovery) were untracked while already required by
-   the workspace build.
-2. Baseline committed (27314f5) after full verification; pushed to origin/main.
-3. Repaired two stale pre-existing test defects (not weakened — updated to current behavior):
-   core_test bridge-runner API usage; filesystem e2e exact-count vs. managed-root creation.
-4. M2 filesystem hardening (b55aab8): managed-root traversal now rejected explicitly; symlink
-   escapes blocked via canonicalize containment (incl. dangling-symlink create targets); writes
-   atomic via temp+rename. Windows 106 tests, Linux 108 tests pass.
-5. M3 managed userspace (6464ce1): fixed layout under the managed root (config/packages/services/
-   state/logs/cache/tmp) with a persistent manifest; integrity-checked JSON state store (kind +
-   generation + sha-256 checksum, atomic replace, corrupt-file quarantine, fresh-generation
-   recovery). KairoCore initializes it and degrades to a warning if the filesystem refuses.
-   Windows 113 tests, Linux 115 tests, all four gates green on both platforms.
-6. M6 real managed packages (39c8940): manifest-driven installation replacing the registry-only
-   stub — artifact acquisition (local + HTTP, streaming sha-256, size cap), hardened tar.gz
-   extraction (zip-slip, links, unpacked-size cap, exec bit), dependency ordering with cycle
-   detection, transactional installs, persisted receipts, upgrade + rollback. Windows 120 tests,
-   Linux 123 tests, all four gates green on both platforms, HTTP path verified live on both.
-7. M7 managed service runtime (f7d7f8b + 0d63bda): real supervised processes with restart
-   policies, log capture, SIGTERM/SIGKILL stop on Unix, persisted definitions + autostart; the
-   agent now shares one KairoCore across sessions (fixes concurrent-session state races).
-   Windows 126 tests, Linux 129 tests, all four gates green on both platforms.
-8. Linux verification on InstaBox found and fixed five real defects: apt-lock false positive
-   (109754d), Xvfb display-allocation race (caf03ed), windows-only traversal test expectation
-   (6c74259), parallel tests sharing one display (5dd6c19), supervisor unsafe-block lint +
-   formatting drift (fc3dc87). Gate scripts now sync with `git fetch + reset --hard` and run
-   with CARGO_INCREMENTAL=0 after the box's disk filled with incremental caches.
-9. M4 declarative configuration (fc6d4d3) + protocol frame cap (8389097): ConfigDocument v1
-   (files/packages/services) applied idempotently with drift detection, file rollback on failure
-   and persisted applied documents; decode rejects frames over 16 MiB before allocation.
-   Windows 133 tests, Linux 137 tests, all four gates green on both platforms.
-10. M5 Kairo Dots (a499629 + 07f09d3): dotfile profiles with inheritance, `{{var}}` templates,
-    conflict detection + explicit authorization for unmanaged files, automatic backups + restore,
-    drift detection, git-backed export/import. Windows 142 tests, Linux 147 tests, gates green.
-11. M9 operator CLI (b086352): new `kairo` binary over the userspace — status, config
-    validate/drift/apply, packages (managed+host, rollback), service define/list/remove, dots
-    save/apply/drift/restore/export/import; text + --json output; 4 end-to-end tests drive the
-    real binary. README rewritten (old vision text + dead docs/INDEX.md link replaced by
-    engineering/INDEX.md). Windows 146 tests, Linux 151 tests, gates green on both.
-12. engineering/ documentation system live and synchronized.
+Crate map and data flows: [ARCHITECTURE.md](ARCHITECTURE.md). Code style rules (mandatory):
+`Docs/KAIRO_CODE_RULES.md` — short functions, no comments that restate code, no `unwrap` in real
+paths, `cargo fmt` + `clippy -D warnings` before every commit, imperative lowercase commit subjects
+(~50 chars), one coherent change per commit.
 
-## Immediate next actions (in order)
+---
 
-1. M8 observability (log rotation, correlation IDs); M10 installer (consume the Linux prereqs list
-   in TEST_MATRIX.md); M11 remainder (session expiry/revocation, socket-level caps).
-2. M12 final release gate: fresh-clone builds, upgrade test, dependency audit, security review
-   pass, final deliverables report per the production completion criteria.
-3. M10 installer consumes the Linux prerequisites list in TEST_MATRIX.md; M8 observability
-   (correlation IDs, rotation); M11 transport hardening.
-4. Rewrites of README and docs/INDEX.md when the CLI/install story lands (M9/M10).
+## 2. What is DONE (all verified on Windows **and** Linux)
 
-## Verification environment (Linux)
+Commit ledger (oldest first). Every commit below is on `origin/main`:
 
-- InstaBox machine `m_agq3cscsuugpmq6rcmyfurqrlq` (name `app`), template agent-browser
-  (Debian 13 trixie), 4 vCPU / 8 GiB, sudo passwordless, Rust 1.99, Node 22, pnpm, docker.
-- **Free plan limit: 1 sandbox.** Do not delete this machine — it is the only Linux host available.
-- Repo checkout: `/data/home/Kairo`. InstaBox API key: `%USERPROFILE%\.instabox\api_key`
-  (outside the repo; never commit).
-- Installed for Kairo: protobuf-compiler, webkit2gtk/gtk dev stack, xvfb, xterm, x11-utils,
-  x11-xserver-utils, xfonts-base. Sidecar prep: build kairo-agent → copy to
-  `apps/kairo-desktop/src-tauri/binaries/kairo-backend-x86_64-unknown-linux-gnu`.
-- Gates are run as nohup scripts (/tmp/kairo-gate*.sh), logs /tmp/kairo-{check,test,clippy,fmt}.log.
+| Commit | Content |
+|---|---|
+| `4807878` | Baseline import: 89 pre-existing uncommitted entries (3 whole crates, UI rework, protos) verified & committed |
+| `10919e3` | M2 filesystem hardening: traversal rejected (not clamped), canonicalize symlink containment incl. dangling-link create targets, atomic temp+rename writes |
+| `2cb0a09` | Fix: unreadable (root-owned) apt lock files must not read as "lock held" |
+| `8305542` | Fix: Xvfb display allocation race (global spawn lock + display claim) |
+| `df432e5` | Fix: toolchain-portable tests/lints (cfg-shadowed bindings, as_chunks_mut, byte str) |
+| `14bf901` | Fix: parallel remote-surface tests get distinct Xvfb displays |
+| `a047757` | M3 managed userspace: fixed layout under `<data_dir>/managed` + SHA-256-checksummed, generation-tracked JSON state store with corrupt-file quarantine |
+| `f0625ef` | M6 real managed packages: manifest → artifact (local path / `file://` / http(s), streamed SHA-256, 512 MiB cap) → hardened tar.gz extraction (zip-slip, links rejected, 2 GiB cap) → receipts; dependency ordering w/ cycle detection; upgrade + rollback; env-gated live HTTP test |
+| `f7d7f8b` | M7 service supervisor: real processes, restart policies w/ backoff, log capture, SIGTERM→SIGKILL stop (Unix), persisted definitions + autostart |
+| `0d63bda` | Architecture fix: the agent's `Server` owns ONE `KairoCore` shared by all sessions (per-session cores raced on state files) |
+| `fc3dc87` | Supervisor lint-clean on Linux (scoped, documented `unsafe_code` allow for `libc::kill`) |
+| `8389097` | M11-lite: protocol frames capped at 16 MiB at decode, before allocation; lying length headers rejected early |
+| `fc6d4d3` | M4 config engine: versioned `ConfigDocument` (files/packages/services), validate-before-apply, idempotent steps, file rollback on later failure, drift detection, applied doc persisted |
+| `a499629` + `07f09d3` | M5 Kairo Dots: profiles w/ inheritance + `{{var}}` templates, conflict gate + backups, restore, drift, git-backed export/import |
+| `b086352` | M9 CLI (`kairo` binary): status, config, pkg (managed+host, rollback), svc define/list/remove, dots workflow, `--json` |
+| `071b9a4` | README rewrite + `engineering/INDEX.md` + doc synchronisation |
 
-## Tests executed and actual results (session 1, final)
+**Verified state (gate 12):** `cargo check/test/fmt/clippy -D warnings` all green.
+Tests: **Windows 146**, **Linux 151** (Linux has extra `#[cfg(unix)]` tests).
 
-| Gate | Windows | Linux (Debian 13 box) |
-|---|---|---|
-| `cargo check --workspace` | PASS | PASS |
-| `cargo test --workspace --no-fail-fast` | **PASS 106/0** | **PASS 108/0** (incl. unix-only symlink-containment test) |
-| `cargo fmt --all -- --check` | PASS | PASS |
-| `cargo clippy --workspace --all-targets -- -D warnings` | PASS | PASS (rustc 1.99 strictness fixed in 6c74259) |
+Git identity: commits must be authored **and** committed as `aikyaam <httpsahilxd@gmail.com>`.
+The sandbox injects `GIT_AUTHOR_*`/`GIT_COMMITTER_*` env vars (`zwork@local`) that override repo
+config — remove those four env vars before any commit/rebase. History was rewritten once
+(with the owner's explicit authorization, `--force-with-lease`) to fix wrong authors; do not
+rewrite again without a new explicit instruction.
 
-Full evidence and per-suite counts: TEST_MATRIX.md. Linux prerequisites documented there.
+---
 
-## Immediate next actions (in order)
+## 3. Environment playbook (how verification actually runs)
 
-1. M3 managed userspace: persistent layout under the managed root (config/, packages/, services/,
-   state/, logs/, cache/), integrity-checked persisted state (SEC-05), init/migration-safe.
-2. M6 real managed packages (SEC-04): artifact acquisition + checksum verify + receipts + rollback,
-   replacing the register-only stub; depends on M3 store.
-3. M4 declarative configuration engine; M5 dots; M7 service runtime/supervision; M9 CLI.
-4. M10 installer should consume the Linux prerequisites list in TEST_MATRIX.md.
-5. Rewrites of README and docs/INDEX.md when the CLI/install story lands (M9/M10).
+### Windows dev host
+Windows 11, PowerShell 5.1, rustc 1.96. Local gates:
 
-## Known failures / open problems
+```powershell
+cargo test --workspace --no-fail-fast
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+```
 
-- None failing at handoff on either platform. Security weaknesses beyond the fixed SEC-01/02/09/10
-  are catalogued in SECURITY_REVIEW.md (SEC-03…08 remain open, planned per roadmap).
-- `README.md` describes the old vision and links a non-existent `docs/INDEX.md` — rewrite when the
-  CLI/install story lands (M9/M10).
-- InstaBox free plan: 1 sandbox total; the Linux box doubles as the user's general machine —
-  leave it running and do not delete it.
+### Linux verification box (required for real Linux evidence)
+InstaBox machine `m_agq3cscsuugpmq6rcmyfurqrlq` (name `app`), Debian 13 trixie, 4 vCPU / 8 GiB,
+rustc 1.99, Node 22, passwordless sudo, repo at `/data/home/Kairo`.
+API key: `%USERPROFILE%\.instabox\api_key` (**never commit**). Free plan = **1 sandbox — do not
+delete this machine.** API: `POST https://api.instabox.sh/v1/machines/{id}/exec` (bash -lc, max
+600 s per call — long work goes through `nohup … &` then polling), `GET /v1/machines/{id}/files`.
 
-## Important architectural context
+**Sync procedure (the box is a pure checkout):**
 
-- `ExecutionTarget::{Host,Managed}` is the product's core boundary; managed state root is
-  `<data_dir>/managed` (`kairo-core/src/system.rs`).
-- `cargo fmt`/`clippy` gates are enforced repo-wide; lints deny `unsafe_code` and `unwrap_used`.
-- Commit style: imperative, lowercase, ≤50-char first line, one coherent change per commit.
+```bash
+cd /data/home/Kairo
+git fetch origin && git reset --hard origin/main   # NOT pull --ff-only (rewritten history)
+git log --oneline -1                                # verify HEAD == pushed HEAD
+export KAIRO_TEST_HTTP=1 CARGO_INCREMENTAL=0
+cargo test --workspace --no-fail-fast --message-format=short > /tmp/t.log 2>&1; echo "EXIT=$?" >> /tmp/t.log
+cargo fmt --all -- --check > /tmp/f.log 2>&1; echo "EXIT=$?" >> /tmp/f.log
+cargo clippy --workspace --all-targets -- -D warnings > /tmp/c.log 2>&1; echo "EXIT=$?" >> /tmp/c.log
+```
+
+Then fetch `/tmp/{t,f,c}.log` back via exec and record **actual** numbers in
+[TEST_MATRIX.md](TEST_MATRIX.md). Never report a gate you did not see pass.
+
+**Box prerequisites (already installed; the M10 installer must reproduce this list):**
+`protobuf-compiler`, `libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev
+libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev`, `xvfb xterm x11-utils x11-xserver-utils
+xfonts-base`, and the agent sidecar step (below).
+
+**Known traps on this box:** `/data` is 20 GiB and fills with incremental caches — run gates with
+`CARGO_INCREMENTAL=0` and `rm -rf target/debug/incremental` when space gets tight (df -h /data).
+The Tauri desktop crate needs a sidecar built first:
+`cargo build -p kairo-agent && cp target/debug/kairo-agent apps/kairo-desktop/src-tauri/binaries/kairo-backend-x86_64-unknown-linux-gnu`
+(it is gitignored; without it `cargo check --workspace` fails on a clean checkout — this is
+documented M10 work).
+
+---
+
+## 4. What is LEFT
+
+Roadmap detail and completion criteria: [MASTER_ROADMAP.md](MASTER_ROADMAP.md).
+Status per subsystem: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
+
+### M8 — Observability (next)
+Needed: structured/JSON log option, **log rotation + retention**, correlation IDs on every log
+line of a session, error classification. Where: `apps/kairo-agent` (tracing init lives in
+`main.rs`; `AgentConfig` in `config.rs`), possibly a `logging.rs` module. Approach: add
+`log_dir: Option<String>` + `log_json: bool` to `AgentConfig` (serde defaults), compose a
+`tracing_subscriber::registry()` with a stdout layer plus `tracing_appender::rolling` (non-blocking,
+keep the `WorkerGuard` for process lifetime), and wrap `Session::run` in a `tracing::info_span!`
+carrying `session_id`/`peer`. Add a rotation/retention unit test (write through the layer, assert
+files appear/age out). An earlier attempt at this was cancelled mid-run with no changes on disk —
+nothing to salvage.
+
+### M10 — Installer / lifecycle
+Needed: `install.sh` (exists, never executed — verify on the box), upgrade path, uninstall with
+data preservation, headless Linux first-class, and **encode the prerequisites list above** (protoc,
+Tauri deps, font packages, sidecar). Where: `scripts/` + documentation. Verify by fresh-clone
+install on the Linux box into a clean directory; record exact commands and output in TEST_MATRIX.
+
+### M11 remainder — transport/session hardening
+Done: 16 MiB frame cap, per-IP auth rate limiting, single core per process.
+Needed: session token **expiry and revocation** (SEC-07), socket-level message caps at the
+tungstenite layer, uniform command-output bounds, protocol version negotiation (SEC-08 remainder).
+Where: `apps/kairo-agent/src/server.rs` + `session.rs` + `crates/kairo-transport`.
+`session.rs` is large (~1.3k lines) — it already has `with_components`/`with_core` constructors;
+keep changes surgical and add targeted tests rather than restructuring.
+
+### M12 — Final release gate
+1. Fresh `git clone` of `origin/main` into an empty dir on Windows **and** the Linux box; run all
+   four gates there (this is what "builds from a clean checkout" means).
+2. Dependency audit (`cargo tree` review; check licenses/versions; no `cargo audit` installed —
+   add or document an equivalent).
+3. Security review pass over [SECURITY_REVIEW.md](SECURITY_REVIEW.md): close or explicitly accept
+   each open finding (SEC-03, SEC-06 recheck, SEC-07, SEC-08 remainder).
+4. Upgrade test: install v0-style state (or an older commit's data dir), then run the current
+   binary against it — the state store's `kind` check and schema version must fail loudly or
+   migrate explicitly.
+5. Failure-injection: kill a supervised service repeatedly (restart policy caps), interrupt an
+   install mid-download (no partial dir, no receipt), corrupt `state/*.json` (quarantine + fresh
+   generation).
+6. Final deliverables report: feature inventory, platform matrix, install/config/CLI/API docs,
+   test results, known limitations — **every claim backed by a TEST_MATRIX row**.
+
+---
+
+## 5. How to work here (rules that keep this repo healthy)
+
+1. **Read before writing**: `Docs/KAIRO_CODE_RULES.md`, the module you will touch, and its tests.
+2. **Smallest correct change.** No speculative abstractions, no placeholder implementations, no
+   comments restating code. Comment only non-obvious *why* (security invariants, platform quirks).
+3. **Every behaviour change gets a test**, and the test must fail without the change.
+4. **Gates before every commit**: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D
+   warnings`, `cargo test --workspace`. Commit with the owner's identity (see §2).
+5. **Linux-only code is invisible to Windows clippy/test.** Anything under `#[cfg(unix)]` (symlink
+   behaviour, `libc::kill`, mode bits) must be verified on the box before claiming it works. This
+   bit us twice (unsafe-lint deny, apt-lock false positive).
+6. **One `KairoCore` per process.** The agent's `Server` builds it once and hands `Arc` clones to
+   sessions. Do not reintroduce per-session cores — the state store assumes a single writer.
+7. **State is JSON envelopes with checksums** (`crates/kairo-core/src/state.rs`): `{kind,
+   generation, data, checksum}`, atomic temp+rename, corrupt files quarantined as
+   `*.corrupt-<ts>`. New persisted subsystems must go through `load_state`/`store_state`, add a
+   new `kind`, and handle quarantine.
+8. **Managed root boundary**: every managed filesystem operation goes through
+   `FilesystemApi` (traversal + symlink containment + atomic writes are already enforced there).
+   Dotfiles are the *only* deliberate exception (ADR-0010) and stay behind the authorization gate.
+9. **Supervision lives in the long-running agent process.** A one-shot CLI cannot supervise —
+   `kairo svc start/stop` intentionally route the operator to the agent. If CLI-driven control is
+   needed, implement a local client over the existing protocol rather than faking supervision.
+10. **Windows quoting pitfalls** in scripts: prefer `edit`/`write` tools over shell `-replace` with
+    nested quotes; when using PowerShell, remember `\` is not an escape and files may be LF or CRLF
+    (the tools will tell you when the ending differs).
+11. **Never weaken a test to make it pass.** If behaviour legitimately changed, rewrite the
+    assertion to the new contract and note it in the commit body (this happened for the
+    `filesystem_test` listing and the `core_test` bridge API).
+12. **Documentation discipline**: update IMPLEMENTATION_STATUS/TEST_MATRIX/HANDOFF as you go; put
+    every significant architecture decision in DECISIONS.md as a new ADR; never mark something
+    PRODUCTION_READY on the strength of unit tests alone.
+
+---
+
+## 6. Quick state check before you start
+
+```powershell
+git -C C:\Users\sahil\Downloads\Kairo log --oneline -3
+git -C C:\Users\sahil\Downloads\Kairo status --porcelain
+cargo test --workspace --no-fail-fast        # expect: all green, ~146 tests on Windows
+```
+
+Then pick the first unfinished milestone (§4, in order) and follow §5. The next concrete task is
+**M8 observability**.
