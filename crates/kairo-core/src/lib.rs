@@ -19,7 +19,7 @@ use std::time::Duration;
 
 pub use audit::{AuditEvent, AuditLog, AuditSeverity};
 pub use auth::{AuthContext, OperationLevel, PermissionManager};
-pub use config::{ConfigDocument, DriftItem, ManagedFileSpec};
+pub use config::{ApplyReport, ConfigDocument, DriftItem, ManagedFileSpec, StepAction, StepResult};
 pub use dots::{
     DotApplyReport, DotContext, DotDrift, DotProfile, DotfileAction, DotfileSpec, DotsEngine,
 };

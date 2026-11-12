@@ -2116,6 +2116,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "kairo-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "kairo-bridge",
+ "kairo-core",
+ "kairo-discovery",
+ "kairo-protocol",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "kairo-common"
 version = "0.1.0"
 dependencies = [
