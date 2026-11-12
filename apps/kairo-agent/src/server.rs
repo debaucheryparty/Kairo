@@ -225,6 +225,7 @@ impl Server {
                                     peer = %peer_addr,
                                     session_id = %session.session_id(),
                                     state = ?session.state(),
+                                    classification = e.classification(),
                                     error = %e,
                                     "session ended with error"
                                 );

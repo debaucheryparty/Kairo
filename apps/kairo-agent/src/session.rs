@@ -33,7 +33,7 @@ use tokio::sync::{Mutex, Notify, mpsc};
 use tokio::time::timeout;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
-use tracing::{debug, error, info, warn};
+use tracing::{Instrument, debug, error, info, warn};
 
 use crate::app_manager::AppManager;
 use crate::config::AgentConfig;
@@ -96,6 +96,23 @@ pub enum SessionError {
 
     #[error("version mismatch: expected {expected}, got {actual}")]
     VersionMismatch { expected: u32, actual: u32 },
+}
+
+impl SessionError {
+    /// Coarse failure category used for log filtering and alert routing.
+    #[must_use]
+    pub fn classification(&self) -> &'static str {
+        match self {
+            Self::AuthenticationFailed => "auth",
+            Self::ConnectionClosed(_) | Self::HandshakeTimeout => "transport",
+            Self::Protocol(_)
+            | Self::ProtobufDecode(_)
+            | Self::ProtobufEncode(_)
+            | Self::UnexpectedKind { .. }
+            | Self::VersionMismatch { .. } => "protocol",
+            Self::Pty(_) | Self::System(_) | Self::Gpu(_) => "backend",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -246,7 +263,19 @@ impl Session {
         self.state
     }
 
-    pub async fn run<S>(&mut self, mut stream: WebSocketStream<S>) -> Result<(), SessionError>
+    pub async fn run<S>(&mut self, stream: WebSocketStream<S>) -> Result<(), SessionError>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
+        let span = tracing::info_span!("session", session_id = %self.session_id);
+        self.run_inner(stream, span.clone()).instrument(span).await
+    }
+
+    async fn run_inner<S>(
+        &mut self,
+        mut stream: WebSocketStream<S>,
+        span: tracing::Span,
+    ) -> Result<(), SessionError>
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
     {
@@ -322,7 +351,8 @@ impl Session {
                     else => break,
                 }
             }
-        });
+        }
+        .instrument(span));
 
         // Attach this session to the AppManager event stream
         self.app
@@ -1362,5 +1392,32 @@ impl Session {
 
         self.send_frame(out_tx, msg).await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn session_errors_classify_by_category() {
+        assert_eq!(SessionError::AuthenticationFailed.classification(), "auth");
+        assert_eq!(SessionError::HandshakeTimeout.classification(), "transport");
+        assert_eq!(
+            SessionError::ConnectionClosed("gone".into()).classification(),
+            "transport"
+        );
+        assert_eq!(
+            SessionError::VersionMismatch {
+                expected: 1,
+                actual: 2
+            }
+            .classification(),
+            "protocol"
+        );
+        assert_eq!(
+            SessionError::Pty(PtyError::NotFound("pty-1".into())).classification(),
+            "backend"
+        );
     }
 }
