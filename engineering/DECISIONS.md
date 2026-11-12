@@ -92,6 +92,24 @@ Append-only ADR log. Superseded decisions stay here with their replacement noted
 - **Consequences:** file rollback is exact; a partially applied package/service set stays applied
   and is visible in the report (each step is individually transactional). Schema v2 will need a
   migration path through the state store's kind check.
+## ADR-0010 — Kairo Dots touch host home files behind an authorization gate
+- **Date:** 2026-11-12
+- **Decision:** Dotfile profiles apply into the user's real home directory (paths are
+  home-relative), which deliberately crosses the managed-root boundary. Protections: applying
+  over an existing *unmanaged* file requires explicit authorization per apply; every overwritten
+  original is copied into the userspace `dots-backups/` tree; `restore` uses those backups (and
+  removes files Kairo created); drift detection compares the last-applied rendered content.
+  Profiles layer over an inherited base, render `{{var}}` templates (undefined variables are
+  errors, never silently kept), and are git-backed: export inits+commits, import clones.
+- **Context:** Dotfile management is the point of Kairo Dots; confinement to the managed root
+  would make it useless. The authorization gate implements the directive's "never overwrite host
+  dotfiles without explicit user authorization".
+- **Alternatives:** symlink farm (stow-style — reversible but surprising on Windows), hardlinks
+  (fragile across editors), copying without backups (violates rollback requirements).
+- **Consequences:** The host home is a new trust surface: documented in SECURITY_REVIEW; the
+  restore path is the tested rollback. Templates that reference undefined variables fail the
+  apply instead of rendering placeholders.
+
 ## ADR-0006 - Integrity-checked state store primitive in kairo-core
 - **Date:** 2026-11-11
 - **Decision:** Persistent state is stored as JSON envelopes `{kind, generation, data, checksum}`

@@ -50,12 +50,16 @@ supervision, CLI, install lifecycle) is in early stages — see IMPLEMENTATION_S
    (files/packages/services) applied idempotently with drift detection, file rollback on failure
    and persisted applied documents; decode rejects frames over 16 MiB before allocation.
    Windows 133 tests, Linux 137 tests, all four gates green on both platforms.
-10. engineering/ documentation system live and synchronized.
+10. M5 Kairo Dots (a499629 + 07f09d3): dotfile profiles with inheritance, `{{var}}` templates,
+    conflict detection + explicit authorization for unmanaged files, automatic backups + restore,
+    drift detection, git-backed export/import. Windows 142 tests, Linux 147 tests, gates green.
+11. engineering/ documentation system live and synchronized.
 
 ## Immediate next actions (in order)
 
-1. M5 Kairo Dots (profiles, templates, backup/restore) on top of the config engine.
-2. M9 CLI exposing config/packages/services (headless-first) — the natural next user-facing piece.
+1. M9 CLI exposing config/packages/services/dots (headless-first) — the natural next user-facing piece.
+2. M8 observability (log rotation, correlation IDs); M10 installer; M11 remainder (session expiry).
+3. M12 final release gate: fresh-clone builds, upgrade test, security review pass, final deliverables.
 3. M10 installer consumes the Linux prerequisites list in TEST_MATRIX.md; M8 observability
    (correlation IDs, rotation); M11 transport hardening.
 4. Rewrites of README and docs/INDEX.md when the CLI/install story lands (M9/M10).
