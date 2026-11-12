@@ -167,7 +167,7 @@ impl ServiceSupervisor {
         Ok(())
     }
 
-    fn validate_spec(spec: &ManagedServiceSpec) -> Result<(), CoreError> {
+    pub fn validate_spec(spec: &ManagedServiceSpec) -> Result<(), CoreError> {
         crate::package::manifest::validate_name(&spec.name)?;
         if spec.command.is_empty() {
             return Err(CoreError::InvalidArgument(format!(
@@ -323,6 +323,17 @@ impl ServiceSupervisor {
             }
         }
         Ok(started)
+    }
+
+    /// Returns the persisted definition of a service, if any. The persisted
+    /// store is authoritative: `define_service` writes through immediately.
+    pub fn definition(&self, name: &str) -> Result<Option<ManagedServiceSpec>, CoreError> {
+        let persisted = self.load_persisted()?;
+        Ok(persisted
+            .services
+            .into_iter()
+            .find(|existing| existing.spec.name == name)
+            .map(|existing| existing.spec))
     }
 
     /// Restores persisted definitions into memory without starting them.

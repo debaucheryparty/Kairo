@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod auth;
+pub mod config;
 pub mod env;
 pub mod error;
 pub mod fs;
@@ -17,6 +18,7 @@ use std::time::Duration;
 
 pub use audit::{AuditEvent, AuditLog, AuditSeverity};
 pub use auth::{AuthContext, OperationLevel, PermissionManager};
+pub use config::{ConfigDocument, DriftItem, ManagedFileSpec};
 pub use env::EnvironmentApi;
 pub use error::CoreError;
 pub use fs::{FileMetadata, FilesystemApi};

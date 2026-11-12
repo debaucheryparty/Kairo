@@ -27,7 +27,7 @@ fn boundary_violation(path: &Path) -> CoreError {
     }
 }
 
-fn managed_relative(relative_or_abs: &Path) -> Result<PathBuf, CoreError> {
+pub(crate) fn managed_relative(relative_or_abs: &Path) -> Result<PathBuf, CoreError> {
     let text = relative_or_abs.to_string_lossy();
     let trimmed = text.trim_start_matches(['/', '\\']);
 

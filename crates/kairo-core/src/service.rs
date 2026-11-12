@@ -191,6 +191,10 @@ impl ServiceApi {
             .unwrap_or_default()
     }
 
+    pub fn managed_definition(&self, name: &str) -> Result<Option<ManagedServiceSpec>, CoreError> {
+        self.supervisor()?.definition(name)
+    }
+
     /// Starts persisted services flagged for autostart; called once per
     /// agent process at startup.
     pub async fn start_autostart_services(&self) -> Result<Vec<String>, CoreError> {
