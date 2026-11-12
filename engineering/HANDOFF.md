@@ -53,13 +53,19 @@ supervision, CLI, install lifecycle) is in early stages — see IMPLEMENTATION_S
 10. M5 Kairo Dots (a499629 + 07f09d3): dotfile profiles with inheritance, `{{var}}` templates,
     conflict detection + explicit authorization for unmanaged files, automatic backups + restore,
     drift detection, git-backed export/import. Windows 142 tests, Linux 147 tests, gates green.
-11. engineering/ documentation system live and synchronized.
+11. M9 operator CLI (b086352): new `kairo` binary over the userspace — status, config
+    validate/drift/apply, packages (managed+host, rollback), service define/list/remove, dots
+    save/apply/drift/restore/export/import; text + --json output; 4 end-to-end tests drive the
+    real binary. README rewritten (old vision text + dead docs/INDEX.md link replaced by
+    engineering/INDEX.md). Windows 146 tests, Linux 151 tests, gates green on both.
+12. engineering/ documentation system live and synchronized.
 
 ## Immediate next actions (in order)
 
-1. M9 CLI exposing config/packages/services/dots (headless-first) — the natural next user-facing piece.
-2. M8 observability (log rotation, correlation IDs); M10 installer; M11 remainder (session expiry).
-3. M12 final release gate: fresh-clone builds, upgrade test, security review pass, final deliverables.
+1. M8 observability (log rotation, correlation IDs); M10 installer (consume the Linux prereqs list
+   in TEST_MATRIX.md); M11 remainder (session expiry/revocation, socket-level caps).
+2. M12 final release gate: fresh-clone builds, upgrade test, dependency audit, security review
+   pass, final deliverables report per the production completion criteria.
 3. M10 installer consumes the Linux prerequisites list in TEST_MATRIX.md; M8 observability
    (correlation IDs, rotation); M11 transport hardening.
 4. Rewrites of README and docs/INDEX.md when the CLI/install story lands (M9/M10).
