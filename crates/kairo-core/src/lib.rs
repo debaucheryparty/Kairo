@@ -1,6 +1,7 @@
 pub mod audit;
 pub mod auth;
 pub mod config;
+pub mod dots;
 pub mod env;
 pub mod error;
 pub mod fs;
@@ -19,6 +20,9 @@ use std::time::Duration;
 pub use audit::{AuditEvent, AuditLog, AuditSeverity};
 pub use auth::{AuthContext, OperationLevel, PermissionManager};
 pub use config::{ConfigDocument, DriftItem, ManagedFileSpec};
+pub use dots::{
+    DotApplyReport, DotContext, DotDrift, DotProfile, DotfileAction, DotfileSpec, DotsEngine,
+};
 pub use env::EnvironmentApi;
 pub use error::CoreError;
 pub use fs::{FileMetadata, FilesystemApi};
@@ -163,5 +167,14 @@ impl KairoCore {
     #[must_use]
     pub fn userspace(&self) -> Option<&ManagedUserspace> {
         self.userspace.as_deref()
+    }
+
+    /// The dots engine over this core's userspace; `None` when userspace
+    /// init failed.
+    #[must_use]
+    pub fn dots(&self) -> Option<DotsEngine> {
+        self.userspace
+            .as_ref()
+            .map(|space| DotsEngine::new(Arc::clone(space)))
     }
 }
