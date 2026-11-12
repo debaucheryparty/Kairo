@@ -46,13 +46,16 @@ supervision, CLI, install lifecycle) is in early stages — see IMPLEMENTATION_S
    (6c74259), parallel tests sharing one display (5dd6c19), supervisor unsafe-block lint +
    formatting drift (fc3dc87). Gate scripts now sync with `git fetch + reset --hard` and run
    with CARGO_INCREMENTAL=0 after the box's disk filled with incremental caches.
-9. engineering/ documentation system live and synchronized.
+9. M4 declarative configuration (fc6d4d3) + protocol frame cap (8389097): ConfigDocument v1
+   (files/packages/services) applied idempotently with drift detection, file rollback on failure
+   and persisted applied documents; decode rejects frames over 16 MiB before allocation.
+   Windows 133 tests, Linux 137 tests, all four gates green on both platforms.
+10. engineering/ documentation system live and synchronized.
 
 ## Immediate next actions (in order)
 
-1. M4 declarative configuration engine (drift detection, idempotent apply, transactions) on the
-   userspace config dir; M5 dots on top of it.
-2. M9 CLI exposing userspace/packages/services (headless-first).
+1. M5 Kairo Dots (profiles, templates, backup/restore) on top of the config engine.
+2. M9 CLI exposing config/packages/services (headless-first) — the natural next user-facing piece.
 3. M10 installer consumes the Linux prerequisites list in TEST_MATRIX.md; M8 observability
    (correlation IDs, rotation); M11 transport hardening.
 4. Rewrites of README and docs/INDEX.md when the CLI/install story lands (M9/M10).

@@ -74,6 +74,24 @@ Append-only ADR log. Superseded decisions stay here with their replacement noted
   lint is overridden for the single, documented `libc::kill` call. HTTP health checks for
   services are deferred (process-liveness is the v1 health model).
 
+## ADR-0009 — Declarative configuration applies files, packages and services idempotently
+- **Date:** 2026-11-11
+- **Decision:** A versioned `ConfigDocument` (schema v1) carries three sections — managed files
+  (path relative to the userspace root + UTF-8 content + optional Unix mode), managed packages
+  (reusing package manifests), and managed services (reusing service specs). `apply` validates the
+  whole document first (version, names, paths, duplicates), then applies files (with in-memory
+  backups and rollback on later failure), packages (dependency-ordered, individually
+  transactional), then services (stop-before-redefine, start when autostart). Every step reports
+  Applied/Skipped/Failed; re-applying an in-sync document changes nothing. The applied document is
+  persisted in the userspace state store. `drift` compares a document against live state without
+  changing anything.
+- **Context:** M4 requires desired-state semantics over the M3/M6/M7 subsystems.
+- **Alternatives:** all-or-nothing rollback including packages (requires staging every artifact
+  before applying anything — deferred), section-scoped dependencies (deferred to schema v2),
+  YAML/TOML documents (JSON now; the CLI can add formats later).
+- **Consequences:** file rollback is exact; a partially applied package/service set stays applied
+  and is visible in the report (each step is individually transactional). Schema v2 will need a
+  migration path through the state store's kind check.
 ## ADR-0006 - Integrity-checked state store primitive in kairo-core
 - **Date:** 2026-11-11
 - **Decision:** Persistent state is stored as JSON envelopes `{kind, generation, data, checksum}`

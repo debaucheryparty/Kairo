@@ -28,6 +28,8 @@ Only actually executed results are recorded. Platforms:
 | `cargo test --workspace` (after M6, gate 8, `KAIRO_TEST_HTTP=1`) | 2026-11-11 | Linux | **PASS: 123 tests, 0 failed**; fmt + clippy `-D warnings` PASS; real HTTP artifact acquisition verified against a local server on the box | /tmp/kairo-test.log on box |
 | `cargo test --workspace` (after M7 runtime, gate 9d, `KAIRO_TEST_HTTP=1`) | 2026-11-11 | Windows | **PASS: 126 tests, 0 failed** | test-run8.log |
 | `cargo test --workspace` (after M7, gate 9d, `KAIRO_TEST_HTTP=1`) | 2026-11-11 | Linux | **PASS: 129 tests, 0 failed**; fmt + clippy `-D warnings` PASS; SIGTERM-based graceful stop exercised on the box | /tmp/kairo-test.log on box |
+| `cargo test --workspace` (after M4 config engine + protocol cap, gate 10, `KAIRO_TEST_HTTP=1`) | 2026-11-12 | Windows | **PASS: 133 tests, 0 failed** | test-run9.log |
+| `cargo test --workspace` (gate 10, `KAIRO_TEST_HTTP=1`) | 2026-11-12 | Linux | **PASS: 137 tests, 0 failed**; fmt + clippy `-D warnings` PASS | /tmp/kairo-test.log on box |
 
 ## Suite counts (baseline run, `--no-fail-fast`, Windows)
 

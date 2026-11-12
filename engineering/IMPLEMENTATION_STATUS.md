@@ -25,7 +25,7 @@ Inventory of every subsystem with honest statuses. Evidence rules:
 | Desktop shell (Tauri) | IMPLEMENTED | `apps/kairo-desktop` | none | |
 | TS runtime client | IMPLEMENTED | `packages/kairo-runtime` | none | IndexedDB + short-lived session tokens |
 | **Managed userspace (persistent layout)** | TESTED | `crates/kairo-core/src/userspace.rs`, `state.rs` | `tests/userspace_test.rs` (7) | fixed layout under managed root, checksummed generation-tracked manifest, corrupt-file quarantine; core degrades gracefully if init fails |
-| **Declarative configuration engine** | NOT_STARTED | — | — | M4 |
+| **Declarative configuration engine** | TESTED | `crates/kairo-core/src/config.rs` | `tests/config_test.rs` (5) | versioned schema v1 (files/packages/services), validate-before-apply, idempotent steps, file rollback on failure, drift detection, applied document persisted |
 | **Kairo Dots (dotfiles/profiles)** | NOT_STARTED | — | — | M5 |
 | **Real managed packages** | TESTED | `crates/kairo-core/src/package*.rs` | `tests/package_test.rs` (7 + env-gated HTTP test) | artifact acquisition (local + HTTP), sha-256 verify, hardened tar.gz extraction, dependency ordering, transactional install, persisted receipts, upgrade/rollback — replaces the registry-only stub (SEC-04 fixed) |
 | **Managed services / runtime supervision** | TESTED | `crates/kairo-core/src/runtime.rs`, `service.rs` | `tests/runtime_test.rs` (6) | real process launch, restart policies with backoff, SIGTERM→SIGKILL stop on Unix, log capture to userspace logs dir, definitions persisted via state store, autostart at agent boot; agent now shares one core across sessions (SEC-05 fixed) |
