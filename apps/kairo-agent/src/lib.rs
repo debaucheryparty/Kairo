@@ -10,6 +10,7 @@ pub mod config;
 pub mod fs;
 pub mod gpu;
 pub mod gui;
+pub mod logging;
 pub mod media;
 pub mod metrics;
 pub mod notification;

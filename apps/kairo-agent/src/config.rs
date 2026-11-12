@@ -15,6 +15,10 @@ pub struct AgentConfig {
     pub tls_key: Option<String>,
     pub tunnel_url: Option<String>,
     pub tunnel_token: Option<String>,
+    #[serde(default)]
+    pub log_dir: Option<String>,
+    #[serde(default)]
+    pub log_json: bool,
 }
 
 impl AgentConfig {
@@ -86,6 +90,8 @@ impl fmt::Debug for AgentConfig {
                 "tunnel_token",
                 &self.tunnel_token.as_ref().map(|_| "[REDACTED]"),
             )
+            .field("log_dir", &self.log_dir)
+            .field("log_json", &self.log_json)
             .finish()
     }
 }
@@ -102,6 +108,8 @@ impl Default for AgentConfig {
             tls_key: None,
             tunnel_url: None,
             tunnel_token: None,
+            log_dir: None,
+            log_json: false,
         }
     }
 }
