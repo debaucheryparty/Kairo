@@ -17,6 +17,9 @@ pub enum ProtocolError {
     #[error("payload too large: {size} bytes (limit {limit})")]
     PayloadTooLarge { size: usize, limit: usize },
 
+    #[error("frame too large: {len} bytes (limit {limit})")]
+    FrameTooLarge { len: usize, limit: usize },
+
     #[error("version mismatch: local={local}, remote={remote}")]
     VersionMismatch { local: u16, remote: u16 },
 

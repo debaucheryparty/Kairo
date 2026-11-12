@@ -6,6 +6,7 @@ pub const MAGIC: [u8; 2] = [0x4B, 0x52];
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const HEADER_SIZE: usize = 20;
 pub const MAX_PAYLOAD_SIZE: usize = 16 * 1024 * 1024;
+pub const MAX_MESSAGE_LEN: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
@@ -212,6 +213,13 @@ impl KairoMessage {
     }
 
     pub fn decode(mut data: Bytes) -> Result<Self, ProtocolError> {
+        if data.len() > MAX_MESSAGE_LEN {
+            return Err(ProtocolError::FrameTooLarge {
+                len: data.len(),
+                limit: MAX_MESSAGE_LEN,
+            });
+        }
+
         if data.len() < HEADER_SIZE {
             return Err(ProtocolError::FrameTooShort {
                 expected: HEADER_SIZE,
@@ -343,5 +351,39 @@ mod tests {
 
         let err = KairoMessage::decode(buf.freeze()).unwrap_err();
         assert_eq!(err, ProtocolError::UnknownMessageKind(999));
+    }
+
+    #[test]
+    fn test_frame_too_large() {
+        let frame = vec![0u8; MAX_MESSAGE_LEN + 1];
+
+        let err = KairoMessage::decode(Bytes::from(frame)).unwrap_err();
+        assert_eq!(
+            err,
+            ProtocolError::FrameTooLarge {
+                len: MAX_MESSAGE_LEN + 1,
+                limit: MAX_MESSAGE_LEN,
+            }
+        );
+    }
+
+    #[test]
+    fn test_payload_length_over_cap() {
+        let mut buf = BytesMut::with_capacity(HEADER_SIZE);
+        buf.put_slice(&MAGIC);
+        buf.put_u16(PROTOCOL_VERSION);
+        buf.put_u16(1);
+        buf.put_u16(0);
+        buf.put_u64(1);
+        buf.put_u32(u32::MAX);
+
+        let err = KairoMessage::decode(buf.freeze()).unwrap_err();
+        assert_eq!(
+            err,
+            ProtocolError::PayloadTooLarge {
+                size: u32::MAX as usize,
+                limit: MAX_PAYLOAD_SIZE,
+            }
+        );
     }
 }

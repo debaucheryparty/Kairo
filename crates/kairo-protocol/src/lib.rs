@@ -6,4 +6,4 @@ pub mod v1 {
 }
 
 pub use error::ProtocolError;
-pub use message::{KairoMessage, MessageKind, Opcode};
+pub use message::{KairoMessage, MAX_MESSAGE_LEN, MessageKind, Opcode};
