@@ -4,7 +4,7 @@ Complete continuation document. Read this first, then
 [MASTER_ROADMAP.md](MASTER_ROADMAP.md) and [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md),
 then verify claims against the code — the code and test results always win over documents.
 
-**Last updated:** 2026-11-12 · **Branch:** `main` · **HEAD:** `071b9a4` · **Working tree:** clean
+**Last updated:** 2026-11-12 · **Branch:** `main` · **HEAD:** `732ab41` · **Working tree:** clean
 **Repo:** `C:\Users\sahil\Downloads\Kairo` = github.com/debaucheryparty/Kairo (public)
 
 ---
@@ -50,9 +50,11 @@ Commit ledger (oldest first). Every commit below is on `origin/main`:
 | `a499629` + `07f09d3` | M5 Kairo Dots: profiles w/ inheritance + `{{var}}` templates, conflict gate + backups, restore, drift, git-backed export/import |
 | `b086352` | M9 CLI (`kairo` binary): status, config, pkg (managed+host, rollback), svc define/list/remove, dots workflow, `--json` |
 | `071b9a4` | README rewrite + `engineering/INDEX.md` + doc synchronisation |
+| `6df3f83` | M8 observability: `--log-dir` daily-rotated file logs (optionally JSON lines), 14-day retention prune |
+| `732ab41` | M8 session correlation span (`session_id` on every session log line) + error classification on session end |
 
-**Verified state (gate 12):** `cargo check/test/fmt/clippy -D warnings` all green.
-Tests: **Windows 146**, **Linux 151** (Linux has extra `#[cfg(unix)]` tests).
+**Verified state (gate 13):** `cargo check/test/fmt/clippy -D warnings` all green.
+Tests: **Windows 149**, **Linux 154** (Linux has extra `#[cfg(unix)]` tests).
 
 Git identity: commits must be authored **and** committed as `aikyaam <httpsahilxd@gmail.com>`.
 The sandbox injects `GIT_AUTHOR_*`/`GIT_COMMITTER_*` env vars (`zwork@local`) that override repo
@@ -114,18 +116,13 @@ documented M10 work).
 Roadmap detail and completion criteria: [MASTER_ROADMAP.md](MASTER_ROADMAP.md).
 Status per subsystem: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 
-### M8 — Observability (next)
-Needed: structured/JSON log option, **log rotation + retention**, correlation IDs on every log
-line of a session, error classification. Where: `apps/kairo-agent` (tracing init lives in
-`main.rs`; `AgentConfig` in `config.rs`), possibly a `logging.rs` module. Approach: add
-`log_dir: Option<String>` + `log_json: bool` to `AgentConfig` (serde defaults), compose a
-`tracing_subscriber::registry()` with a stdout layer plus `tracing_appender::rolling` (non-blocking,
-keep the `WorkerGuard` for process lifetime), and wrap `Session::run` in a `tracing::info_span!`
-carrying `session_id`/`peer`. Add a rotation/retention unit test (write through the layer, assert
-files appear/age out). An earlier attempt at this was cancelled mid-run with no changes on disk —
-nothing to salvage.
+### M8 — Observability (done, gate 13)
+`logging.rs` composes the stdout layer with an optional daily-rotated file layer
+(`--log-dir`, JSON lines via `--log-json`), prunes rotated files older than 14 days, wraps the
+session loop in a `session_id` correlation span, and classifies session errors
+(auth/transport/protocol/backend). Design notes: ADR-0011. Retention is policy, not config.
 
-### M10 — Installer / lifecycle
+### M10 — Installer / lifecycle (next)
 Needed: `install.sh` (exists, never executed — verify on the box), upgrade path, uninstall with
 data preservation, headless Linux first-class, and **encode the prerequisites list above** (protoc,
 Tauri deps, font packages, sidecar). Where: `scripts/` + documentation. Verify by fresh-clone
@@ -197,8 +194,8 @@ keep changes surgical and add targeted tests rather than restructuring.
 ```powershell
 git -C C:\Users\sahil\Downloads\Kairo log --oneline -3
 git -C C:\Users\sahil\Downloads\Kairo status --porcelain
-cargo test --workspace --no-fail-fast        # expect: all green, ~146 tests on Windows
+cargo test --workspace --no-fail-fast        # expect: all green, ~149 tests on Windows
 ```
 
 Then pick the first unfinished milestone (§4, in order) and follow §5. The next concrete task is
-**M8 observability**.
+**M10 installer/lifecycle**.

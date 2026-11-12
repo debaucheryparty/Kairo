@@ -145,3 +145,27 @@ Append-only ADR log. Superseded decisions stay here with their replacement noted
   fail before any artifact is touched; artifact-level failures are reported per package in the
   response. HTTP acquisition is verified end-to-end by the env-gated `KAIRO_TEST_HTTP=1` test
   that runs against a local node server on Windows and Linux.
+
+
+## ADR-0011 — Agent logging: stdout layer plus rotated file with retention pruning
+- **Date:** 2026-11-12
+- **Decision:** The agent composes a `tracing_subscriber::registry` with a stdout layer and —
+  when `--log-dir` is set — a `tracing_appender::rolling::daily` file layer
+  (`kairo-agent.log.<date>`, ANSI disabled, optional JSON lines via `--log-json`). The env
+  filter is attached once as a global registry filter, not per layer, because per-layer filters
+  pin their subscriber type and stop composing with further layers. Retention is a fixed policy:
+  rotated files older than 14 days are deleted at boot and every 6 hours by a prune task tied
+  to the logging guard's lifetime. Sessions get a `session_id` correlation span around the
+  session loop; session ends log a coarse error classification (auth/transport/protocol/backend).
+- **Context:** M8 required structured logs, rotation + retention and correlation IDs; logs must
+  reach both an operator terminal and a file a log shipper can read, without a runtime
+  configurable log framework.
+- **Alternatives:** `tracing_subscriber::fmt()` with `Builder::rotation_size`-style custom
+  appender (more code, no gain), log4rs (second logging framework), retention via
+  logrotate/systemd (outside the agent's control, not verifiable cross-platform).
+- **Consequences:** adds `tracing-appender` 0.2 to kairo-agent — the official companion crate of
+  `tracing-subscriber`, same maintainers, MIT license, no transitive dependencies beyond the
+  crossbeam channel it already brings. The `WorkerGuard` must live for the whole process or
+  queued file events are dropped; it is held by a `LoggingGuard` returned from `logging::init`.
+  Retention is 14 days by policy, not configuration — revisit only when an operator actually
+  needs it (no speculative config).

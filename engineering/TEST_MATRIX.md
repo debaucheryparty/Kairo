@@ -34,6 +34,9 @@ Only actually executed results are recorded. Platforms:
 | `cargo test --workspace` (gate 12, `KAIRO_TEST_HTTP=1`) | 2026-11-12 | Linux | **PASS: 151 tests, 0 failed**; fmt + clippy `-D warnings` PASS | /tmp/kairo-test.log on box |
 | `cargo test --workspace` (after M5 dots, gate 11, `KAIRO_TEST_HTTP=1`) | 2026-11-12 | Windows | **PASS: 142 tests, 0 failed** | test-run10.log |
 | `cargo test --workspace` (gate 11, `KAIRO_TEST_HTTP=1`) | 2026-11-12 | Linux | **PASS: 147 tests, 0 failed**; clippy `-D warnings` PASS; fmt initially found rustfmt drift from hand-built code — fixed in 07f09d3, fmt re-verified PASS on the box | /tmp/kairo-test.log on box |
+| `cargo test --workspace --no-fail-fast` (after M8 observability, gate 13, `KAIRO_TEST_HTTP=1`) | 2026-11-12 | Windows | **PASS: 149 tests, 0 failed** (incl. new logging e2e test + session classification test) | /tmp/kairo-m8-http.log |
+| `cargo test --workspace` + fmt + clippy `-D warnings` (gate 13, `KAIRO_TEST_HTTP=1`) | 2026-11-12 | Linux | **PASS: 154 tests, 0 failed**; fmt + clippy PASS; run after `cargo clean` because the box disk filled at 99% from accumulated artifacts — doubles as a fresh-build verification | /tmp/{t,f,c}.log on box |
+| live smoke: agent started with `--log-dir` + `--log-json`, real WS client connects then closes | 2026-11-12 | Windows | JSON lines written to `kairo-agent.log.2026-11-12`; the session's handshake-failure line carries `span.session_id`; the session-end line carries `"classification":"transport"` | manual run, output inspected inline |
 
 ## Suite counts (baseline run, `--no-fail-fast`, Windows)
 
