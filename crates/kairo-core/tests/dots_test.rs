@@ -450,15 +450,18 @@ async fn test_managed_file_recreated_without_conflict() {
         }],
         ..base_profile()
     };
-    save_profile(&space, &profile, &[( ".managed", b"kairo owns this")]);
+    save_profile(&space, &profile, &[(".managed", b"kairo owns this")]);
 
     let dots = engine(&space);
-    dots.apply("base", &context(home.path()), false, &auth()).unwrap();
+    dots.apply("base", &context(home.path()), false, &auth())
+        .unwrap();
     std::fs::remove_file(home.path().join(".managed")).unwrap();
 
     // The file was created by Kairo: re-applying recreates it without an
     // authorization prompt even though it is now missing.
-    let report = dots.apply("base", &context(home.path()), false, &auth()).unwrap();
+    let report = dots
+        .apply("base", &context(home.path()), false, &auth())
+        .unwrap();
     assert!(report.success, "{:?}", report.files);
     assert_eq!(
         std::fs::read_to_string(home.path().join(".managed")).unwrap(),

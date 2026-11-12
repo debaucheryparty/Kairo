@@ -400,9 +400,8 @@ impl DotsEngine {
                 // Three states: Some(Some) = managed with a backup to keep,
                 // Some(None) = managed (Kairo created it), None = unmanaged
                 // and therefore protected by the authorization gate below.
-                let managed_before: Option<Option<String>> = previously
-                    .as_ref()
-                    .and_then(|applied| {
+                let managed_before: Option<Option<String>> =
+                    previously.as_ref().and_then(|applied| {
                         applied
                             .files
                             .iter()
