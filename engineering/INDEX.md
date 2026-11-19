@@ -2,6 +2,7 @@
 
 | Document | Purpose |
 |---|---|
+| [KAIRO_OS.md](KAIRO_OS.md) | Kairo OS direction: streamed Linux desktop architecture, technology evaluation, isolation, security model, host matrix, risks (ADR-0012+) |
 | [MASTER_ROADMAP.md](MASTER_ROADMAP.md) | Full production scope, phases, milestones, completion gate |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The architecture as it actually exists |
 | [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) | Every subsystem: implemented / tested / production-ready / deferred |

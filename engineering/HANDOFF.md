@@ -11,10 +11,14 @@ then verify claims against the code — the code and test results always win ove
 
 ## 1. What this project is
 
-Kairo is a remote-computer platform: a local client (web/Tauri) makes a remote Linux host feel like
-a computer, and the same machinery maintains a **managed userspace** — an independent environment
-with its own packages, services, configuration and dotfiles — separable from the host's own
-resources at every call site via `ExecutionTarget::{Host, Managed}`.
+Kairo OS (ADR-0012, 2026-11-20) is a complete desktop operating environment running on an
+existing Linux machine and accessed from a **browser** — compositor-driven window management,
+workspaces, real applications, terminal, filesystem, notifications, audio, clipboard, settings,
+persistent sessions. The same machinery maintains a **managed userspace** — an independent
+environment with its own packages, services, configuration and dotfiles — separable from the
+host's own resources at every call site via `ExecutionTarget::{Host, Managed}`. The host is
+never re-imaged; the desktop design lives in [KAIRO_OS.md](KAIRO_OS.md) (sway headless + wayvnc
++ noVNC per ADR-0013, isolation tiers per ADR-0014, platform trait family per ADR-0015).
 
 ```
 clients <-- Kairo Protocol (WS / reverse tunnel) --> kairo-agent
@@ -127,6 +131,16 @@ Needed: `install.sh` (exists, never executed — verify on the box), upgrade pat
 data preservation, headless Linux first-class, and **encode the prerequisites list above** (protoc,
 Tauri deps, font packages, sidecar). Where: `scripts/` + documentation. Verify by fresh-clone
 install on the Linux box into a clean directory; record exact commands and output in TEST_MATRIX.
+CI currently produces no `kairo-agent-$TARGET.tar.gz` release asset that install.sh downloads —
+part of this milestone. Desktop-stack provisioning is a separate milestone (M20).
+
+### M13–M20 — Kairo OS build-out (designed, not started)
+The OS direction (ADR-0012) adds: capability report + approval-gated provisioning planner (M13),
+desktop-session orchestration on sway headless + wayvnc (M14), streaming v1 — agent RFB⇄WS
+bridge + noVNC + clipboard + file transfer (M15), session audio (M16), isolation tiers
+(M17), video v2 encode → WebCodecs (M18), desktop UX completion (M19), OS installer (M20).
+Design, technology evaluation, host matrix, security model and acceptance criteria:
+[KAIRO_OS.md](KAIRO_OS.md). Read ADR-0012…0015 before starting any of these.
 
 ### M11 remainder — transport/session hardening
 Done: 16 MiB frame cap, per-IP auth rate limiting, single core per process.
@@ -198,4 +212,5 @@ cargo test --workspace --no-fail-fast        # expect: all green, ~149 tests on 
 ```
 
 Then pick the first unfinished milestone (§4, in order) and follow §5. The next concrete task is
-**M10 installer/lifecycle**.
+**M10 installer/lifecycle** (the architecture/roadmap review the OS direction required is done —
+see KAIRO_OS.md; M13–M20 follow it).

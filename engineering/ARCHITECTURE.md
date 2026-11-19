@@ -1,7 +1,9 @@
 # Kairo Architecture
 
 This document describes the architecture as it actually exists in the repository.
-Verified against the source on 2026-11-11 (see TEST_MATRIX.md for build evidence).
+Verified against the source on 2026-11-20 (HEAD `f634106`; see TEST_MATRIX.md for build
+evidence: gate 13, Windows 149 / Linux 154 tests). The target architecture for the Kairo OS
+direction is [KAIRO_OS.md](KAIRO_OS.md).
 
 ## System overview
 
@@ -21,6 +23,8 @@ The client presents a desktop-like shell for a remote machine. Computation and s
 remote host; the agent exposes them over the Kairo Protocol. Kairo additionally maintains a
 *managed* environment on the host (distinct from the host's own resources) — that boundary is the
 core architectural idea: every operation carries an `ExecutionTarget` of `Host` or `Managed`.
+Under the Kairo OS direction (ADR-0012), the web client becomes the primary product surface and
+the remote side grows full desktop-environment sessions (see KAIRO_OS.md).
 
 ## Component map (verified)
 
@@ -29,24 +33,25 @@ core architectural idea: every operation carries an `ExecutionTarget` of `Host` 
 | Crate | Responsibility | Key modules |
 |---|---|---|
 | `crates/kairo-common` | Shared small types (ids) | `id.rs` |
-| `crates/kairo-protocol` | Wire protocol: protobuf-generated messages + envelope | `message.rs`, `build.rs` (prost), `proto/kairo/v1/*.proto` |
-| `crates/kairo-transport` | Connection layer: WebSocket client, reverse tunnel with virtual streams, fallback | `websocket.rs`, `tunnel.rs` (largest), `fallback.rs` |
+| `crates/kairo-protocol` | Wire protocol: protobuf-generated messages + envelope (20-byte header, 16 MiB cap, opcode in flags) | `message.rs`, `build.rs` (prost), `proto/kairo/v1/*.proto` |
+| `crates/kairo-transport` | Connection layer: WebSocket client (wss-capable via rustls), reverse tunnel with virtual streams, fallback | `websocket.rs`, `tunnel.rs` (largest), `fallback.rs` |
 | `crates/kairo-discovery` | Host discovery: OS/init/packages/privileges/isolation/display/hardware → `SystemProfile` | `os_info.rs`, `init.rs`, `packages.rs`, `privileges.rs`, `isolation.rs`, `display.rs`, `hardware.rs` |
-| `crates/kairo-bridge` | Platform adapter layer behind traits, selected by capabilities | `traits.rs` (`PlatformAdapter`, `ServiceOps`, `PackageOps`), `selector.rs` (capability-based selection), `package/{apt,pacman,unsupported,validation}.rs`, `service/{systemd,openrc,unsupported}.rs`, `common/{runner,process,lock}.rs` |
-| `crates/kairo-core` | Platform-independent APIs with authorization + audit | `auth.rs` (levels), `audit.rs` (ring buffer), `fs.rs` (boundary-enforced filesystem), `package.rs`, `service.rs`, `process.rs`, `env.rs` (reserved-key protection), `system.rs` (boundaries/resources), `target.rs` (`ExecutionTarget`) |
+| `crates/kairo-bridge` | Platform adapter layer behind traits, selected by capabilities | `traits.rs` (`PlatformAdapter`, `ServiceOps`, `PackageOps`), `selector.rs`, `package/{apt,pacman,validation}.rs`, `service/{systemd,openrc}.rs`, `common/{runner,process,lock}.rs` |
+| `crates/kairo-core` | Platform-independent APIs with authorization + audit; managed userspace | `auth.rs`, `audit.rs`, `fs.rs` (boundary-enforced), `package*.rs` (real artifact installs + receipts), `service.rs` + `runtime.rs` (supervisor), `config.rs` (declarative engine), `dots.rs`, `userspace.rs`, `state.rs` (checksummed envelopes), `target.rs` (`ExecutionTarget`) |
 
 ### Apps / packages
 
 | Path | Role |
 |---|---|
-| `apps/kairo-agent` | Headless agent binary + library. WebSocket server with auth token, per-IP rate limiting, reverse-tunnel client, session handling; handlers: `pty` (portable-pty), `fs`, `process`, `system`, `app_manager` (installed apps), `gpu`, `gui/x11` (X11 screen capture via x11rb: composite/damage/xfixes/xtest), `media`, `notification`, `metrics`. Constructs `KairoCore` in `session.rs`. |
-| `apps/kairo-web` | React web client (desktop shell UI: window manager, dock, file manager, terminal, remote surface viewer, spotlight). Talks to the agent via `packages/kairo-runtime`. |
-| `apps/kairo-desktop` | Tauri desktop shell wrapping the web client. |
-| `packages/kairo-runtime` | TypeScript client library: protocol envelope, session server connection, token handling. |
+| `apps/kairo-agent` | Headless agent binary + library. WebSocket server with auth token, per-IP rate limiting, reverse-tunnel client, session handling; handlers: `pty` (portable-pty), `fs`, `process`, `system`, `app_manager` (freedesktop .desktop catalog), `gpu` (detection only — streaming is a stub), `gui/x11` (X11 capture via x11rb: composite/damage/xtest, raw-RGBA frames), `media` (MPRIS via playerctl), `notification` (in-memory stub), `metrics`; `logging.rs` (M8: rotation, retention, JSON option, correlation spans). One shared `KairoCore` per process. |
+| `apps/kairo-web` | React 19 + Vite web client: end-4-derived desktop shell (dock, top-bar islands, spotlight, workspaces, window manager, boot flow) with `RemoteSurfaceViewer` rendering raw-RGBA surface frames on canvas and feeding input events back. Talks to the agent via `packages/kairo-runtime`. |
+| `apps/kairo-desktop` | Tauri desktop shell wrapping the web client + agent sidecar on localhost (optional distribution channel). |
+| `packages/kairo-runtime` | TypeScript client library: byte-exact envelope mirror, hand-written protobuf codec, resilient transport (backoff/failover), typed API incl. surface streaming. |
+| `apps/kairo-cli` | Headless operator CLI (status, config, packages, services, dots). |
 
 ### Workspace layout
 
-- Cargo workspace members: agent, desktop (src-tauri), protocol, transport, common, discovery, bridge, core.
+- Cargo workspace members: agent, cli, desktop (src-tauri), protocol, transport, common, discovery, bridge, core.
 - pnpm workspace: `apps/*`, `packages/*`.
 - Lints: workspace-wide `unsafe_code = deny`, `unwrap_used = deny`, `expect_used = warn`.
 
@@ -55,26 +60,41 @@ core architectural idea: every operation carries an `ExecutionTarget` of `Host` 
 1. **Session establishment**: client connects (direct WebSocket to agent, or via relay tunnel).
    Handshake exchanges `SystemProfile` (discovered on the agent) and capabilities; auth token
    required unless `no_auth` (dev only). Failed auths feed the per-IP rate limiter.
-2. **Interactive use**: terminal (PTY), filesystem ops, process/app management, metrics, remote
-   GUI (X11 damage events → dirty rectangles → client surface), media and notifications.
+2. **Interactive use**: terminal (PTY with backlog replay), filesystem ops (optimistic
+   revision writes + watch), process/app management, metrics, remote GUI (X11 damage → dirty
+   rectangles → raw-RGBA `SurfaceFrame` events; per-surface latest-wins relay in the session
+   writer; input via XTEST), media and notifications.
 3. **Host management**: agent handlers call `KairoCore` APIs; core checks `AuthContext` against
-   `OperationLevel` (Read < Modify < Privileged), executes through the bridge adapter, records
-   audit events. Host operations run native tools (`apt`, `pacman`, `systemctl`, `rc-service`);
-   managed operations act inside the managed root.
+   `OperationLevel` (Read < Modify < Privileged), executes through the bridge adapter
+   (host target) or the managed userspace (managed target), records audit events.
+4. **Managed lifecycle**: declarative config documents apply files → packages (checksummed,
+   transactional, receipts) → services (supervised processes with restart policies, SIGTERM→
+   SIGKILL stop, log capture, autostart at agent boot); dots apply to the host home behind the
+   authorization gate (ADR-0010).
 
 ## Security boundaries
 
 - **Client ↔ agent**: WebSocket; auth token; rate limiting on handshake failures. TLS terminates
-  outside the agent process today (reverse proxy / tunnel) — documented in SECURITY_REVIEW.md.
-- **Managed ↔ host**: `ExecutionTarget` + `SystemBoundaries.managed_root`; path resolution must
-  confine managed operations (current enforcement details and gaps in SECURITY_REVIEW.md).
-- **Privilege**: `OperationLevel::Privileged` requires elevated or confirmed sudo identity.
-- **Unsafe code**: denied workspace-wide.
+  outside the agent process today (reverse proxy / tunnel) — `tls_cert`/`tls_key` exist in
+  `AgentConfig` but are not consumed by the listener (tracked in KAIRO_OS.md / M11 remainder).
+- **Managed ↔ host**: `ExecutionTarget` + `SystemBoundaries.managed_root`; canonicalize-based
+  containment, symlink rejection, atomic temp+rename writes (SEC-01/02 fixed).
+- **Privilege**: `OperationLevel::Privileged` requires elevated or confirmed sudo identity;
+  host package/service ops are audited.
+- **Unsafe code**: denied workspace-wide (single documented `libc::kill` allow in `runtime.rs`).
 
 ## Known architectural debts (tracked, not hidden)
 
-1. Managed packages are a registry-only stub (no real artifact installation) — M6.
-2. Managed services are in-memory only (not persisted, not supervised) — M7.
-3. Filesystem boundary normalization silently clamps `..` and does not defend against symlinks — M2.
-4. No declarative configuration, dotfiles management, or operator CLI yet — M4/M5/M9.
-5. README describes an older vision and references docs/INDEX.md which does not exist.
+1. GPU streaming is a stub: `gpu.rs::start_stream` records state and returns a fabricated
+   endpoint; frames are raw RGBA with no encoder (KAIRO_OS.md §6 — desktop streaming milestone).
+2. Sessions are 1:1 with WebSocket connections and managers are singletons — no desktop-session
+   registry, reattach, or multi-viewer support (KAIRO_OS.md §4).
+3. No audio, clipboard-sync, or cursor-shape channels in the protocol.
+4. SEC-07 (token expiry/revocation) and SEC-08 remainder (socket-level caps, output bounds)
+   open — M11 remainder; SEC-03 open (identity strength) — M12 close-out.
+5. The supervisor kills a single process, not a process tree — compositor sessions need
+   `setsid`/cgroup-based teardown (KAIRO_OS.md §7).
+6. `install.sh` has never been executed; CI produces no Linux agent artifact for it to
+   download (M10 + OS-era installer milestone).
+7. The web client (shell + streaming) has no automated tests.
+8. `packages/kairo-runtime` TS opcode enum has drifted from the Rust enum (missing 62–64).
