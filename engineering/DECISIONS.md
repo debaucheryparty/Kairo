@@ -169,3 +169,117 @@ Append-only ADR log. Superseded decisions stay here with their replacement noted
   queued file events are dropped; it is held by a `LoggingGuard` returned from `logging::init`.
   Retention is 14 days by policy, not configuration — revisit only when an operator actually
   needs it (no speculative config).
+
+
+## ADR-0012 — Reorient the product to Kairo OS: a streamed Linux desktop accessed from the browser
+- **Date:** 2026-11-20
+- **Decision:** The product is a complete desktop operating environment running on an existing
+  Linux machine (compositor, window management, workspaces, real applications, terminal,
+  filesystem, notifications, audio, clipboard, settings, persistent sessions), delivered to a
+  **browser** as the only required client. The existing crates are extended, not rewritten:
+  agent/protocol/transport/session machinery, the managed userspace, and the end-4-derived web
+  shell are the foundation (ADR-0004 continues to apply — extension over rewrite). The desktop
+  experience is owned by Kairo and built on maintained upstream components; **ShojiWM is not a
+  dependency**. Linux is the first implementation target; Windows is a separate native backend
+  behind a shared trait family and is never faked; macOS stays explicitly unimplemented. This
+  supersedes the "graphical-first design" line of MASTER_ROADMAP's out-of-scope list and narrows
+  ADR-0004's "existing web behavior is preserved" to mean: the web client is the primary product
+  surface; the Tauri shell remains as an optional distribution channel (it is load-bearing for
+  the sidecar build and CI, not for the product's client requirements).
+- **Context:** Owner directive (2026-11-20) to evolve Kairo from a remote-computing agent into a
+  unified, remotely accessible operating environment. Inspection found: a tested X11 streaming
+  path, a full desktop-shell UI already specified and built in `apps/kairo-web`
+  (`Docs/ui/end4-*.md`), managed packages/services/config that can provision an environment, and
+  a capability-report-shaped discovery crate — i.e. most substrate exists. Gaps (compositor
+  orchestration, encode/decode, audio, clipboard, isolation, multi-session) are design topics of
+  `engineering/KAIRO_OS.md`, not reasons to restart.
+- **Alternatives:** Keep the dual-client agent-only platform (rejected — does not meet the
+  product goal); full rewrite of client and agent around a new stack (rejected — discards
+  tested code, violates ADR-0004); a simulated desktop in React (forbidden — the directive and
+  this ADR require real remote execution).
+- **Consequences:** New milestones M13+ in MASTER_ROADMAP.md; new ADRs for the desktop stack
+  and isolation strategy; SECURITY_REVIEW gains desktop-session trust boundaries; ARCHITECTURE.md
+  and README gain the OS framing; the web client's desktop-shell UI moves from "frontend not
+  prioritized" to critical path (and needs its first tests). No completed milestone is reverted;
+  M10–M12 engineering work remains in scope, re-scoped where the desktop changes the installer's
+  and gate's requirements.
+
+
+## ADR-0013 — Desktop stack: sway headless + wayvnc + agent WS bridge; noVNC client; phased encode
+- **Date:** 2026-11-20
+- **Decision:** Each Kairo desktop session runs **sway** as a headless Wayland compositor
+  (`WLR_BACKENDS=headless`, no seat/DRM/logind/root required, virtual outputs, XWayland for X11
+  apps) with **wayvnc** bound to localhost (`--detached` + `wayvncctl` for attach/detach and
+  viewer management). The agent bridges the RFB stream to the authenticated WebSocket
+  (websockify-equivalent in Rust) and the React client embeds **noVNC**. Session control
+  (workspaces, focus, layout, app mapping) goes through sway's i3-compatible IPC. Phased
+  evolution: audio next (per-session PipeWire → Opus → WebRTC track), then video v2
+  (wlr-screencopy → x264/openh264 encode in the agent → WebSocket → WebCodecs decode, with
+  ZRLE as fallback), negotiated through the existing `StartGpuStreamRequest`/`SurfaceFrame`
+  wire shapes. sway stays an unmodified upstream binary configured by generated Kairo state —
+  no fork. The existing X11/x11rb backend remains a `DisplayProvider` for single-app streaming
+  and non-wlroots hosts.
+- **Context:** Verified 2026-11-20: sway 1.12 (MIT) and wayvnc 0.10.2 (ISC) are actively
+  maintained; headless wlroots runs without root on every target distro; sway's IPC is the
+  richest programmatic WM API available; H.264-in-RFB is unusable on GPU-less VPS (wayvnc's
+  OpenH264 needs DRM-PRIME), so ZRLE/Tight is the v1 reality; WebCodecs VideoDecoder is ~95%
+  browser support. Rejected: KDE krdp (headless unsupported), GNOME g-r-d (heavy, GDM-coupled,
+  GPL if shipped), X11-only stacks (fail the Wayland requirement), Smithay custom compositor
+  (deferred — weeks-to-months effort, revisit on trigger).
+- **Alternatives:** Weston RDP backend (per-client sessions but weak automation); KasmVNC
+  (capable but modified license and X11-only); Guacamole gateway (extra Java/daemon ops);
+  RDP-with-IronRDP-WASM (immature web coverage ⚠︎).
+- **Consequences:** No audio in v1 (RFB carries none) — audio is its own milestone; motion-heavy
+  content on 2 vCPU is ZRLE-limited until video v2 lands; the supervisor must gain
+  process-group/cgroup teardown before compositor sessions ship; media bytes must not ride the
+  16 MiB framed protobuf layer — RFB passes as opaque binary WS messages under agent auth.
+
+
+## ADR-0014 — Desktop sessions isolate in tiers: rootless podman → bwrap/systemd scope → shared scope
+- **Date:** 2026-11-20
+- **Decision:** Desktop-session isolation is chosen per host capability, never silently:
+  **T1 rootless podman** (one container per session, compositor + apps + a per-session PipeWire
+  inside) where unprivileged user namespaces work; **T0 systemd user scope + `setsid`** with a
+  dedicated `XDG_RUNTIME_DIR` where they do not; **T2 rootful podman or per-session systemd
+  scopes** (`MemoryMax`/`CPUQuota`, private tmpfs/shm, per-session UID) when the operator grants
+  root — rootful podman (daemonless), never docker-group membership (root-equivalent). Every
+  tier runs audio/IPC per-session (host sockets are never shared across sessions), the agent is
+  hardened with landlock/seccomp and never runs as root, and all desktop stack components bind
+  localhost — the agent is the only network listener. Nested VMs are rejected (nested virt is
+  probed, essentially unavailable on VPS).
+- **Context:** The capability report gates the choice: userns probes (`unshare -Ur`),
+  `apparmor_restrict_unprivileged_userns` (Ubuntu 24.04 blocks rootless containers without a
+  root-installed profile), cgroup v2 delegation (`Delegate=` on `user@.service`), kernel ≥ 5.13
+  for native overlay (else fuse-overlayfs). This mirrors the industry pattern — KasmVNC, neko,
+  Selkies and Coder envbox all run one container per desktop session.
+- **Alternatives:** firejail (setuid history, no cgroup limits — rejected); systemd-nspawn
+  (root tool, dominated by podman in T2); per-session VMs (impractical on VPS); no isolation
+  (rejected — the session is a new untrusted surface and T0 must be labeled shared-privilege).
+- **Consequences:** Provisioning plans that need root are discrete, enumerated, audited,
+  approval-gated operations (SEC-11). Without delegation, memory limits are best-effort — the
+  capability report must state that. Config generated for the session (compositor, autostart,
+  portals) lives in the managed userspace so a session is reproducible from its document.
+
+
+## ADR-0015 — Platform capabilities are a trait family with honest support tiers; no fake backends
+- **Date:** 2026-11-20
+- **Decision:** Host-facing capabilities are expressed as one trait family — `PlatformSystem`,
+  `ProcessManager`, `FilesystemProvider`, `ServiceManager`, `PackageManager`, `DisplayProvider`,
+  `InputProvider`, `AudioProvider`, `NetworkProvider`, `IsolationProvider`,
+  `WindowManager` — implemented independently per platform (Linux first; Windows as a separate
+  native backend; `RemoteGuiBackend` becomes the window-level view over
+  `DisplayProvider + WindowManager`). Core never receives platform types. Every capability has a
+  declared support tier (`Supported` / `Partial{limits}` / `Unavailable`) surfaced in the
+  capability report; an unsupported capability returns an explicit unsupported error (the
+  existing `UnsupportedPackageManager` pattern) — never a stub that pretends to work. Adapters
+  detect read-only; mutation happens only through audited, approval-gated operations.
+- **Context:** The pivot requires Windows to be architecturally supported without pretending it
+  is implemented, and requires Linux platform differences (wlroots versions, init systems,
+  isolation mechanics) to stay out of core. The existing bridge already proves the pattern
+  (`PlatformAdapter` with capability-based selection, `CommandRunner` mock seam).
+- **Alternatives:** One mega-trait (rejected — forces fake implementations of unrelated
+  capabilities); build-tag/conditional compilation without traits (rejected — loses the mock
+  seam and the capability report); implementing Windows by shimming Linux tools (forbidden).
+- **Consequences:** New trait surface lives with `kairo-bridge` until size justifies a split
+  crate; the capability report becomes part of `SystemProfile` (versioned protobuf); the
+  TEST_MATRIX gains a per-trait platform matrix so "partial" claims stay honest.
